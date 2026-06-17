@@ -79,3 +79,57 @@ describe('0001 identity_roles', () => {
     expect(s()).toMatch(/lift_data\s+jsonb/);
   });
 });
+
+describe('0002 classes_enrollments', () => {
+  const s = () => sql('0002_classes_enrollments.sql');
+
+  it('creates classes + enrollments with the unique seat key', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.classes/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.enrollments/);
+    expect(s()).toMatch(/UNIQUE\(class_id, student_id\)/);
+  });
+
+  it('ports the seat-enforcement trigger (LIFT 049, references active license)', () => {
+    expect(s()).toMatch(/FUNCTION public\.enforce_enrollment_limit\(\)[\s\S]*SECURITY DEFINER/);
+    expect(s()).toMatch(/status = 'active'/);
+    expect(s()).toMatch(/CREATE TRIGGER trg_enforce_enrollment_limit\s+BEFORE INSERT ON public\.enrollments/);
+  });
+
+  it('has the to_regclass guard so 0002 is inert until 0007 creates school_licenses', () => {
+    expect(s()).toMatch(/to_regclass\('public\.school_licenses'\) IS NULL THEN RETURN NEW/);
+  });
+
+  it('defines the 3 enrollment/class SECURITY DEFINER helpers (after tables, before policies)', () => {
+    expect(s()).toMatch(/FUNCTION public\.get_teacher_student_ids\([\s\S]*\)[\s\S]*SECURITY DEFINER/);
+    expect(s()).toMatch(/FUNCTION public\.get_teacher_class_ids\([\s\S]*\)[\s\S]*SECURITY DEFINER/);
+    expect(s()).toMatch(/FUNCTION public\.get_student_class_ids\([\s\S]*\)[\s\S]*SECURITY DEFINER/);
+  });
+
+  it('policy enrollments_school_read appears after get_teacher_class_ids definition (no forward-ref)', () => {
+    const src = s();
+    const helperPos = src.indexOf('FUNCTION public.get_teacher_class_ids');
+    const policyPos = src.indexOf('enrollments_school_read');
+    expect(helperPos, 'get_teacher_class_ids not found').toBeGreaterThan(-1);
+    expect(policyPos, 'enrollments_school_read policy not found').toBeGreaterThan(-1);
+    expect(policyPos, 'policy must appear after helper').toBeGreaterThan(helperPos);
+  });
+
+  it('enables RLS + grants', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.classes\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.enrollments ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/GRANT ALL ON public\.classes\s+TO authenticated, anon, service_role/);
+    expect(s()).toMatch(/GRANT ALL ON public\.enrollments TO authenticated, anon, service_role/);
+  });
+
+  it('uses DROP POLICY IF EXISTS before CREATE POLICY (re-runnable)', () => {
+    expect(s()).toMatch(/DROP POLICY IF EXISTS/);
+    expect(s()).toMatch(/CREATE POLICY/);
+  });
+
+  it('classes table has all V1 columns including google_grade_sync_enabled, enrollment_count', () => {
+    expect(s()).toMatch(/google_course_id\s+text/);
+    expect(s()).toMatch(/google_grade_sync_enabled\s+boolean/);
+    expect(s()).toMatch(/google_feed_enabled\s+boolean/);
+    expect(s()).toMatch(/enrollment_count\s+int/);
+  });
+});
