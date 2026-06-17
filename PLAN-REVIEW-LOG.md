@@ -70,3 +70,22 @@ Codex thread: `019ed74b-fb60-7aa2-9660-88ce7b6592d3`.
 > "No remaining material implementation blockers in PLAN.md. The current plan now has a coherent cut-line: M-Slice is explicitly Notice→Act→minimal Confirm, P1 Pilot restores the full SCOPE-locked Pro baseline, WDK is no longer assumed, Spark/security/eval gates are pilot-blocking where they need to be, and operational hardening is separated without moving core controls out of pilot. Residual risks remain, but they are now named rather than hidden: solo timeline, Barb dependency, WDK spike, per-skill CL mapping, and eval corpus rebuild. Those are execution risks, not plan contradictions."
 
 **Converged after 4 rounds.** No Claude rejections were needed — all 24 findings across rounds 1–3 were valid and incorporated. The cross-model review materially hardened the plan; see the gate summary.
+
+## Round 5 — Codex (scope change: LIFT handoff pulled into P1) — VERDICT: REVISE
+1. **Foundation `platform_links.product CHECK ('spark','custom')` rejects `'lift'`** — LIFT can't be provisioned. Fix: allow `'lift'`.
+2. **LIFT absent from milestone/security cut-line** — P1 Pilot + Security Minimum name Spark only. Fix: add LIFT inbound to P1 Pilot; "Spark/LIFT contract security."
+3. **Endpoint mismatch** — LIFT's sender posts `/api/import/lift-inbound`; plan said `/api/integrations/lift-inbound`. Fix: match LIFT's path (or scope the LIFT-side change).
+4. **Per-skill CL seeding overclaims** — LIFT sends coarse `predicted_mastery_band`, not skill-level evidence; blind write fabricates mastery. Fix: source-tagged **provisional prior**, mapped to skill groups, **superseded by first CORE quiz**.
+5. **Idempotency key collision across schools** — `lift_candidate_id` alone unsafe. Fix: key = `provider+school_id+lift_candidate_id`.
+6. **Student-linking rules missing** — create/match/reject undefined. Fix: school-scoped `external_identities(school_id, provider, external_id)` UNIQUE + explicit ambiguous-match behavior.
+7. **Tier gating not explicit** — raw `lift_integration` flag can bypass packaging. Fix: add to tier gate map as Pro+; require tier feature + active link.
+
+### Claude's response (Round 5)
+**All 7 accepted.** Applied to PLAN.md (Approach #6 LIFT clause rewritten; LIFT added to P1 Pilot milestone + Security Minimum), SCOPE §11, spec §7.9, and the Foundation plan corrections (platform_links enum). Notable: #4 (provisional-prior, observation-supersedes) protects per-skill CL integrity; #6 adds an `external_identities` table. Re-submitting for re-pass.
+
+## Round 6 — Codex (LIFT re-pass) — VERDICT: APPROVED ✅
+> "No remaining material blockers on the LIFT addition. The revised LIFT scope now has a consistent inbound-only cut-line, matches the existing LIFT sender path, uses the same pilot-blocking auth/idempotency/rate-limit/FERPA posture as Spark, avoids fabricating per-skill mastery by treating LIFT data as a provisional prior, and adds the missing identity/linking and Pro+ gate requirements."
+
+Hygiene note (Codex): the Foundation plan's inline Task 15 still shows the stale `('spark','custom')` enum; the "LIFT handoff provisioning" correction overrides it — **update the Task 15 body + test inline when implementing** so no one follows the stale snippet.
+
+**Plan + LIFT scope change both Codex-APPROVED.** Ready to build (subagent-driven).

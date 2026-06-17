@@ -2404,3 +2404,8 @@ Do NOT implement here — each is a named later deliverable referenced by this s
 
 ### Role-model resolution (referenced throughout)
 - **`school_sysadmin` (6th role):** lock it in the `0001` role enum + fold into the School Admin route group + `get_my_role()` before any RLS policy references it (SCOPE §1.2 / design §1.2 open item #3). Confirm enum = `student|teacher|parent|school_admin|school_sysadmin|platform_admin`.
+
+### LIFT handoff provisioning (added 2026-06-17 — Codex LIFT re-pass)
+- **Task 15 (`platform_links`):** the `product`/`provider` CHECK must be **`IN ('spark','lift','custom')`** — the LIFT pre-populate handoff (P1) provisions a `provider='lift'` row. The draft's `('spark','custom')` rejects LIFT. Update the migration + its test.
+- **NEW (foundation) — `external_identities` table:** `(school_id uuid, provider text, external_id text, core_student_id uuid, created_at)` with **UNIQUE (school_id, provider, external_id)** — the school-scoped identity map the LIFT inbound route uses to resolve create-vs-match (ambiguous matches rejected, never silently merged). Spark/LIFT both key idempotency on `provider+school_id+external_id`.
+- **`lift_integration` feature** must be in the tier gate map as **Pro+** (not just a raw flag).

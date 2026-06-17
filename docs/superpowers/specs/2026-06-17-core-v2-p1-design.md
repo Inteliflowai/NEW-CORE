@@ -1001,6 +1001,18 @@ CORE holds `CORE_SPARK_API_SECRET` (JWT signing + result-webhook Bearer); each `
 
 ---
 
+### 7.9 LIFT pre-populate handoff (inbound, P1) — added 2026-06-17
+
+> Source: `lift-mining-findings.md`. LIFT ("Learning Insight for Transitions") is the admissions/readiness product; at enrollment it hands CORE a readiness snapshot so the student isn't a cold start. Only the **inbound** handoff is in P1 (SCOPE §11/§19).
+
+- **Direction/lifecycle:** LIFT → CORE, one-shot per completed evaluation, request-response, fail-soft.
+- **Endpoint:** `POST /api/import/lift-inbound` — **matches LIFT's existing sender path** (no LIFT-side change). **Auth:** Bearer per-school `api_key` on `platform_links(provider='lift')` (the `product` CHECK must allow `'lift'`). **Idempotency:** `(endpoint, idempotency_key = provider+school_id+lift_candidate_id)` UNIQUE + the `in_progress/completed/failed` state machine (shared with SPARK) — bare `lift_candidate_id` collides across schools. **Gate:** `lift_integration` feature **AND Pro+ tier** (in the gate map; require tier + active link). **Rate limit:** per-key (Upstash).
+- **Payload (inline, ~26 fields):** `lift_candidate_id`, identity/roster, `tri_score`+`tri_label`, `predicted_mastery_band`, `predicted_learning_style`, `overall_confidence`, `readiness_dimensions{reading,writing,reasoning,math,reflection,persistence,support_seeking}`, `support_indicator_level`, `learning_support_flags[]`, `internal_narrative_summary`, `placement_guidance`, `lift_report_url`. **CORE returns:** `core_student_id`.
+- **Student linking:** a school-scoped `external_identities(school_id, provider, external_id) UNIQUE` table resolves create-vs-match; ambiguous email/name/grade collisions are **rejected for manual review, never silently merged**, before `core_student_id` is returned. `core_student_id` is immutable once mapped (no re-sync path in P1).
+- **Effect (integrity-critical):** LIFT's coarse `predicted_mastery_band` + readiness dimensions are written as a **source-tagged provisional cold-start prior** (mapped only to defined skill groups), **superseded by the first CORE quiz** — never fabricate per-skill mastery from admissions data (observation supersedes). LIFT's 7 *input-readiness* dimensions ≠ SPARK's 7 *output-quality* rubric dimensions — keep separate.
+- **FERPA:** included in the P1 delete/forget action (pilot-blocking).
+- **Out of P1:** outcomes return (CORE→LIFT, P2); `learner_profile.v1` delivery (pedagogy-gated fast-follow).
+
 ## 8. Pedagogy & Eval Reconciliation
 
 > Scope refs: SCOPE.md §7 (pedagogy — Barb's call, ✅* approach locked), §4c, §6b. **Carry V1's locked pedagogy verbatim** as the v2 basis; Barb confirmation is queued for only **3 deltas**. The pedagogy *content* is lifted as-is; the *work* is the three deltas and the eval reconciliation they require.

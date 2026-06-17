@@ -179,13 +179,15 @@ The build must **license-gate features by tier** from day one.
 | **Google Classroom** (SSO, roster, lesson import, one-click launch, grade sync) | **All tiers, free, MVP** |
 | **SIS** (Blackbaud, Veracross, ManageBac, Clever/SSO) | **Enterprise** — design connector interface now, ship Phase 3 |
 | Spark (internal) | Pro+ — via typed contract, never shared seeds |
-| Pulse / LIFT ecosystem API | Enterprise — deferred from pilot |
+| **LIFT pre-populate handoff** (LIFT → CORE inbound: readiness snapshot at admission) | **Pro+, P1** — inbound intake via the typed contract; seeds per-skill CL cold-start |
+| LIFT outcomes return + learner-profile delivery + Pulse ecosystem API | Enterprise / P2 — deferred from pilot |
 
 - **DECIDED:**
   - **Google Classroom is the only *live* integration at pilot** (all tiers, free) — lift V1's ~95%-complete connector (`lib/integrations/lms/google-classroom.ts` + `app/api/teacher/google/*`); add grade *pull* (V1 only pushes).
   - **Architect now, ship later:** a provider-agnostic **LMS adapter interface** (Google Classroom + **Canvas** — Canvas is net-new vs V1) and the **SIS adapter interface** (Blackbaud, Veracross, ManageBac, Clever — V1 has a base adapter + stubs). Non-GC implementations ship in the **Enterprise** phase.
   - **v2 Platform API = SPARK's proven contract pattern** (typed HTTP POST + inline payloads; asymmetric auth — CORE signs HS256 JWTs, products return via per-school Bearer secret; one school-scoped `api_key` per link; per-tenant feature-flag gating both entry points; webhook idempotency; per-school `core_base_url` override) **+ GA reworks:** rotatable/expiring keys (not bare UUIDs), per-key rate limiting (Upstash), idempotency-row TTL (~30d), and codegen the payload spec so both sides auto-validate. Wrap the call site in a `lib/spark/sendAssignmentToSpark` service layer.
   - **ARCHITECTURE — Vercel Workflow DevKit for the CORE↔SPARK round-trip.** Model the assignment→result handoff as a durable workflow using `createHook()` / webhook **pause-resume**: CORE fires the assignment, the workflow suspends, and SPARK's return webhook resumes it — replacing V1's hand-rolled idempotency-key + retry plumbing with the DevKit's built-in durability. (WDK adoption is scoped to **this contract** + the **generation pipeline (4e)** only — not Super TELI, crons, or media polling.)
+  - **LIFT pre-populate handoff is IN P1 (inbound only)** — see `lift-mining-findings.md`. Receive LIFT's admission-time readiness snapshot at a CORE-side **`POST /api/import/lift-inbound`** (matches LIFT's existing sender path — no LIFT-side change), a one-off inbound *sibling* to the SPARK contract (no outbound launch/JWT). Auth = a per-school LIFT `api_key` on a `platform_links` row (`provider='lift'` — the enum must allow it), reusing the SPARK key/rate-limit machinery; **idempotency keyed `provider+school_id+lift_candidate_id`** (not bare candidate id); gated on a distinct **`lift_integration`** feature **AND Pro+ tier** (in the gate map; require tier + active link). **Student linking** via a school-scoped `external_identities(school_id, provider, external_id) UNIQUE` table — ambiguous matches rejected for manual review, never silently merged. **CL seeding is integrity-critical:** LIFT's coarse `predicted_mastery_band` + readiness dimensions are a **source-tagged provisional cold-start prior** (mapped to skill groups), **superseded by the first CORE quiz** — never fabricate per-skill mastery from admissions data (observation supersedes). LIFT's 7 *input-readiness* dimensions stay distinct from SPARK's 7 *output-quality* rubric dimensions. Same **pilot-blocking FERPA delete/forget** as SPARK. **Deferred to P2:** CORE → LIFT outcomes return + `learner_profile.v1` delivery. ~3–5 days, absorbed into the SPARK/Platform-API workstream.
 
 ## 12. Licensing, Anti-Piracy & Free Trial 🟠
 
@@ -297,6 +299,6 @@ Per decision 0, the old P1 (Essentials) and P2 (Pro) **merge into a single Pilot
 ## 19. Explicitly Out of Scope (v2 pilot) ✅
 
 - Portuguese / Brazil localization (Pulse track).
-- LIFT integration beyond the pre-populate handoff.
+- LIFT integration **beyond the inbound pre-populate handoff** — the handoff itself (LIFT → CORE readiness snapshot at admission) is **in P1** (§11); the CORE → LIFT outcomes return, the richer `learner_profile.v1` delivery, and the Pulse ecosystem API are deferred (P2 / Enterprise).
 - Custom white-label + advanced longitudinal dashboards (Enterprise, Phase 3).
 - Anything that doesn't serve Notice → Act → Confirm.
