@@ -205,3 +205,56 @@ describe('0005 skills', () => {
     expect(s()).toMatch(/GRANT ALL ON public\.skill_learning_state TO authenticated, anon, service_role/);
   });
 });
+
+describe('0006 snapshots', () => {
+  const s = () => sql('0006_snapshots.sql');
+
+  it('creates student_model_snapshots with the trajectory grain', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.student_model_snapshots/);
+    expect(s()).toMatch(/student_id\s+uuid/);
+    expect(s()).toMatch(/snapshot_date\s+date/);
+  });
+
+  it('carries the six signal fields + schema-version stamp (LIFT 046)', () => {
+    for (const c of ['risk_score','avg_hints_per_attempt','divergence_direction','divergence_score','recent_effort_labels','snapshot_schema_version']) {
+      expect(s()).toContain(c);
+    }
+  });
+
+  it('carries the V1 039 base model fields', () => {
+    for (const c of ['mastery_band','learning_style','consistency_label','dominant_effort_pattern','avg_score','improvement_4w']) {
+      expect(s()).toContain(c);
+    }
+  });
+
+  it('has UNIQUE (student_id, snapshot_date) — per-week trajectory grain', () => {
+    expect(s()).toMatch(/UNIQUE \(student_id, snapshot_date\)/);
+  });
+
+  it('enables RLS + grants', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.student_model_snapshots ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/GRANT ALL ON public\.student_model_snapshots TO authenticated, anon, service_role/);
+  });
+
+  it('uses DROP POLICY IF EXISTS before CREATE POLICY (re-runnable)', () => {
+    expect(s()).toMatch(/DROP POLICY IF EXISTS/);
+    expect(s()).toMatch(/CREATE POLICY/);
+  });
+
+  it('service-role write policy exists (snapshots written by cron, not authenticated)', () => {
+    expect(s()).toMatch(/CREATE POLICY[^\n]*sms_service_role_write[^\n]*/);
+    expect(s()).toMatch(/TO service_role/);
+  });
+
+  it('authenticated users have scoped read policy only (no authenticated write)', () => {
+    expect(s()).toMatch(/FOR SELECT\s+TO authenticated/);
+    expect(s()).not.toMatch(/FOR INSERT\s+TO authenticated/);
+    expect(s()).not.toMatch(/FOR UPDATE\s+TO authenticated/);
+  });
+
+  it('has per-student DESC index + partial v2 index (no forward-refs in FK targets)', () => {
+    expect(s()).toMatch(/CREATE INDEX IF NOT EXISTS idx_sms_student_date/);
+    expect(s()).toMatch(/CREATE INDEX IF NOT EXISTS idx_sms_v2_recent/);
+    expect(s()).toMatch(/WHERE snapshot_schema_version = 'v2'/);
+  });
+});
