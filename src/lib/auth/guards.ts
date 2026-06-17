@@ -37,19 +37,27 @@ export async function guardPlatformAdmin(): Promise<NextResponse | null> {
 
 /**
  * Require a school-admin-tier caller (school_admin / school_sysadmin /
- * platform_admin). On success returns { schoolId, role, userId } so the
- * handler can scope queries; on failure returns { error: NextResponse }.
+ * platform_admin). On success returns { schoolId, role, userId, isPlatformAdmin }
+ * so the handler can scope queries; on failure returns { error: NextResponse }.
  * Check the discriminant: `if ('error' in r) return r.error;`
+ *
+ * IMPORTANT — platform_admin scope: when `isPlatformAdmin` is true, `schoolId`
+ * is null (unrestricted access to all schools). Callers MUST check
+ * `isPlatformAdmin` before using `schoolId` in a `.eq('school_id', schoolId)`
+ * filter — passing null into that filter silently mis-scopes to all rows.
+ * Pattern: `if (!r.isPlatformAdmin) query = query.eq('school_id', r.schoolId);`
  */
 export async function guardSchoolAdmin(): Promise<
-  { error: NextResponse } | { schoolId: string | null; role: string; userId: string }
+  | { error: NextResponse }
+  | { schoolId: string | null; role: string; userId: string; isPlatformAdmin: boolean }
 > {
   const caller = await resolveCaller();
   if (!caller) return { error: UNAUTH() };
   if (!(SCHOOL_ADMIN_ROLES as readonly string[]).includes(caller.role as string)) {
     return { error: FORBID() };
   }
-  return { schoolId: caller.school_id, role: caller.role as string, userId: caller.id };
+  const isPlatformAdmin = caller.role === PLATFORM_ROLE;
+  return { schoolId: caller.school_id, role: caller.role as string, userId: caller.id, isPlatformAdmin };
 }
 
 /**
