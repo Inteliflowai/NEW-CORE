@@ -277,50 +277,191 @@ SCOPE §13 makes this non-negotiable ("Eval rig from day one … critical for th
 ## 2. Data Model
 
 > Scope refs: SCOPE.md §9 (Data Model, draft locked), §4c (per-skill CL), §6 (signals each entity must feed). Start minimal — every entity earns its place by feeding a signal in §4. Capture per-attempt history + weekly snapshots **from the start** (the V1 trajectory view was a painful retrofit). All tables get school_id-scoped RLS + the `SECURITY DEFINER` helper-fn pattern (§1.4b); `DROP POLICY IF EXISTS` before each `CREATE POLICY`. Identity/role/guardian tables are defined in §1.2; this section covers domain data.
+>
+> **Disposition column:** every table below is tagged **LIFT** (port V1 schema as-is, only re-key/RLS-harden), **LIFT+amend** (V1 table exists but needs a documented column/constraint change), or **NEW** (no V1 antecedent). **Provenance is a real V1 migration**, not a guess — paths are `C:/users/inteliflow/core/supabase/migrations/`.
+>
+> **One global RLS posture (don't repeat it per table):** all domain tables `ENABLE ROW LEVEL SECURITY`; reads are gated by `school_id = public.get_my_school_id()` (the `SECURITY DEFINER` helper from `000_full_schema.sql:738`) `OR public.is_platform_admin()` (`000:733`). Writes on signal/skill/profile tables are **service-role only** (no `authenticated` INSERT/UPDATE/DELETE policy — V1 `skills`/`skill_learning_state` do exactly this, `071:74`, `072:55`). Every new table needs the explicit `GRANT ALL … TO authenticated, anon, service_role` (V1 "Bug #7": PostgREST returns `42501` without it — `071:80`). The cross-user **admin-client** read paths additionally bind an object-level guard (§1.4a) — RLS is *not* the backstop there.
 
 ### 2.1 Core entities
 
-- **School · Teacher · Class · Student** — roster basics, **multi-school from day one**. Teacher/Student are `users` rows (§1.2). `Student` carries `grade_level` (for grade-anchored generation, §3, and the Spark grade-band gate, §7) and `schoolStudentId` (null for GC-imported, populated for SIS/Clever — the longitudinal anchor for P2).
-- **Lesson** (plan + passage + objectives + key concepts) · **Assignment** (goal + per-student entry point) · **Attempt** (work + result + effort signal). **Each attempt carries a skill tag** so signals can key on skill (§2.4); the engine emits skill-tagged attempts from M1 or M2 has nothing to key on.
-- **Quiz / Quiz attempt** — kept **separate** from Assignment/Attempt so the Assignment-vs-Quiz gap signal works; stores per-question (3 MCQ + 2 OEQ) + the structured cognitive fields (`error_type`, `reasoning_pattern`, etc. — §3.2).
-- **`skill_learning_state`** (LIFT migration 072 — **not** an invented `skill_state`) — per `(student_id, skill_id)`, columns `state` (6-value vocabulary), `confidence`, `observation_count`, `evidence` jsonb, `last_reteach_outcome`. Computed by `lib/skills/computeSkillState.ts` (LIFT). Cold-start states are first-class in the vocabulary (`insufficient_data`, `not_attempted`), not fabricated. CL verbs are a **display mapping** over these states (§2.4, §3.2).
-- **`skills_registry`** (LIFT migration 071) — the skill taxonomy `skill_learning_state` and attempts reference.
-- **Snapshots** (LIFT migration 046) — weekly, written by the §1.8 snapshot cron, so trajectory is real not retrofitted.
-- **Profile** — `student_model`, observational only; Strategies + Powers accrue from behavior, **per `(student_id, class_id)`** (migration 029, §2.4). Never assigned upfront (§15: "the student is not a data set").
-- **Teacher action log** (LIFT migration 040) — records the success-metric-#1 click (§5.1a, §11.8).
-- **Media asset** — generated illustrations/diagrams/audio, with per-school usage counters for tier limits (feeds §6 metering). **Flux URLs expire in ~10 min → persist immediately on generation** (LIFT V1 `persistImage`; §3.3, §7.4).
-- **Student IEP** (LIFT migration 053) — IEP/504 fields feeding accommodation-aware generation.
-- **License** — see §6 (`school_licenses`, `license_keys`, etc.).
+Concrete table sketches. Columns are the load-bearing subset (full column lists live in the cited migrations); types are the real V1 types.
+
+**School · Teacher · Class · Student — roster basics (LIFT, `000_full_schema.sql`).** Multi-school from day one.
+
+- **`schools`** (`000:8`) — `id uuid PK`, `name`, `domain`, `timezone`, `google_classroom_enabled bool`, `parent_profile_visible bool`, `is_active bool`, `welcome_completed bool`. **LIFT+amend:** carries the trial + licensing-anchor columns added later (`is_trial`, `trial_status`, `trial_credentials jsonb` from `035`; `allowed_email_domains jsonb` domain-lock from `049:65`). RLS: tenant root — every other table joins back to `schools.id`.
+- **`classes`** (`000:71`) — `id`, `school_id FK schools`, `teacher_id FK users`, `name`, `subject`, `grade_level`, `period`, `google_course_id`, `enrollment_count int`. RLS: teacher reads own (`teacher_id = auth.uid()` via `get_teacher_class_ids`, `000:751`); school-scoped otherwise.
+- **`enrollments`** (`000:88`) — `id`, `class_id FK classes`, `student_id FK users`, `is_active bool`, `UNIQUE(class_id, student_id)`. **This table carries the seat-enforcement trigger — see §2.5.**
+- **Teacher / Student** are **`users` rows** discriminated by `role` (§1.2), not separate tables. `users.grade_level` (`000:53`) is the grade-anchor for generation (§3, §4a) and the Spark grade-band gate (§7). `users.school_student_id` (the longitudinal anchor for P2) is **NOT in `000`** — it is added by **`075_sis_anchor_roster_imports.sql:27`** (`school_student_id text` + `school_student_id_source CHECK ('csv_import'|'provider_sync'|'admin_manual')` + a partial-unique index on `(school_id, school_student_id) WHERE … IS NOT NULL`, `075:43`). Null for GC-imported rows; populated by SIS/Clever. **LIFT the column + anchor index from 075; leave the roster-import pipeline tables dark (§2.2).**
+
+**Lesson · Quiz · Assignment · Attempt (LIFT, `000_full_schema.sql`).**
+
+- **`lessons`** (`000:98`) — `id`, `class_id`, `teacher_id`, `title`, `parsed_content jsonb` (plan + passage + objectives + key concepts), `grade_level`, `subject`, `status CHECK ('draft'|'pending_review'|'approved'|'published'|'archived')` (the teacher-in-the-loop gate, §3.1).
+- **`quizzes`** (`000:115`) + **`quiz_questions`** (`000:129`) + **`quiz_attempts`** (`000:143`) + **`quiz_responses`** (`000:159`) — kept **separate** from the assignment chain so the Assignment-vs-Quiz gap signal works (§4, SCOPE §9).
+  - `quiz_questions.question_type CHECK ('mcq'|'open')` (`000:133`) — 3 MCQ + 2 OEQ. `concept_tag text` (free-text AI tag) **plus** `skill_id uuid FK skills` added by **`071:56`** — this is the linkage that makes signals key on skill (§2.4).
+  - `quiz_attempts.mastery_band CHECK ('reteach'|'grade_level'|'advanced')` (`000:153`) — the **DB enum stays `reteach|grade_level|advanced`**; the user-facing **Reinforce/On Track/Enrich** verbs are a display mapping (SCOPE §15 "never 'Band'"; §3.2).
+  - **`quiz_responses` is where the cognitive fields live** (`000:159`): `ai_score numeric`, `ai_score_explanation`, `cognitive_notes text` (FERPA-sensitive — §1.10), `confidence numeric`, plus the behavioral telemetry that feeds effort/frustration signals: `response_time_ms`, `hesitation_ms`, `answer_changes`, `navigation_backs`, `pause_count`, `total_pause_ms`, `word_count`. **LIFT+amend:** the structured `error_type` / `reasoning_pattern` / `misinterpretation_detected` / `vocabulary_difficulty` values (emitted by the grader, `lib/openai/prompts.ts:589-592`) are persisted as part of the grading write but are **not yet first-class columns** — V1 folds them into `cognitive_notes`/grading output. P1 promotes them to the misconception taxonomy table (§2.4, §3.2).
+- **`assignments`** (`000:184`) — `id`, `quiz_attempt_id FK quiz_attempts`, `student_id`, `class_id`, `lesson_id`, `mastery_band` (same enum), `learning_style`, `content jsonb NOT NULL` (the differentiated work), `status`, `teacher_reviewed bool`, `scaffold_level`, `due_at`. **LIFT+amend:** `skill_ids uuid[] NOT NULL DEFAULT '{}'` is added by **`071:65`** (the denormalized skill set the homework practices — *each attempt carries a skill tag* per §2.1's loop requirement). Spark columns (`spark_experiment_id`, `spark_attempt_id`) are added by `038:7` and the sync-state columns by `056` (§2.2).
+- **`homework_attempts`** (`000:214`) — the student's actual work on an assignment: `assignment_id`, `student_id`, `responses jsonb`, `score_pct numeric`, `ai_feedback jsonb`, `teli_hint_count int`, `submitted_on_time bool`. (Note: V1 has **both** `assignment_submissions` and `homework_attempts`; the `homework_attempts` row is the graded artifact that feeds the gap signal.)
+
+**`skill_learning_state` (LIFT, `072_skill_learning_state.sql`) — per `(student_id, skill_id)`.** This is the corrected lift (the draft's invented `skill_state` does not exist):
+
+```
+skill_learning_state (072:22)
+  id uuid PK
+  student_id  uuid FK users  ON DELETE CASCADE
+  school_id   uuid FK schools ON DELETE CASCADE
+  skill_id    uuid FK skills  ON DELETE CASCADE
+  state       text NOT NULL CHECK (state IN (         -- the 6-value vocabulary
+                'needs_different_instruction','needs_more_time',
+                'on_track','ready_to_extend',
+                'insufficient_data','not_attempted'))
+  confidence        numeric  DEFAULT 0   -- 0-100, rendered as SOFT WORDS only (072:35)
+  observation_count int      DEFAULT 0   -- graded cold + scaffolded observations
+  evidence          jsonb    DEFAULT '{}' -- { drivers: string[], metrics: {...} }
+  last_reteach_outcome text                -- e.g. 'different_approach_improved'
+  updated_at  timestamptz
+  UNIQUE (student_id, skill_id)
+```
+
+Computed by **`lib/skills/computeSkillState.ts`** (LIFT) — `MIN_OBSERVATIONS = 3` is the anti-noise guard (`computeSkillState.ts:121`): never assert a verdict on `< 3` graded observations and never score non-submission as "can't" (those route to `insufficient_data`/`not_attempted`, `:226-231`, `:320-337`). `ready_to_extend` was added after the original 5-state version shipped to prod, so 072 re-runs a `DROP CONSTRAINT … ADD CONSTRAINT` to stay idempotent (`072:68-78`) — **keep that idempotent re-add in the consolidated v2 migration.** Cold-start states (`insufficient_data`, `not_attempted`) are first-class, never fabricated. **RLS:** same-school read; **students/parents never read this table** ("no diagnostic surfaces student-side", `072:53`) — load-bearing for SCOPE §15 ("observational, not diagnostic").
+
+**`skills` (LIFT, `071_skills_registry.sql`) — the per-school taxonomy `skill_learning_state` and `quiz_questions.skill_id` reference.**
+
+```
+skills (071:31)
+  id uuid PK
+  school_id uuid FK schools ON DELETE CASCADE   -- per-school registry
+  subject   text                                -- nullable
+  name      text NOT NULL                        -- display (first-seen cleaned tag)
+  slug      text NOT NULL                        -- normalized identity (lib/skills/skillSlug.ts)
+  aliases   jsonb DEFAULT '[]'                   -- folded-in raw AI tags (drift merges, not forks)
+  status    text DEFAULT 'unreviewed' CHECK (status IN ('unreviewed','active','merged','retired'))
+  merged_into uuid FK skills                      -- merge without losing history
+  created_by  text DEFAULT 'ai' CHECK ('ai'|'teacher'|'backfill')
+  UNIQUE INDEX (school_id, COALESCE(subject,''), slug)  -- 071:50, COALESCE closes the NULL hole
+```
+
+Quiz generation resolves each AI `concept_tag` → `skills` row (slug match else auto-create `status='unreviewed'`); nothing is dropped. **LIFT verbatim.**
+
+**Snapshots (LIFT+amend, `046_snapshot_schema_v2.sql`) — weekly, written by the §1.8 snapshot cron.** V1's table is **`student_model_snapshots`** (extended by `046`, not invented). `046` adds the six signal fields the historical classifier needs — `risk_score`, `avg_hints_per_attempt`, `divergence_direction`, `divergence_score`, `recent_effort_labels jsonb`, and a `snapshot_schema_version CHECK (NULL OR 'v1'|'v2')` forensic stamp (`046:29-42`). Index is **per `(student_id, snapshot_date DESC)`** partial on `snapshot_schema_version='v2'` (`046:48`). **The trajectory grain is per-student-per-week** (not per-class, not per-skill) — see §2.4. **LIFT the schema; the weekly write job is the §1.8 cron, idempotent per `(student, week)`; "<4 weeks of data" is the cold-start empty state for the "you vs 4 weeks ago" UI (§5.1b/§5.2a).**
+
+**Profile — `student_model` (LIFT, `000:333` + `029` per-class grain).** Observational only; Strategies + Powers accrue from behavior, **per `(student_id, class_id)`** — see §2.4 for why this is the *correct* grain and not a special case.
+
+```
+student_model (000:333)
+  id uuid PK
+  student_id uuid FK users
+  class_id   uuid FK classes        -- ADDED by 029:8 (was per-student-only)
+  risk_score numeric, risk_trend text
+  attention_avg numeric, attention_trend text
+  learning_velocity_avg numeric, velocity_trend text
+  dominant_engagement text, frustration_avg numeric
+  consistency_label text, dominant_effort_pattern text
+  sessions_analyzed int
+  -- 7 SPARK rubric rolling averages added by 060 (see §2.2):
+  spark_dim_problem_understanding … spark_dim_collaboration  NUMERIC(3,2)
+  spark_dim_attempt_count int, spark_dim_collaboration_count int
+  UNIQUE (student_id, class_id)     -- 029:15 (was student_model_student_id_key)
+```
+
+**`029` is the real grain change** (`029:11` drops the old `student_id`-only unique, `029:15` adds `UNIQUE(student_id, class_id)`); **null `class_id` rows are the legacy global rollup** (`029:14`). The "8.2 per-student band" claim elsewhere is corrected to **per-class**. **LIFT 000 + 029 together; the upsert target is `onConflict: 'student_id,class_id'` (`029:18`).**
+
+**Teacher action log (LIFT+amend, `040_teacher_actions.sql`) — success-metric-#1 click (§5.1a, §11.8).**
+
+```
+teacher_actions (040:9)
+  id uuid PK
+  teacher_id uuid FK users ON DELETE CASCADE
+  student_id uuid FK users ON DELETE CASCADE
+  class_id   uuid FK classes, school_id uuid FK schools
+  tribe   text NOT NULL CHECK (tribe IN ('reteach','stretch','advanced'))   -- ⚠ see note
+  signal_summary text, draft_body text NOT NULL
+  status  text DEFAULT 'draft' CHECK ('draft'|'approved'|'edited'|'skipped')
+  final_body text, send_to_parent bool
+  source  text DEFAULT 'gpt' CHECK ('gpt'|'template'|'demo')
+  briefing_date date DEFAULT current_date
+  UNIQUE INDEX (teacher_id, student_id, briefing_date)   -- 040:30, one draft/teacher/student/day
+```
+
+**⚠ SCOPE divergence (flag, don't reopen):** the `tribe CHECK ('reteach'|'stretch'|'advanced')` is V1's retired **"Three Tribes"** vocabulary — SCOPE §15 retires "Tribes" in favor of **Reinforce/On Track/Enrich**. P1 renames the column to `cl` (or keeps `tribe` internal and maps at the read boundary) and aligns the CHECK to the CL verb set (§3.2). The **`status` value the success metric reads is `approved`/`edited`** (the click that proves the insight landed). RLS: `teacher_id = auth.uid()` own-rows (`040:48`) + platform-admin SELECT.
+
+**Media asset (LIFT, metering via `platform_events`).** V1 has **no dedicated `media_assets` table**; generated illustrations/diagrams/audio are persisted to Supabase Storage and **metered as event rows in `platform_events`** (§2.5). **Flux URLs expire in ~10 min → persist immediately on generation** (LIFT V1 `lib/storage/media.ts::persistImage`; §3.3, §7.4). **NEW for P1:** if a first-class `media_assets` row is wanted (for the per-task modality descriptor and FERPA cascade, §1.10/§3.3), add it as a fresh v2 table — it does not exist to lift.
+
+**Student IEP (LIFT, `053_student_iep.sql`) — IEP/504 fields. Correction: these are COLUMNS on `users`, not a separate table.** `053:26` adds `has_iep bool`, `iep_plan_type text CHECK (NULL|'iep'|'504'|'support_plan')`, `accommodations jsonb` (canonical codes from `lib/iep/accommodations.ts`), `iep_notes text`, `iep_updated_at`, `iep_updated_by uuid FK auth.users`. **Privacy posture (Barb 2026-04-26, `053:9`): visible to teacher/school_admin/school_sysadmin/platform_admin only — parent and student surfaces MUST NOT render it.** Feeds accommodation-aware generation (§3) + the eval IEP edge case (§11.6).
+
+**License — see §2.5 / §6** (`school_licenses` etc.).
 
 ### 2.2 Tables the integration/platform layers add
 
-- **`platform_links`** (generalizes SPARK's `core_spark_links`): one row per CORE-school↔product link, columns `school_id, product, enabled, api_key, core_base_url`, plus the §7 GA-rework columns `key_version, rotated_at, expires_at`. **This config row is the only thing in §7 that is genuinely generic** (§7 framing note).
-- **`webhook_idempotency_keys`** (lift SPARK migration 029 shape): `(endpoint, idempotency_key UNIQUE, status_code, response_body, created_at, expires_at)`.
-- **`eval_candidates`** (LIFT migration 066): `scope, input, expected_output, raw_output`, stratification cols (`grade_band/subject/comprehension_band/learning_style`), `reviewer_notes`, `source_attempt_id`, `barb_reviewed`, `promoted_at`.
-- **LMS connector + roster identity tables** (LIFT migrations 074/075) — GC course-link, identity anchoring (`rosterIdentity.ts` pattern), grade pull/push records.
+- **`platform_links` (LIFT+amend — generalizes V1 `platform_api_keys`, `034:7`).** The V1 table is **`platform_api_keys`** (`034_platform_api.sql`), **not** SPARK's `core_spark_links` (that lives in the SPARK repo). V1 columns: `id`, `school_id FK schools`, `product text CHECK ('lift'|'spark'|'pulse'|'custom')`, `api_key text UNIQUE`, `label`, `is_active bool`, `last_used_at`, with `UNIQUE INDEX (school_id, product)` (`034:20`) — exactly one link per (school, product). **P1 renames to `platform_links` and amends** to add the §7 GA-rework columns (these are **NEW**, no V1 antecedent — V1's `api_key` is a bare value with no version/rotation/expiry):
+  ```
+  platform_links (rename of platform_api_keys)
+    school_id, product, enabled (was is_active), api_key, core_base_url   -- LIFT shape
+    key_version int, rotated_at timestamptz, expires_at timestamptz       -- NEW (§7)
+    UNIQUE (school_id, product)                                            -- LIFT (034:20)
+  ```
+  **This config row is the only thing in §7 that is genuinely generic** (§7 framing note). Drop V1's `'lift'`/`'pulse'` product values from the pilot CHECK (Enterprise/out-of-scope) but keep `'spark'`; keep the wire seam.
+- **`webhook_idempotency_keys` (NEW for P1 — lift SPARK migration 029 *shape*, no V1 CORE table).** `(endpoint, idempotency_key text UNIQUE, status_code int, response_body jsonb, created_at, expires_at)`. On hit, return the cached response and **never** re-run (prevents retry storms, §7.3). `expires_at` enforces the ~30d TTL (the §1.8 idempotency-sweep cron). V1 CORE's only idempotency surface today is the per-assignment `spark_sync_*` columns (`056`), which is *not* a generic dedupe table — hence NEW.
+- **`eval_candidates` (LIFT, `066_eval_candidates.sql`).** `scope, input, expected_output, raw_output`, stratification cols (`grade_band`/`subject`/`comprehension_band`/`learning_style`), `reviewer_notes`, `source_attempt_id`, `barb_reviewed bool`, `promoted_at` — the corpus-rebuild table (§11.6). **LIFT.**
+- **LMS connector tables (LIFT, `074_lms_connector.sql`).** Two real tables: **`external_identities`** (`074:12` — `school_id`, `student_id FK users`, `provider text` e.g. `'google_classroom'`, `external_user_id`, `email`, `UNIQUE(provider, external_user_id)`) and **`lms_publications`** (`074:29` — `provider`, `course_external_id`, `external_assignment_id`, `resource_type CHECK ('quiz'|'homework'|'spark'|'course_link')`, `resource_id uuid`, `launch_url`, `grade_passback_enabled bool`, `UNIQUE(provider, resource_type, resource_id, course_external_id)`). Identity resolution is the `SECURITY DEFINER` fn **`resolve_external_identity(provider, external_user_id, email)`** (`074:54`) — external-id first, *unambiguous* email second (2+ rows = no match, `074:69`). **RLS posture is the strict one to copy:** `external_identities` has **no client-facing policy at all** (deny-by-default; reads only via the definer fn + service role, `074:84-87`); `lms_publications` is teacher-owns-what-they-published (`published_by = auth.uid()`, `074:91`). **LIFT both verbatim.**
+- **Roster identity / SIS anchor (LIFT schema, dark at pilot — `075`).** `roster_imports` + `roster_import_rows` (the CSV anchor-import pipeline, `075:49`/`:70`) plus the `users.school_student_id` anchor (§2.1). **Admin-only RLS** via the new `get_my_role()` definer (`075:93`) scoped to `school_admin`/`school_sysadmin`/platform_admin. **LIFT the anchor column + index now** (it is the P2 longitudinal backbone); the import-pipeline tables ship but stay dark (no GC/SIS sync wiring at pilot beyond GC).
+- **SPARK sync-state (LIFT, `056` + `038`).** Not a table — **columns on `assignments`**: `spark_experiment_id`, `spark_attempt_id` (`038:7`), `spark_sync_failed bool`, `spark_sync_error text` (one of `school_not_linked|core_integration_disabled|experiment_not_found|teacher_resolution_failed|session_creation_failed|transport_exhausted|other`, `056:13`), `spark_sync_attempted_at` (last-attempt semantics, overwritten on retry, `056:24`). Launch button gates on `spark_attempt_id IS NOT NULL AND NOT spark_sync_failed` (`056:11`; soft-degrade per §3.5). **LIFT.**
 
 ### 2.3 Trial-state source of truth (reconcile the two models — locked decision needed)
 
 V1 stores trial state in **two places with two `provisionTrial` functions**, and P1 must pick one source of truth and document the read path for every gate:
 
-- **`schools` table (migration 035):** `is_trial`, `trial_started_at`, `trial_expires_at`, `trial_status` (CHECK `inactive|active|expired|converted|cancelled`), `trial_plan='pro'`, `trial_credentials` jsonb. Written by the **account-level** `lib/trial/provisionTrial.ts`.
-- **`school_licenses` (migration 035 trial cols):** `status='trialing'`, `trial_starts_at`, `trial_ends_at`, `trial_converted`. Written by the **license-level** `lib/licensing/trial.ts::provisionTrial` (sets `student_limit=300`, `tier='professional'`).
+- **`schools` table (migration 035):** `is_trial bool`, `trial_started_at`, `trial_expires_at`, `trial_status text CHECK ('inactive'|'active'|'expired'|'converted'|'cancelled')` (`035:10`), `trial_plan text DEFAULT 'pro'` (`035:13`), `trial_credentials jsonb` (`035:16`), `trial_source`, `hl_contact_id` (HighLevel CRM). Plus `users.is_trial_user bool` + `users.trial_school_id` (`035:19`) and the **`trial_events`** audit table with an 18-value `event_type CHECK` (incl. `trial_signup`, `day_25_email_sent`, `day_30_email_sent`, `trial_converted`, `035:27`). Written by the **account-level** `lib/trial/provisionTrial.ts`.
+- **`school_licenses` (migration 020 base + 035 trial cols):** `status text CHECK ('trialing'|'active'|'past_due'|'suspended'|'cancelled')` (`020:12`), `trial_starts_at`, `trial_ends_at`, `trial_converted bool` (`020:14`), `tier CHECK ('essentials'|'professional'|'enterprise')` (`020:11`), `student_limit int DEFAULT 300` (`020:13`). Written by the **license-level** `lib/licensing/trial.ts::provisionTrial` (sets `student_limit=300`, `tier='professional'`, `status='trialing'`).
 
 **Decision for P1:** `school_licenses.status` is the **authoritative source for all gating** — `checkFeature`, `useLicenseGate`, `checkUsageCap`, `enforceActiveLicense`, and the trial cron all read `school_licenses`. `schools.is_trial/trial_status/trial_credentials` is **derived/presentation state** (used by onboarding and the welcome email), kept in sync by the provisioning flow. The two `provisionTrial` functions are disambiguated by path and role: `lib/trial/*` provisions the **account + school + demo data**, then calls `lib/licensing/trial.ts` to provision the **license row**. Both referenced explicitly in the lift table.
 
+> **NEW divergence to flag (not in the draft) — tier-enum mismatch across two licensing migrations.** `school_licenses.tier` uses **`'professional'`** (`020:11`) but `license_keys.tier` uses **`'pro'`** (`049:18`). The HMAC activation path (which writes a `license_keys` row then provisions `school_licenses`) must map `'pro' → 'professional'` or the CHECK fails at activation. P1 **picks `'professional'` as canonical** (it matches `TIER_FEATURES` and SCOPE §10) and corrects the `license_keys` CHECK in the consolidated migration. Do not silently carry both.
+
 ### 2.4 Context granularity — reconcile per-student / per-class / per-skill (do not pile up special cases)
 
-The draft introduced per-skill state as a *third* grain without reconciling the two that already exist. P1 defines the granularity model **once**:
+The draft introduced per-skill state as a *third* grain without reconciling the two that already exist. P1 defines the granularity model **once**, grounded in what the real migrations enforce:
 
-- **Canonical hierarchy:** `(student_id, class_id, skill_id)` with rollup. Legacy global per-student `student_model` rows (null `class_id`) are treated as the global rollup.
-- **`student_model` (migration 029)** is already per-`(student_id, class_id)` (unique on `(student_id, class_id)`, null = legacy global). **Learner Profile, the 12 Strategies, and the 5 Powers live here, per-class** — they are cross-cutting and behavioral, not per-skill. (§8.2's "per-student band" claim is corrected to "per-class, migration 029.")
-- **`skill_learning_state` (migration 072)** is per-`(student_id, skill_id)`. **CL and the misconception signal live here, per-skill.**
-- **Source-of-truth rule when grains disagree:** for a *skill-specific* question (CL on this skill, the misconception on this skill), `skill_learning_state` wins; for a *cross-cutting* question (which Strategies/Powers this student shows in this class), `student_model` wins. They answer different questions and are not expected to agree.
-- **Dependency:** signals re-key onto this hierarchy in M2; the engine must emit skill-tagged attempts in M1/M2 (§2.1) or per-skill state has no input.
+- **Canonical hierarchy:** `(student_id, class_id, skill_id)` with rollup. The grain a signal lives at is **determined by what question it answers**, and each grain is a real DB constraint, not a convention:
+  | Grain | DB constraint | What lives here |
+  |---|---|---|
+  | per `(student, class)` | `student_model UNIQUE(student_id, class_id)` (`029:15`) | Learner Profile, 12 Strategies, 5 Powers, risk/attention/velocity/consistency, the 7 SPARK rubric rolling averages (`spark_dim_*`, `060`) |
+  | per `(student, skill)` | `skill_learning_state UNIQUE(student_id, skill_id)` (`072:41`) | CL (the 6-state vocabulary → 3 verbs) + the per-skill misconception |
+  | per `(student, week)` | `student_model_snapshots (student_id, snapshot_date)` (`046:48`) | trajectory ("you vs 4 weeks ago") |
+- **Legacy global per-student `student_model` rows (null `class_id`)** are the **global rollup** (`029:14`) — not a special case, just the top of the same hierarchy.
+- **`student_model` (migration 029)** is per-`(student_id, class_id)` (unique on `(student_id, class_id)`, null = legacy global). **Learner Profile, the 12 Strategies, and the 5 Powers live here, per-class** — they are cross-cutting and behavioral, not per-skill. (§8.2's "per-student band" claim is corrected to "per-class, migration 029.") A student can be "visual in Math, auditory in English" (`029:3`) — that is *why* the grain is per-class, and it is the one rule that prevents special-casing.
+- **`skill_learning_state` (migration 072)** is per-`(student_id, skill_id)`. **CL and the misconception signal live here, per-skill.** Note this grain has **no `class_id`** — a skill is school-scoped (`072:26` FK `skills`, which is per-school via `071`), so per-skill state is implicitly cross-class. That is intentional: comprehension of "decimal operations" is the same skill whether seen in 1st or 5th period.
+- **Source-of-truth rule when grains disagree:** for a *skill-specific* question (CL on this skill, the misconception on this skill), `skill_learning_state` wins; for a *cross-cutting* question (which Strategies/Powers this student shows in this class), `student_model` wins; for a *trajectory* question (is this student climbing/sliding over weeks), `student_model_snapshots` wins. They answer different questions and are **not expected to agree** — `mastery_band` on `quiz_attempts` is the *attempt-level* reading; `skill_learning_state.state` is the *fused per-skill* reading; they can legitimately differ.
+- **Dependency:** signals re-key onto this hierarchy in M2; the engine must emit **skill-tagged attempts** in M1/M2 — concretely, `quiz_questions.skill_id` (`071:56`) and `assignments.skill_ids[]` (`071:65`) must be populated by the generation path, or per-skill state has no input (`computeSkillState.ts` reads graded observations keyed by `skill_id`).
 
 ### 2.5 Licensing tables (detail in §6)
 
-`school_licenses` (one per school, UNIQUE on `school_id`, reserved Stripe columns), `license_keys` (HMAC burn ledger), `license_usage`, `license_events`, `billing_invoices` (PO/check/wire — no Stripe), `user_sessions`, `login_anomalies`, `platform_config` (maintenance singleton), `platform_events` (media metering). `schools.allowed_email_domains` (jsonb, domain lock). `enrollments` carries the `trg_enforce_enrollment_limit` BEFORE-INSERT trigger.
+All from the licensing/anti-piracy migrations; **LIFT as-is** with the four §6 hardening fixes and the §2.3 tier-enum correction.
+
+- **`school_licenses`** (`020:8`, extended `049:70`) — one per school, **`UNIQUE(school_id)`** (`020:10`); `tier`/`status`/`student_limit` (gating source of truth, §2.3); reserved Stripe columns `stripe_customer_id`/`stripe_subscription_id` stay but **no code path may assume they're populated** (§1.6, SCOPE §14); `feature_overrides jsonb`/`feature_blocks jsonb` (`020:25`) for negotiated deals; `activated_via_key_id FK license_keys` (`049:71`).
+- **`license_keys`** (`049:14`) — HMAC burn ledger: `key text UNIQUE`, `signature text NOT NULL` (HMAC-SHA256 truncated, verified at activation via `LICENSE_KEY_SECRET`), `tier`/`student_limit`/`duration_months`, `status CHECK ('pending'|'active'|'expired'|'revoked')`, one-time `activated_at`/`activated_by`, `expires_at` (hardening fix #3 reads this **at activation**, today it's ignored), `allowed_email_domains jsonb` baked in at issue (`049:35`).
+- **`license_usage`** (`020:34`) — monthly rollup, `UNIQUE(school_id, month)`.
+- **`license_events`** (`020:50`) — audit log; auto-written `'license_created'` by the `AFTER INSERT` trigger `trg_license_created_event` (`020:113`).
+- **`billing_invoices`** (`049:121`) — PO/check/wire (`payment_method text`, no Stripe), `invoice_number text UNIQUE`, `status CHECK ('issued'|'paid'|'overdue'|'cancelled')`.
+- **`user_sessions`** (`049:81`) + **`login_anomalies`** (`049:229`, `anomaly_type CHECK ('many_concurrent_sessions'|'multi_geo_24h'|'rapid_ip_burst'|'auto_suspended')`) — concurrent-session tracking + anti-piracy anomaly detection.
+- **`platform_config`** (`033:7`) — maintenance singleton (`maintenance_mode bool`, `maintenance_message`, seeded `INSERT … DEFAULT VALUES ON CONFLICT DO NOTHING`, `033:17`). **Hardening fix #2:** today it gates a banner only; P1 makes it *truly* read-only (block write-shaped requests; FERPA deletions queue until it clears, §1.10).
+- **`platform_events`** (`034:23`) — **media metering store**. Each metered call inserts a row `{ source, event_type, school_id, student_id, payload jsonb }`; `lib/licensing/usageCaps.ts::checkUsageCap` counts rows where `source = CAP_EVENT_SOURCE[feature]` since the period start (`usageCaps.ts:159`). The exact source strings and caps (LIFT verbatim, SCOPE §5b):
+  | Capped feature (`CappedFeature`) | `platform_events.source` | Period | Essentials / Professional / Enterprise |
+  |---|---|---|---|
+  | `teli_chat` | `teli_chat` | day | 20 / 50 / ∞ |
+  | `flux_images` | `flux` | month | 50 / 200 / ∞ |
+  | `runway_videos` | `runway` | month | 10 / 50 / ∞ |
+  | `whisper_seconds` | `whisper` | month | 12 000 / 60 000 / ∞ |
+  | `tts_characters` | `tts` | month | 100 000 / 500 000 / ∞ |
+
+  (`usageCaps.ts:30-75`; `null` = unlimited.) **Metering fail-open vs licensing fail-closed precedence is locked in §3.5** — the gated write never reaches the metered provider call, so fail-closed wins.
+- **`schools.allowed_email_domains`** (jsonb, `049:65`) — the domain-lock anti-piracy layer.
+- **`enrollments`** carries the **seat-enforcement DB trigger** — the §2.1 table plus this `BEFORE INSERT` trigger:
+  ```
+  trg_enforce_enrollment_limit  BEFORE INSERT ON enrollments   -- 049:218
+    → enforce_enrollment_limit()  SECURITY DEFINER             -- 049:169
+  ```
+  Logic (`049:169-216`): resolve the student's `school_id`; read `school_licenses.student_limit WHERE status='active'`; if **no active license → allow** (trial/pilot, no enforcement, `049:188`); else count `DISTINCT` active student users at the school; if `count >= limit` **and** this student is not already enrolled anywhere at the school, `RAISE EXCEPTION … USING ERRCODE='check_violation'` (`049:209`). Re-enrollments of existing students are always allowed. **Cannot be bypassed from app code** — this is the SCOPE §12a "DB-trigger seat enforcement" moat. **LIFT verbatim.** (Pilot note: a Pro trial has `status='trialing'`, not `'active'`, so the trigger is a no-op during the trial window by design — the cap binds only after conversion to an active license.)
 
 ---
 
@@ -332,76 +473,250 @@ The draft introduced per-skill state as a *third* grain without reconciling the 
 
 **Lesson Plan → Quiz (3 MCQ + 2 OEQ) → read cognitive + behavior signals → set CL + detect Learning Strategies → generate Differentiated Assignment + Spark Challenge + Super TELI support.**
 
-- **Lesson plan.** One sentence or one upload in → CORE writes the full plan, passage, objectives, key concepts. **Review, edit, publish** (the teacher is in the loop). Lift `app/api/teacher/lessons/parse/route.ts` logic into `lib/engine/` (§3.4).
-- **Quiz: 3 MCQ + 2 OEQ.** MCQs read comprehension fast; the **2 OEQs are the engine** (reasoning, critical thinking, and the *specific misconception*). AI-graded with a rubric, eval-gated from day one. Lift `lib/teacher/generateQuizForLesson.ts` + the quiz prompt in `lib/openai/prompts.ts`.
-- **Grade-anchored difficulty (§4a — hard constraint).** Questions generated to the student's **grade level** — a Grade 6 and Grade 12 item on the same skill differ in difficulty. Lift V1's Bloom-to-grade calibration in the quiz/assignment prompt. Surface a **grade selector, not a difficulty slider**.
-- **Adaptive Q4–Q5 (§4b).** Within-attempt reshape (Q1–Q3 MCQ % → Q4–Q5: **0–50 scaffolded / 50–79 grade / 80+ advanced**); lift `adapt/route.ts`. **SCOPE divergence — flagged (see Residual Open Questions):** SCOPE §4b frames reshape as *sequenced* ("cold-start is a fixed 3 MCQ + 2 OEQ at grade level; once CORE has enough history, Q4–Q5 reshape"), but V1's actual behavior is *always-on within-attempt* reshape off Q1–Q3. P1 ships V1's always-on behavior (it is the proven, calibration-locked path) and flags the divergence for a SCOPE call; if history-gating is retained, "enough history" must be defined.
-- **OEQ grading (the highest-stakes path).** Lift `GRADING_SYSTEM`/`gradingPrompt` (prompt 514–648) **text** verbatim. **This is not a verbatim file copy:** V1's `submit/route.ts` is **1,449 lines making 5 distinct LLM calls** (Claude grading at temperature 0.2 + GPT-4o calls for learning-style/insights at temp 0.3–0.7 with `response_format: json_object`). If the registry selects an Opus 4.x grader, **every Claude call must be re-shaped** to `output_config` structured output, sampling params stripped, prefills removed, and the `JSON.parse` contract re-derived (§1.3). Scored 0 / 0.5 / 1.0. Claude primary → GPT fallback. **Week-1 spike (mandatory, §10.5):** run the chosen grader against 5–10 hand-graded OEQs *before* committing M1 to it — if Opus structured output shifts the grade distribution vs V1's temp-0.2 Claude, the calibration-locked corpus premise weakens; decide Opus-vs-keep-Sonnet/GPT on day 3, not at soak.
+The pipeline is **not one file copy**. V1 spreads it across four route/lib surfaces, and the heaviest one — `app/api/attempts/[attemptId]/submit/route.ts` (**1,449 lines**) — makes **4 distinct LLM call sites** (grading, learning-style, assignment, insights), with the assignment site itself a **2-provider primary→fallback path** (Claude → GPT), which is what makes "5 LLM calls" in submit. Counting the whole pipeline there are **5 generation calls end-to-end** (lesson parse, quiz gen, adapt, grading, assignment) plus **2 analysis calls** that fire inside submit (learning-style, insights). Each one becomes an import-safe `lib/engine/*` function (§3.4) and a retryable WDK step (§3.6).
+
+#### Per-AI-call reference table (lift targets, exact params)
+
+| # | Call (purpose) | V1 call site | Model + sampling | Prompt source (`lib/openai/prompts.ts`) | Output shape | `lib/engine` target | Primary → fallback |
+|---|---|---|---|---|---|---|---|
+| 1 | **Lesson parse** — sentence/upload → plan + passage + objectives + key concepts | `app/api/teacher/lessons/parse/route.ts:95–103` | `OPENAI_GEN_MODEL`, **temp 0.3**, `max_tokens 2000`, `response_format:{type:'json_object'}` | `LESSON_PARSE_SYSTEM` (268–271) + `lessonParsePrompt()` (272–296) | `{ plan, passage, objectives[], key_concepts[] }` JSON; persisted `status='pending_review'` | `lib/engine/lessonParse.ts` | GPT-only (no Claude leg); `resilientChatCompletion` retries 429/5xx |
+| 2 | **Quiz gen** — 3 MCQ + 2 OEQ (STEM variant: 3 numeric + 2 OEQ) | `lib/teacher/generateQuizForLesson.ts:199–209` | `OPENAI_GEN_MODEL`, **temp 0.5**, `max_tokens 3000`, `response_format:{type:'json_object'}` | quiz prompt body (297–512); **Bloom-to-grade calibration at 367–372 — §4a hard constraint** | `{ questions:[{position,type,question_text,options?,answer?,rubric}] }` | `lib/engine/quizGen.ts` | GPT-only; numeric-math grading is deterministic (migration 076), not LLM |
+| 3 | **Adapt Q4–Q5** — within-attempt reshape off Q1–Q3 MCQ % | `app/api/attempts/[attemptId]/adapt/route.ts:98–148` | `OPENAI_GEN_MODEL`, **temp 0.7**, `max_tokens 1200`, `response_format:{type:'json_object'}` | inline system+user (94–142); band thresholds from `computeMasteryBand` (**0–50 scaffolded / 50–79 grade_level / 80+ advanced**, adapt:61–62) | `{ level, mcq_pct, questions:[{position,question_text,rubric,scaffold_hint,difficulty_label}] }`; cached on `quiz_attempts.adapted_questions` | `lib/engine/adapt.ts` | GPT-only; **on null → falls back to original Q4/Q5** (adapt:151–161), never blocks the attempt |
+| 4 | **OEQ grading** — score the 2 OEQs + extract cognitive signals (highest-stakes) | `submit/route.ts:245–249` (concurrent `Promise.all`, one call per OEQ) | `CLAUDE_GRADING_MODEL` via `claudeChat`, **temp 0.2**, `maxTokens 600` | `GRADING_SYSTEM` (521–569) + `gradingPrompt()` (571–648) | `{ score:0|0.5|1.0, explanation, confidence, grader_source, error_type, reasoning_pattern, misinterpretation_detected, vocabulary_difficulty, cognitive_notes }` (contract at 583–594) | `lib/engine/grading.ts` | **Claude primary → GPT fallback** (V1's calibration-locked chain); see request-shape rebuild below |
+| 5 | **Assignment gen** — differentiated assignment (15 profiles = 3 bands × 5 learning styles) | `submit/route.ts:854–880` (`generateAssignmentJson`) | Claude `claudeChat` **temp 0.7**, `maxTokens` up to 4500, `timeoutMs 120000`; GPT leg temp 0.7, `response_format:{type:'json_object'}`, `timeoutMs 45000` | `ASSIGNMENT_SYSTEM` (686–743) + `assignmentPrompt()` (744+); `SCAFFOLD_INSTRUCTIONS[level]` appended (submit:748–752) | differentiated assignment JSON keyed to band + learning_style; `generation_model` recorded | `lib/engine/assignmentGen.ts` | **Claude primary → GPT fallback** (submit:869–880); 120s Claude timeout tuned to ~60–80 tok/s streaming (submit:846–853) |
+| 5a | **Learning-style** — infer style from behavioral signals (analysis, fires inside submit) | `submit/route.ts:466–475` | `OPENAI_GEN_MODEL`, **temp 0.3**, `max_tokens 300`, `response_format:{type:'json_object'}` | `LEARNING_STYLE_SYSTEM` (652–656) + `learningStylePrompt()` (657–684) | `{ learning_style, confidence }`; normalized via `normalizeLearningStyle` (submit:483) | folds into `lib/engine/assignmentGen.ts` (feeds the band×style profile) | GPT-only; null → `{learning_style:'emerging',confidence:0}` (submit:477) |
+| 5b | **Insights** — narrative insight rollup (analysis, fires inside submit) | `submit/route.ts:1197–1213` | `OPENAI_GEN_MODEL`, **temp 0.4**, `max_tokens 1000`, `response_format:{type:'json_object'}` | `INSIGHT_SYSTEM` (1062–1065) + `insightPrompt()` (1066+) | `{ insights:[] }` → `insights` table | not on the eval critical path; lib-ify alongside grading | GPT-only; null → `{insights:[]}` (submit:1215) |
+
+- **Lesson plan.** One sentence or one upload in → CORE writes the full plan, passage, objectives, key concepts. **Review, edit, publish** (the teacher is in the loop). Lift call #1.
+- **Quiz: 3 MCQ + 2 OEQ.** MCQs read comprehension fast; the **2 OEQs are the engine** (reasoning, critical thinking, and the *specific misconception*). AI-graded with a rubric, eval-gated from day one. Lift call #2 (`generateQuizForLesson.ts` + prompt 297–512).
+- **Grade-anchored difficulty (§4a — hard constraint).** Questions generated to the student's **grade level** — a Grade 6 and Grade 12 item on the same skill differ in difficulty. Lift V1's Bloom-to-grade calibration (`prompts.ts:367–372`). Surface a **grade selector, not a difficulty slider**.
+- **Adaptive Q4–Q5 (§4b).** Within-attempt reshape (Q1–Q3 MCQ % → Q4–Q5: **0–50 scaffolded / 50–79 grade / 80+ advanced**); lift call #3. The thresholds are **not** re-hardcoded in `adapt/route.ts` — they derive from `computeMasteryBand` (adapt:61), so the band vocabulary stays single-sourced. **SCOPE divergence — flagged (see Residual Open Questions):** SCOPE §4b frames reshape as *sequenced* ("cold-start is a fixed 3 MCQ + 2 OEQ at grade level; once CORE has enough history, Q4–Q5 reshape"), but V1's actual behavior (confirmed in `v1-mining-findings.md` item 4) is *always-on within-attempt* reshape off Q1–Q3. P1 ships V1's always-on behavior (it is the proven, calibration-locked path) and flags the divergence for a SCOPE call; if history-gating is retained, "enough history" must be defined.
+- **OEQ grading (the highest-stakes path).** Lift `GRADING_SYSTEM`/`gradingPrompt` (521–648) **text** verbatim. **This is not a verbatim file copy:** submit/route.ts makes the 5 calls above; the grading call alone fires **once per OEQ concurrently** (`Promise.all`, submit:242–255) at temp 0.2 against `CLAUDE_GRADING_MODEL` through `claudeChat` (which today defaults to Claude Sonnet 4.6 per V1 `lib/ai/models.ts`). Scored **0 / 0.5 / 1.0**. Claude primary → GPT fallback. **If ANY of the concurrent grading calls returns null/throws, the whole submit short-circuits** to `grading_status:'pending'` + `grading_failed:true` and returns a "grading delayed" payload (submit:261–273) — **V1 never half-grades**; this is the seed of the §3.5 terminal-failure contract.
+- **Grading request-shape rebuild (the real work, not a copy — §1.3).** V1's `claudeChat` builds a Messages request with `temperature` (submit passes 0.2), `max_tokens`, and a `JSON.parse(raw)`-with-fallback contract (submit:281 supplies a full default object on parse fail). If the §1.3 registry selects an **Opus 4.x** grader, **every Claude call must be re-shaped**: drop `temperature`/`top_p`/`top_k` (they 400 on 4.6/4.7/4.8), move to `output_config.format` structured output, remove last-assistant-turn prefills, set `thinking:{type:'adaptive'}` + `output_config:{effort:'high'}`, and handle `stop_reason:'refusal'` *before* reading `content[0]`. The prompt **text** ports verbatim; the request **shape** is rebuilt. Parse with `JSON.parse`, never raw-string match.
+- **Week-1 spike (mandatory, §10.5).** Run the chosen grader against 5–10 hand-graded OEQs *before* committing M1 to it — if Opus structured output shifts the grade distribution vs V1's temp-0.2 Claude Sonnet, the calibration-locked corpus premise weakens. Decide Opus-vs-keep-Sonnet/GPT on day 3, not at soak. The registry pattern (§1.3) keeps the pick a one-line env change either way.
 
 ### 3.2 CL, Learning Strategies, and the misconception taxonomy
 
-- **CL = Reinforce / On Track / Enrich (§4c) — a verb mapping over the existing per-skill state.** The per-skill model already exists (`skill_learning_state`, 6 states, migration 072 — a **LIFT**, not net-new). The genuine net-new is the **CL verb mapping**: the 3 teacher verbs are a display layer over the 6 V1 states. Defined mapping for P1:
-  - `needs_different_instruction`, `needs_more_time` → **Reinforce**
-  - `on_track` → **On Track**
-  - `ready_to_extend` → **Enrich**
-  - `insufficient_data`, `not_attempted` → **"Not yet assessed"** (cold-start; null CL, never a fabricated verb)
-  - This mapping is the Barb delta (ratify it), **not** the per-skill existence. Whether to keep `confidence`/`observation_count`/`last_reteach_outcome` surfaced or internal-only is a Barb call (Residual Open Questions). The cold-start "Not yet assessed" UI state is genuinely net-new and must be designed for One Student (§5.1b).
-- **CL drives generation:** Reinforce → scaffolded work + more Super TELI. On Track → grade-level. Enrich → Spark / stretch + Socratic-only Super TELI.
-- **Learning Strategies (12) detection.** Quiz *seeds* LS weakly; **behavior signals confirm over time** (observation supersedes; never a day-one verdict). LS/Learner Profile stay cross-cutting + per-class (`student_model`, §2.4), not per-skill.
-- **Misconception taxonomy (§6b — formalize the existing enums, Barb-ratified).** Not greenfield: V1 already emits a closed **8-value `error_type`** (`none|factual_error|reasoning_gap|incomplete|misunderstood_question|vocabulary_confusion|off_topic|blank`), a **6-value `reasoning_pattern`** (incl. a literal `misconception` value), `misinterpretation_detected`, and `vocabulary_difficulty` (`prompts.ts` 589–612), plus a recurring-error matcher (`lib/reports/diagnosis.ts::findRecurringError`, threshold ≥3, drives a `check_concepts` action). P1's work: **(a)** formalize these enums into a first-class taxonomy table; **(b)** key the matcher to `skill_learning_state` so a misconception is per-skill; **(c)** surface it on One Student. The Barb decision shrinks from "invent a taxonomy" to "ratify/extend these 8 error types + 6 reasoning patterns." Until Barb signs off, the surface uses the raw (already-structured) `error_type`/`reasoning_pattern` values directly — the fallback is structured, not freetext.
+- **CL = Reinforce / On Track / Enrich (§4c) — a verb mapping over the existing per-skill state.** The per-skill model already exists: `skill_learning_state` (migration `072_skill_learning_state.sql`), per `(student_id, skill_id)` (`UNIQUE (student_id, skill_id)`, migration:40), computed by `lib/skills/computeSkillState.ts::computeSkillState(input: SkillStateInput): SkillStateResult` (072 is a **LIFT**, not net-new). The genuine net-new is the **CL verb mapping**: the 3 teacher verbs are a display layer over the **6 real `state` enum values** (the CHECK constraint, migration `072:27–34` / `71–78`; mirrored as the `SkillLearningState` union, `computeSkillState.ts:31–37`):
+
+  | `skill_learning_state.state` (V1, exact) | CL verb (P1 display) |
+  |---|---|
+  | `needs_different_instruction` | **Reinforce** |
+  | `needs_more_time` | **Reinforce** |
+  | `on_track` | **On Track** |
+  | `ready_to_extend` | **Enrich** |
+  | `insufficient_data` | **"Not yet assessed"** (cold-start; null CL, never a fabricated verb) |
+  | `not_attempted` | **"Not yet assessed"** (cold-start; null CL) |
+
+  - `ready_to_extend` was added *after* the original 5-state 072 shipped to prod; the migration's idempotent `DROP CONSTRAINT … ADD CONSTRAINT` (072:68–78) is what makes the 6-state version re-runnable — P1 consolidates the **6-state** version. `insufficient_data` is a documented first-class anti-noise guard: **never assert a verdict on < 3 graded observations, and never score non-submission as "can't"** (072:17–19).
+  - This mapping is the **Barb delta** (ratify it), **not** the per-skill existence. Whether to surface `confidence` (0–100, rendered as soft words only, 072:35), `observation_count` (072:36), and `last_reteach_outcome` (072:38) or keep them internal-only is a Barb call (Residual Open Questions). The cold-start "Not yet assessed" UI state is genuinely net-new and must be designed for One Student (§5.1b) and rendered by the `CLBadge` component (§9.4).
+  - **Do not compute per-skill CL via `computeMasteryBand`** — that ≤50/51–79/≥80 rolling-avg-of-5 instrument (`lib/utils/scoring.ts`) is the *per-student quiz band*, a different instrument (§4 note). Per-skill CL comes from `skill_learning_state` only. Recompute triggers (072:11): **on quiz grade, homework grade, and reteach completion** — wire these as the same events that fire skill-tagged attempt writes (§2.1/§2.4).
+- **CL drives generation:** Reinforce → scaffolded work + more Super TELI. On Track → grade-level. Enrich → Spark / stretch + Socratic-only Super TELI. (The generation-side scaffold lever is the `SCAFFOLD_INSTRUCTIONS[level]` block appended to `ASSIGNMENT_SYSTEM`, submit:748–752.)
+- **Learning Strategies (12) detection.** Quiz *seeds* LS weakly; **behavior signals confirm over time** (observation supersedes; never a day-one verdict). LS/Learner Profile stay cross-cutting + per-class (`student_model`, migration 029, §2.4), **not** per-skill. The 12 names + prescription rule (`INTELIFLOW_STRATEGIES` at `prompts.ts:15–218`, `getStrategiesForStudent(band, style)`) lift verbatim (§8.1).
+- **Misconception taxonomy (§6b — formalize the existing enums, Barb-ratified).** Not greenfield. V1 already emits, inside the grading JSON contract (`prompts.ts:589–593`), a **closed 8-value `error_type`** and a **closed 6-value `reasoning_pattern`** that P1 promotes to a first-class taxonomy table:
+  - **`error_type` (8 values, exact, `prompts.ts:589`):** `none | factual_error | reasoning_gap | incomplete | misunderstood_question | vocabulary_confusion | off_topic | blank`. Rule: `error_type` uses `none` **only when score is 1.0** (`prompts.ts:604`).
+  - **`reasoning_pattern` (6 values, exact, `prompts.ts:590`, definitions at 606–612):** `surface_recall | partial_reasoning | full_reasoning | misconception | creative_extension | blank_or_off_topic`. Note the literal **`misconception`** value already exists — the taxonomy is ~60% built, not invented. The grading prompt **must never return `none`** for `reasoning_pattern` unless blank/off-topic (use `blank_or_off_topic`), and submit synthesizes one from score when the LLM omits it (submit:285–287).
+  - **Plus** `misinterpretation_detected: true|false` and `vocabulary_difficulty: none|low|medium|high` (`prompts.ts:591–592`).
+  - **The recurring-error matcher already exists:** `lib/reports/diagnosis.ts::findRecurringError(errorTypes)` (diagnosis:61–74), gated by `RECURRING_ERROR_THRESHOLD = 3` (diagnosis:53) — filters out `none`/`''`, returns the most-frequent `error_type` recurring **≥ 3 times**, and drives the `check_concepts` suggested action (`grade_level + recurring error type → check_concepts`, diagnosis:84/117–122).
+  - **P1's work, three parts:** **(a)** formalize the 8 `error_type` + 6 `reasoning_pattern` enums into a first-class taxonomy table (Barb ratifies/extends the vocabulary — the decision shrinks from "invent a taxonomy" to "ratify these 8 + 6"); **(b)** key `findRecurringError` to `skill_learning_state` so a misconception is **per-skill**, not per-student-flat (it currently counts a flat `error_types[]` array); **(c)** surface it on One Student (§5.1b). **Until Barb signs off**, the surface uses the raw (already-structured) `error_type`/`reasoning_pattern` values directly — the fallback is **structured, not freetext.**
 
 ### 3.3 Media-rich outputs (detail in §6)
 
 Every passage, question, and hint can be read aloud; students can speak back; assignments include generated illustrations and diagrams. Media generation defaults-on (TTS/Whisper/Flux/diagrams all tiers; Runway video Pro+). Metering is owned by §6.
 
-- **Per-task modality descriptor (net-new abstraction — replaces the ad-hoc `isReadingTask` boolean).** The engine emits an `affordances` descriptor on each generated task (e.g. `{read_aloud, voice_in, text_in}`). Both the client (hide the mic) and the server guard (422) read this **one descriptor** rather than re-deriving "is this a reading task." This single field enforces "voice only on non-reading tasks" (§6.7) *and* every future modality rule (no read-aloud of an answer field, no voice on math-symbol entry) without a new bespoke flag each time. There is no task-modality concept in V1 — this is built once, correctly, in the engine.
-- **Persist Flux media immediately (build requirement, not an open risk).** Flux URLs expire in ~10 min; LIFT V1's `persistImage` so any generated illustration/diagram is persisted to storage on generation. A stale/expired media URL at render is a correctness bug for a loop product.
+- **Per-task modality descriptor (net-new abstraction — replaces the ad-hoc `isReadingTask` boolean).** The engine emits an `affordances` descriptor on each generated task (e.g. `{read_aloud, voice_in, text_in}`). Both the client (hide the mic) and the server guard (**422** on `transcribe`/`teli-voice` when `voice_in` is disallowed, §6.7) read this **one descriptor** rather than re-deriving "is this a reading task." This single field enforces "voice only on non-reading tasks" (§6.7, SCOPE §5c) *and* every future modality rule (no read-aloud of an answer field, no voice on math-symbol entry) without a new bespoke flag each time. There is no task-modality concept in V1 — `v1-mining-findings.md` item 5 confirms voice-on-non-reading is "implied via assignment modality, not enforced in code" — so this is built once, correctly, in the engine. The descriptor is written by the quiz-gen / assignment-gen steps (calls #2/#5) so it travels with the persisted task.
+- **Persist Flux media immediately (build requirement, not an open risk).** Flux URLs expire in ~10 min (V1 uses `flux-pro-1.1` via `lib/flux/client.ts`, degrades to Mermaid/Excalidraw with no key — `v1-mining-findings.md` item 5); LIFT V1's `persistImage` so any generated illustration/diagram is persisted to storage on generation. A stale/expired media URL at render is a correctness bug for a loop product (mirrors the §7.4 snapshot-invalidation rule).
 
 ### 3.4 Lib/route split (mandatory for the eval rig — M1 deliverable)
 
-Each AI path is a **pure, import-safe `lib/engine/` function** (no `next/server`, no `cookies()`, no SDK side-effects at import) that the route handler **and** the eval runner both import. Build the engine lib-first, not route-first. This closes the §11.3 gotcha (the eval rig can only wire `invokeCandidate` against import-safe functions) — make "engine exposes headless entry points" an explicit M1 deliverable, not an M7 discovery. Targets: `lib/engine/{grading,quizGen,assignmentGen,adapt}.ts`.
+Each AI path is a **pure, import-safe `lib/engine/` function** (no `next/server`, no `cookies()`, no SDK side-effects at import) that the route handler **and** the eval runner both import. This is the single biggest refactor of the V1 lift, because V1 buries calls #4/#5/#5a/#5b *inside* the 1,449-line `submit/route.ts` handler — they cannot be invoked headless today. Build the engine **lib-first, not route-first**:
+
+- Targets: `lib/engine/{lessonParse,quizGen,adapt,grading,assignmentGen}.ts` (calls #1–#5; learning-style #5a folds into `assignmentGen`, insights #5b lib-ifies alongside).
+- Each function takes plain data in, returns parsed/validated data out; the route handler does auth + DB + metering around it; the eval runner calls the same function directly.
+- This closes the §11.3 / §1.11 gotcha (the eval rig can only wire `invokeCandidate` against import-safe functions) — make "engine exposes headless entry points" an explicit **M1 deliverable**, not an M7 discovery. It is also the precondition for §3.6: the same functions **are** the WDK step bodies, so the eval rig and the durable workflow share one entry point.
 
 ### 3.5 Error contract (net subsection — every route family)
 
 Beyond licensing's status codes (§6.3/§6.4), the engine and integration routes define explicit error behavior via a **standard error envelope** `{ error: {code, message, retryable, userMessage} }`:
 
-- **Terminal LLM failure** (primary+fallback exhausted): route returns `503` + `retryable:true` + a "try again" `userMessage`; grading never returns a fabricated or partial score. The attempt stays ungraded and re-queueable.
-- **`stop_reason:"refusal"`:** handled before reading `content[0]`; surfaces as a neutral "couldn't process this response" to the teacher, logged for review — never a crash.
-- **JSON-parse / Zod-validation failure** on structured output: treated as a terminal failure for that call (503), logged with the raw output for debugging; no partial persistence.
-- **Partial generation** (e.g. 3 MCQ produced, OEQ gen failed): the whole quiz generation rolls back; nothing half-generated is published. Teacher sees a retry.
+- **Terminal LLM failure** (primary+fallback exhausted): the §1.4 wrapper raises a typed `LlmExhaustedError`; route returns `503` + `retryable:true` + a "try again" `userMessage`; grading **never returns a fabricated or partial score**. This generalizes V1's proven grading short-circuit (submit:261–273: any failed OEQ grade → `grading_status:'pending'`, `grading_failed:true`, "grading delayed" payload). The attempt stays ungraded and **re-queueable**.
+- **`stop_reason:"refusal"`** (Opus 4.x path, §1.3/§3.1): handled **before** reading `content[0]`; surfaces as a neutral "couldn't process this response" to the teacher, logged for review — never a crash.
+- **JSON-parse / Zod-validation failure** on structured output: treated as a terminal failure for that call (503), logged with the **raw output** for debugging; no partial persistence. (V1's `JSON.parse(raw || '{…default…}')` defaulting at submit:281 is replaced by fail-to-503, not silent-default, on the graded path — a silent default would poison the calibration-locked grade distribution.)
+- **Partial generation** (e.g. quiz gen #2 produced 3 MCQ but OEQ gen failed): the whole quiz generation rolls back; nothing half-generated is published. Teacher sees a retry. (The adapt call #3 is the documented exception — it *intentionally* degrades to original Q4/Q5 rather than failing, adapt:151–161, because a missing adaptation must not block the attempt.)
 - **Spark sync-handoff timeout (35s, §7.4):** **soft-degrade** — the assignment remains usable; the Launch button shows "challenge generating, check back" and `spark_sync_failed` gates it; never a hard error that blocks the assignment.
-- **Fail-open metering meets fail-closed licensing (both DB + Redis down):** licensing **fail-closed wins** — `enforceActiveLicense` blocks the write (security/compliance over availability); media metering's fail-open is moot because the gated write never reaches the metered provider call. Document this precedence so the two policies don't contradict at runtime.
+- **Fail-open metering meets fail-closed licensing (both DB + Redis down):** licensing **fail-closed wins** — `enforceActiveLicense` blocks the write (security/compliance over availability); media metering's fail-open (`checkUsageCap` on DB error, §6.7) is moot because the gated write never reaches the metered provider call. Document this precedence so the two policies don't contradict at runtime.
 
 ### 3.6 Durable execution — Vercel Workflow DevKit (generation pipeline)
 
 > Architecture decision (SCOPE §4e): the **background** generation pipeline runs on the Vercel Workflow DevKit. WDK adoption is scoped to **this pipeline + the §7.4 Spark round-trip only** — not Super TELI, crons, or media polling.
 
-- **Shape.** A `"use workflow"` orchestrator drives the pipeline; **each AI call is a retryable `"use step"`** (lesson parse, quiz gen, adapt, OEQ grading, assignment gen). The §3.4 `lib/engine/*` functions **are** the step bodies, so the eval rig and the workflow share one import-safe entry point.
-- **Why.** Automatic retry (with the §1.4 fallback *inside* the step), results **persisted for replay** — a mid-pipeline model failure resumes from the last completed step, not from scratch — and crash-safety on Vercel Fluid Compute. Map the §3.5 error contract onto WDK errors: `FatalError` (refusals, 4xx, JSON-parse/Zod failures → no retry) vs `RetryableError` (429/5xx/timeouts → backoff).
-- **Boundary (critical).** The teacher's interactive "create a differentiated assignment in <5 min" hero path (§16d) **stays synchronous/streaming** for the snappy feel. WDK governs durable/background generation and any regeneration — *not* the live request. If a create action is heavy, kick off the workflow and stream/poll its result; don't make the teacher wait on a durable run.
-- **Constraints.** Step inputs/outputs must be serializable (no class instances/functions — pass data, not callbacks); keep secrets/Node APIs inside steps, orchestration logic in the workflow. Read `node_modules/workflow/docs/` once the `workflow` package is added (it is **not** in the current scaffold — adding it is an M-stage task).
+- **Shape.** A `"use workflow"` orchestrator drives the pipeline; **each AI call is a retryable `"use step"`** (lesson parse #1, quiz gen #2, adapt #3, OEQ grading #4, assignment gen #5 — see the §3.1 table). The §3.4 `lib/engine/*` functions **are** the step bodies, so the eval rig and the workflow share one import-safe entry point. The grading step wraps the concurrent per-OEQ fan-out (submit:242–255) as one durable unit so a partial-grade failure replays the whole grade, preserving V1's "never half-grade" invariant.
+- **Why.** Automatic retry (with the §1.4 Claude→GPT fallback *inside* the step), results **persisted for replay** — a mid-pipeline model failure resumes from the last completed step (e.g. lesson parse + quiz gen succeeded, grading failed → replay grading only, not the lesson), not from scratch — and crash-safety on Vercel Fluid Compute. Map the §3.5 error contract onto WDK errors: **`FatalError`** (refusals, 4xx, JSON-parse/Zod failures → no retry) vs **`RetryableError`** (429/5xx/timeouts → backoff). This subsumes V1's hand-rolled per-step null-checking and the 120s-then-fallback timeout dance (submit:846–880).
+- **Boundary (critical).** The teacher's interactive "create a differentiated assignment in <5 min" hero path (§16d, §5.1c) **stays synchronous/streaming** for the snappy feel. WDK governs durable/background generation and any regeneration — *not* the live request. If a create action is heavy, kick off the workflow and stream/poll its result; don't make the teacher wait on a durable run. (Super TELI is explicitly **not** on WDK per SCOPE §4d — it is a normal implementation.)
+- **Constraints.** Step inputs/outputs must be serializable (no class instances/functions — pass data, not callbacks); keep secrets/Node APIs (the SDK clients, the Supabase admin client) **inside** steps, orchestration logic in the workflow. Read `node_modules/workflow/docs/` once the `workflow` package is added (it is **not** in the current scaffold — adding it is an M-stage task). See the `vercel:workflow` skill for the `"use workflow"`/`"use step"` patterns.
 
 ---
 
 ## 4. Signals → Actions
 
-> Scope refs: SCOPE.md §6 (signal set + gap=20), §3 (the loop). LIFT V1 formulas/thresholds. A signal reaches the screen **only if** it passes the 5-second test *and* resolves to a plain-language action; everything else lives one tap down. **8-signal set locked; gap threshold = 20.** Signals re-key onto the §2.4 granularity hierarchy in M2.
+> Scope refs: SCOPE.md §6 (signal set + gap=20), §3 (the loop). LIFT V1 formulas/thresholds. A signal reaches the screen **only if** it passes the 5-second test *and* resolves to a plain-language action; everything else lives one tap down. **8-signal set locked; gap threshold = 20.** Signals re-key onto the §2.4 granularity hierarchy in M2. Every threshold below is a **real V1 constant** — cited with its file and the variable name to lift — so M2 ports values, not vibes. The noisy heuristics are flagged for pilot recalibration at the end of this section.
+
+**Locked invariants this section preserves verbatim (do not re-derive):**
+- **Gap threshold = 20.** `divergence_score ≥ 20` fires the Assignment-vs-Quiz signal; alignment band is `±10` (`ALIGNMENT_THRESHOLD = 10`, `lib/signals/computeHwQuizDivergence.ts:29`).
+- **Two different instruments, never conflated.** `computeMasteryBand` (≤50/51–79/≥80, mean of last 5 quizzes) is the **per-student quiz-band instrument**. It is **not** per-skill CL. Per-skill CL comes from `skill_learning_state` / `computeSkillState.ts` (the 6-state model, §2.4/§3.2). Do not compute per-skill CL via `computeMasteryBand`.
+- **Risk Index = the weighted ensemble** `frustration .30 / attention .20 / velocity .20 / error .15 / confidence .10 / engagement .05` — a Pro feature. **Source correction:** this ensemble lives in `computeRisk()` inside `lib/signals/signalComputer.ts:310–367`, **not** in `lib/signals/computeRiskIndex.ts` (see the Risk Index entry — V1 has two distinct risk computations and the spec draft pointed at the wrong one).
+- **"Observation supersedes."** Comprehension is readable from a quiz; a *strategy* is behavioral and accrues — never a day-one verdict. This is encoded as the credibility rule at the end of this section.
+
+### The 8-signal set (locked)
 
 | Signal | Source (lift) | Who | Action it triggers |
 |--------|---------------|-----|--------------------|
-| **Comprehension Level (per skill)** | `lib/skills/computeSkillState.ts` (state) → CL verb mapping (§3.2) | Teacher | Reinforce / leave on track / enrich |
-| **Assignment-vs-Quiz gap** | `lib/signals/computeHwQuizDivergence.ts` (fires at `divergence_score ≥ 20`; alignment ±10) | Teacher | Review submissions — integrity, format, or anxiety |
-| **Effort vs ability** (4 labels) | `lib/signals/computeEffortLabel.ts` (success ≥75%, effortful = ≥2 hints) | Teacher | Reteach the concept, or just check in |
-| **Direction (sliding / climbing)** | `lib/signals/signalComputer.ts` (consistency + velocity, off snapshots) | Teacher + Student | Watch & check in / celebrate the climb |
-| **Did-the-intervention-work (mastery moved?)** | `lib/signals/computeReteachEffectiveness.ts` + mastery-regression alert (`lib/studentModel.ts` 326–353) | Teacher | Confirm complete, or escalate — **the loop closer, in-pilot** |
-| **The specific misconception (from OEQs)** | structured `error_type`/`reasoning_pattern` enums + `findRecurringError`, keyed to skill (§3.2, Barb-ratified) | Teacher | Targeted practice on that exact thing |
-| **Personal growth over time** | snapshots / trajectory (`lib/studentModel.ts` 259–277) | Student | "You're getting better at X" (**vs own past, never peers**) |
-| **One next step, plain words** | `lib/briefing/regenerateSignalWhy.ts` (cache: migration 041) | Student | Do this one thing |
+| **Comprehension Level (per skill)** | `lib/skills/computeSkillState.ts` (`skill_learning_state.state`) → CL verb mapping (§3.2) | Teacher | Reinforce / leave on track / enrich |
+| **Assignment-vs-Quiz gap** | `lib/signals/computeHwQuizDivergence.ts` (`divergence_score ≥ 20`; alignment `±10`) | Teacher | Review submissions — integrity, format, or anxiety |
+| **Effort vs ability** (4 labels) | `lib/signals/computeEffortLabel.ts` (`SUCCESS_THRESHOLD=75`, `EFFORT_THRESHOLD=2`) | Teacher | Reteach the concept, or just check in |
+| **Direction (sliding / climbing)** | `lib/studentModel.ts:259–277` (consistency) + `lib/signals/signalComputer.ts` (velocity) | Teacher + Student | Watch & check in / celebrate the climb |
+| **Did-the-intervention-work (mastery moved?)** | `lib/signals/computeReteachEffectiveness.ts` + mastery-regression alert (`lib/studentModel.ts:326–353`) | Teacher | Confirm complete, or escalate — **the loop closer, in-pilot** |
+| **The specific misconception (from OEQs)** | `error_type`/`reasoning_pattern` enums (`lib/openai/prompts.ts:589–592`) + `findRecurringError` (`lib/reports/diagnosis.ts:61`), keyed to skill (§3.2) | Teacher | Targeted practice on that exact thing |
+| **Personal growth over time** | snapshots / `band_history` + `consistency_label` (`lib/studentModel.ts`, snapshot cron §1.8) | Student | "You're getting better at X" (**vs own past, never peers**) |
+| **One next step, plain words** | `lib/briefing/regenerateSignalWhy.ts` + `lib/signals/diagnosis.ts::diagnose` (cache: migration 041) | Student | Do this one thing |
 
-- **Risk Index (Pro feature).** Weighted ensemble across the above — `lib/signals/computeRiskIndex.ts` + `signalComputer.ts` 310–367. Gate with `checkFeature`. Surfaced at school scale on the School Admin screen.
-- **CL formula note:** `computeMasteryBand` (≤50/51–79/≥80, rolling avg of last 5) is the **per-student quiz-band instrument** — it is *not* the per-skill CL. Per-skill CL comes from `skill_learning_state`/`computeSkillState.ts` (§2.4/§3.2). Do not compute per-skill CL via `computeMasteryBand`; the two are different instruments.
-- **V1 credibility risk:** don't claim a learning *strategy* from 5 answers — comprehension you can read from a quiz; strategy is behavioral and accrues. "Observation supersedes."
-- **Recalibrate** the noisier V1 heuristics (frustration, attention) from pilot data; consider hiding the noisiest sub-signals at school scale until recalibrated.
+The eight rows are the **8-signal set locked** in SCOPE §6. Each is detailed below with its exact source, formula, thresholds, inputs, cold-start behavior, edge cases, surfacing screen, and the plain-language action it produces.
+
+---
+
+### 4.1 Comprehension Level (per skill) — the headline signal
+
+- **Source.** `lib/skills/computeSkillState.ts::computeSkillState` (pure, import-safe — Bug #27 sibling-pure-file pattern; no DB/AI imports). Persisted to `skill_learning_state` (migration 072): `state text CHECK IN (…6 values…)`, `confidence numeric 0–100`, `observation_count int`, `evidence jsonb {drivers[], metrics{}}`, `last_reteach_outcome text`, `UNIQUE(student_id, skill_id)`. Recompute orchestration: `lib/skills/recomputeSkillStates.ts`.
+- **Formula (state machine, first matching gate wins, in this order).** `not_attempted` → `insufficient_data` (anti-noise) → engagement guard → `ready_to_extend` → `on_track` → `needs_different_instruction` (the heavy claim) → `needs_more_time` → ambiguous-middle default (`needs_more_time` @ confidence 25). It fuses four observation streams — cold quiz accuracy, scaffolded homework grade, session error-pattern type, and (Pro+) SPARK transfer score — over a single skill.
+- **Thresholds (all in `SKILL_STATE_WEIGHTS`, `computeSkillState.ts:118–203` — pilot-tunable in one place):**
+  - `MIN_OBSERVATIONS = 3` (never a verdict below 3 graded observations)
+  - `ON_TRACK_COLD_ACCURACY = 0.8` (mirrors the locked ≥80 band boundary)
+  - `EXTEND_COLD_ACCURACY = 0.95`, `EXTEND_MIN_COLD_OBSERVATIONS = 4`
+  - `COLD_FLOOR = 0.5`, `IMPROVING_DELTA = 0.15`
+  - `CONCEPTUAL_DOMINANCE = 0.5`, `SLIP_DOMINANCE = 0.5`
+  - `DIVERGENCE_GAP_PTS = 25` (scaffold-vs-cold gap that signals scaffold dependence), `STRUGGLING_SHARE = 0.4`
+  - `NON_SUBMISSION_SHARE = 0.5` (engagement-gap floor), `NDI_MIN_OBSERVATIONS = 4`
+  - SPARK transfer: `SPARK_STRONG_TRANSFER = 70`, `SPARK_WEAK_TRANSFER = 50`, `SPARK_TREND_DELTA = 15`
+  - Confidence assembly: `CONFIDENCE_PER_OBSERVATION = 8` (cap 40), `CONFIDENCE_PER_DRIVER = 15`, `CONFIDENCE_RETEACH_BONUS = 15`, `CONFIDENCE_CAP = 95` (never claim certainty).
+- **Inputs.** `SkillStateInput`: cold quiz correctness per question on the skill (`quiz[]`); scaffolded homework `{gradePct, submitted, effortLabel}` (`homework[]`); session-level `error_pattern_type` history (`sessionErrorPatterns[]`); the most recent reteach event `{type: 'more_practice'|'different_approach', completedAt}`; Pro+ `spark[]` `{transferScore, contentQuality, completed}`. Skills are resolved via `lib/skills/resolveSkills.ts` against `skills_registry` (migration 071), so each attempt must be skill-tagged from M1/M2 (§2.1/§2.4) or this signal has no input.
+- **CL verb mapping (the Barb delta, §3.2).** The teacher never sees the 6 internal states; they see 3 verbs: `needs_different_instruction`/`needs_more_time` → **Reinforce**, `on_track` → **On Track**, `ready_to_extend` → **Enrich**, `insufficient_data`/`not_attempted` → **"Not yet assessed"** (null CL, never a fabricated verb).
+- **Cold-start.** `not_attempted` (zero contact with the skill) and `insufficient_data` (< 3 graded observations, or a non-submission-dominant signature) are **first-class states in the CHECK constraint**, not fabricated. Both map to "Not yet assessed." `confidence` ramps with observation count (`obs × 10`, capped at 30 during cold-start). This is the genuinely net-new UI state One Student (§5.1b) must render.
+- **Edge cases (already handled in V1, preserve):** (a) **"didn't do it" ≠ "can't do it"** — the engagement guard (`NON_SUBMISSION_SHARE ≥ 0.5` with thin cold evidence) routes to `insufficient_data`, never to a conceptual verdict; (b) `ready_to_extend` is **informational only** — it never auto-promotes a band or auto-generates harder work (no success-streak escalation); it tells the teacher a skill *could* go deeper, the teacher decides; (c) SPARK transfer **never flips a state by itself** — strong transfer *suppresses* the scaffold-vs-cold driver and discounts confidence (`CONFIDENCE_SPARK_DISCOUNT = 10`, floor `CONFIDENCE_FLOOR = 10`); weak transfer can only *strengthen* an already-fired Reinforce read, never initiate one; `non_engaged`/`minimal` SPARK completions are excluded as evidence entirely.
+- **Screen.** Teacher → One Student (§5.1b), shown **per skill** with the soft-word confidence (never the raw number) and the `evidence.drivers` feeding the plain "why."
+- **Plain-language action.** Reinforce → "Reteach this skill / assign targeted practice." On Track → "Leave on track." Enrich → "This skill could go deeper — assign a stretch / Spark." Not yet assessed → no action (suppressed from the triage ranking; never a fabricated nudge).
+
+### 4.2 Assignment-vs-Quiz gap — gap = 20 (locked)
+
+- **Source.** `lib/signals/computeHwQuizDivergence.ts::computeHwQuizDivergence` (pure). Emits `{divergence_score (0–100), divergence_direction ('hw_higher'|'quiz_higher'|'aligned'), divergence_trend ('widening'|'narrowing'|'stable'|null), hw_avg, quiz_avg}`.
+- **Formula.** `gap = hw_avg − quiz_avg`. If `|gap| ≤ ALIGNMENT_THRESHOLD (10)` → `aligned`. Otherwise `divergence_score = round(min(100, |gap| / 50 × 100))`, direction by sign. **Trend** splits each series into chronological thirds and compares first-half vs second-half gap magnitude (`stable` if the change < 3 pts).
+- **Thresholds.** `ALIGNMENT_THRESHOLD = 10` (line 29); the **locked gap threshold = 20** is the *surfacing/gating* value — a `divergence_score ≥ 20` is what reaches the teacher (consistent with SCOPE §6 "gap = 20"). **Divergence note (carry, do not silently differ):** the live diagnosis surface `lib/signals/diagnosis.ts` uses `DIVERGENCE_THRESHOLD = 25` (line 57) to *escalate* a gap to a sev-2 action ("possible inconsistency" / "knowledge not transferring"). So `20` is the locked "show it" floor; `25` is V1's "act on it loudly" floor. P1 ships gap=20 as the locked surfacing threshold (SCOPE §6) and keeps the 25-pt escalation as a sub-tier; flag any desire to collapse them as a SCOPE call.
+- **Inputs.** `homeworkScores[]` and `quizScores[]`, both 0–100, newest-first (DB `ORDER BY … DESC`). The function reverses internally for trend.
+- **Cold-start.** Returns `aligned`, `divergence_score = 0` until `MIN_HW_SAMPLES = 2` graded homework **and** `MIN_QUIZ_SAMPLES = 1` graded quiz exist (lines 27–28). `hw_avg`/`quiz_avg` are still surfaced (or null) so the UI can say "not enough yet" rather than "aligned."
+- **Edge cases.** `aligned` with high absolute scores ≠ a problem; `aligned` with two low scores is the "major gap" pattern (handled by `diagnosis.ts` pattern 2, sev 3, → reteach). `quiz_higher` ≥ 25 → "verbal check" (possible inconsistency / integrity / format); `hw_higher` ≥ 25 → "practice" (knowledge isn't transferring under assessment).
+- **Screen.** Teacher → Today (the ranked "why") and One Student.
+- **Plain-language action.** "Review submissions — integrity, format, or anxiety." The direction picks the verb: `hw_higher` → look for transfer/anxiety on the assessment; `quiz_higher` → look at the homework's integrity/format.
+
+### 4.3 Effort vs ability — the 4 labels
+
+- **Source.** `lib/signals/computeEffortLabel.ts::computeEffortLabel` (pure; the single classification rule — never duplicate). Persisted on `homework_attempts.effort_label` (migration 043; CHECK constraint kept aligned with `EFFORT_LABELS`).
+- **Formula.** `isSuccess = score ≥ SUCCESS_THRESHOLD`; `isEffortful = hints ≥ EFFORT_THRESHOLD`. The 2×2: `effortful_success`, `struggling_trying`, `independent_success`, `independent_struggle`.
+- **Thresholds.** `SUCCESS_THRESHOLD = 75` (line 49 — 70 rejected as too generous, 80 as too strict for the middle band), `EFFORT_THRESHOLD = 2` (hint count). Both are documented as **Barb-review-pending** in the file header — adjust in `computeEffortLabel.ts`, not at call sites.
+- **Inputs.** `{score: 0–100|null, teliHintCount: number|null}` per homework attempt (null hints treated as 0).
+- **Cold-start.** Returns **null** when `score` is unavailable (ungraded attempt) — callers must skip the derived signal or wait for grading; the label is never fabricated on an ungraded row.
+- **Edge cases / noise.** `EFFORT_THRESHOLD` (hint count) is explicitly flagged as a **noisy proxy** in the source: a student who asks one substantial question looks "independent," and a button-masher looks "effortful." The file's own TODO is to blend hint count with `articulation_used` + `self_unblock_flag` once those are first-class — **a pilot-recalibration target** (see §4.9).
+- **Screen.** Teacher → Today/One Student. Feeds the per-skill state's `STRUGGLING_SHARE` / `independent_success_share` drivers (§4.1).
+- **Plain-language action.** `struggling_trying`/`independent_struggle` → "Reteach the concept." `effortful_success` → "Check in — they got there but it cost them." `independent_success` → no action (suppressed).
+
+### 4.4 Direction (sliding / climbing) — trajectory, not a snapshot
+
+- **Source.** Two pieces: **consistency** from `lib/studentModel.ts:259–277` (computed on submit) and **velocity** from `lib/signals/signalComputer.ts::computeVelocity`. Trajectory history persists to weekly snapshots (migration 046, written by the §1.8 snapshot cron) and to `student_model.band_history` / `consistency_label`.
+- **Formula.** Consistency = std-dev of the last 5 `quiz_attempts.score_pct`, mapped to `consistency_score`: `stdDev ≤ 5 → 95+`, `≤ 15 → 70+`, `≤ 25 → 40+`, else `< 40`; label `consistent` (≥70) / `variable` (≥40) / `erratic` (<40). Velocity = correct-answers-per-minute with a first-half-vs-second-half pace delta; `> +20% → accelerating`, `< −20% → decelerating`, else `stable`.
+- **Thresholds.** Consistency std-dev bands `5 / 15 / 25`, label cuts `70 / 40`. Velocity trend `±0.2` (±20% pace delta). Trajectory direction off snapshots uses `computeTrend` (`signalComputer.ts:423`): needs ≥4 history points, compares last-3 vs prior-3 with a 10% delta threshold.
+- **Inputs.** Last 5 quiz `score_pct` (consistency); within-session `QuestionAttemptData[]` timing (velocity); `risk_history`/`velocity_history`/`band_history` windows (EMA over `HISTORY_WINDOW = 10`).
+- **Cold-start.** Consistency requires ≥3 quizzes (`scores.length >= 3`); below that it is unset. Trajectory direction returns `stable` until ≥4 history points exist. The "you vs 4 weeks ago" frame renders an **empty state until 4 weekly snapshots accrue** (§1.8/§5.1b/§5.2a) — for the whole early pilot this is the expected state, not a bug.
+- **Edge cases.** A volatile student can show a single current band that hides swings — `bandIsVolatile` (`scoring.ts:70`, window 3) flags the ↕ marker without changing the canonical current-band read (`currentMasteryBand`, most-recent-quiz-wins). Velocity is *within-session* pace, not cross-session growth — keep them distinct in copy.
+- **Screen.** Teacher → One Student (trajectory) **and** Student → Home ("You vs 4 weeks ago," never peers; SCOPE §16 leaderboard-off frame).
+- **Plain-language action.** Teacher: sliding → "Watch & check in"; climbing → "Celebrate the climb." Student: the same direction in their own-past voice register.
+
+### 4.5 Did-the-intervention-work (mastery moved?) — the loop closer
+
+- **Source.** Two complementary mechanisms: **reteach effectiveness** `lib/signals/computeReteachEffectiveness.ts` (`detectCompletedReteachCycles` + `aggregateReteachStats`) and the **mastery-regression alert** in `lib/studentModel.ts:326–353`.
+- **Formula.** A reteach *cycle* = a flagged attempt (`allow_redo = true`, has a score) + a later graded attempt on the same assignment; `improvement = post_score − pre_score` (can be negative). Aggregate `success_rate` = % of cycles with `improvement > 0`, split by `flagged_by ∈ {auto, teacher}`. Regression alert: map band to order `{reteach:0, grade_level:1, advanced:2}`; if `newOrder < oldOrder` **and** ≥3 quizzes exist, insert a `severity:'high'` row into `alerts` with `trigger_reason = 'mastery_regression'`. The per-skill counterpart is `last_reteach_outcome` on `skill_learning_state` (`more_practice_improved` / `more_practice_no_improvement` / `different_approach_improved` / `*_pending_cold_check`) — `more_practice_no_improvement` is *affirmative evidence* for a conceptual gap (it confirms practice alone isn't enough → Reinforce-by-different-approach).
+- **Thresholds.** Regression requires a band drop **and** `qScores.length ≥ 3` (guards against a single bad quiz). Reteach outcome compares cold accuracy strictly before vs at/after `completedAt`.
+- **Inputs.** `homework_attempts` rows (`allow_redo`, `is_redo`, `score`, `flagged_by`, timestamps); `reteach_cycles` ledger (dedupe via `original:redo` pair keys); the student's quiz band history.
+- **Cold-start.** No completed cycle until a redo with a graded score exists; until then the intervention shows "in progress," not "no effect." Regression alert never fires before 3 quizzes.
+- **Edge cases.** Negative `improvement` is a real, surfaced outcome (escalate, don't hide). A `*_pending_cold_check` reteach outcome means the redo hasn't met a cold quiz yet — render "waiting to confirm," not "worked." Multiple flagged attempts on one assignment are paired chronologically.
+- **Screen.** Teacher → One Student (the Confirm half of Notice→Act→Confirm lives here, §5.1b). Mastery-regression alerts also surface on Today.
+- **Plain-language action.** improvement > 0 → "Confirm complete." improvement ≤ 0 / regression → "Escalate — the intervention didn't move it."
+
+### 4.6 The specific misconception (from OEQs) — formalize the existing enums
+
+- **Source.** The grader (`GRADING_SYSTEM` / `gradingPrompt`, `lib/openai/prompts.ts:514–648`) emits structured cognitive fields per OEQ; the recurring-error matcher is `lib/reports/diagnosis.ts::findRecurringError` (and the class-level twin in `buildClassInsights`). Class-wide gaps come from `lib/signals/conceptGapDetector.ts`.
+- **Formula / structured values (LOCKED enums, lift verbatim — `prompts.ts:589–592`):**
+  - `error_type` (8-value): `none | factual_error | reasoning_gap | incomplete | misunderstood_question | vocabulary_confusion | off_topic | blank`
+  - `reasoning_pattern` (6-value): `surface_recall | partial_reasoning | full_reasoning | misconception | creative_extension | blank_or_off_topic`
+  - plus `misinterpretation_detected: bool` and `vocabulary_difficulty: none|low|medium|high`.
+  - `findRecurringError`: most-frequent non-trivial `error_type` (drops `none`/empty) recurring `≥ RECURRING_ERROR_THRESHOLD = 3` (`diagnosis.ts:53`) → the `check_concepts` action.
+  - `conceptGapDetector`: a quiz question wrong by `≥ 40%` of `≥ 5` students (`THRESHOLD_PCT = 40`, `MIN_STUDENTS = 5`) → a class-wide reteach topic.
+- **Net-new work (§3.2, Barb-ratified — taxonomy, not invention):** (a) promote these enums into a first-class taxonomy table; (b) **key `findRecurringError` to `skill_learning_state`** so a recurring misconception is per-skill, not per-report; (c) surface it on One Student. Until Barb signs off, the surface uses the **raw structured `error_type`/`reasoning_pattern`** directly — the fallback is structured, not freetext.
+- **Inputs.** Per-OEQ grader output stored on the quiz-attempt question rows (`cognitive_notes` is sensitive — FERPA cascade, §1.10); recent `error_type[]` per student/skill for the matcher.
+- **Cold-start.** A single OEQ yields one `error_type`/`reasoning_pattern` but **no recurring misconception** until 3 like errors accrue; below that, show the single observation, never assert a pattern. `none`/`blank` never count as a misconception.
+- **Edge cases.** Blank/idk/off-topic is forced to `error_type:"blank"`, `reasoning_pattern:"blank_or_off_topic"`, score 0.0 (no partial credit "for showing up") — exclude these from misconception ranking. `cognitive_notes` is observable-fact only ("the response did not include analysis"), never psychologizing — preserve this language rule when surfacing.
+- **Screen.** Teacher → One Student (per skill) and Today (when recurring). Class-wide gaps surface to the teacher as a "10-minute review" suggestion.
+- **Plain-language action.** "Targeted practice on that exact thing" (the named `error_type`/skill), e.g. "Recurring 'reasoning_gap' on fractions — assign practice on that."
+
+### 4.7 Personal growth over time — the student's signal
+
+- **Source.** Weekly snapshots (migration 046, §1.8 cron) + `band_history` / `consistency_label` on `student_model` (`lib/studentModel.ts`). Same trajectory machinery as §4.4, rendered in the **student** voice register (`lib/copy/effortLabels.ts`).
+- **Formula.** Growth = a student's own band/score trajectory across weekly snapshots (the §4.4 `computeTrend` over their own history). **Never peer-relative** (SCOPE §16: leaderboard off by default; "You vs 4 weeks ago" is the frame).
+- **Thresholds.** Inherits §4.4 (≥4 snapshots for a direction; 10% delta).
+- **Inputs.** The student's own snapshot series + per-skill `ready_to_extend`/`on_track` transitions ("getting better at X").
+- **Cold-start.** Empty state until 4 weekly snapshots exist — the student sees "we're just getting started," never a fabricated trend or a comparison.
+- **Edge cases.** Phrase as observation, not judgment (SCOPE §15: "the student is not a data set"). No band/score numbers student-side; soft words only.
+- **Screen.** Student → Home (§5.2a).
+- **Plain-language action.** "You're getting better at X" + exactly **one** next-step card.
+
+### 4.8 One next step, plain words — the "why" that resolves to an action
+
+- **Source.** `lib/signals/diagnosis.ts::diagnose` (pure, first-match-wins pattern table → a one-line diagnosis + a single `SuggestedAction` + severity) and the LLM-polished copy in `lib/briefing/regenerateSignalWhy.ts` (cached on `student_model.signal_why_cache`, migration 041). The Today ranking uses `lib/briefing/tribes.ts::classifyStudent` (lift the pure classifier as-is).
+- **Formula.** `diagnose` resolves each student's signal row to one of: `practice` / `reteach` / `verbal_check` / `profile`, severity 1–3, sorted severity-desc then `risk_score`-desc (`compareDiagnosed`). The "why" sentence is LLM-generated only for 3 signals (`learningRiskIndex`, `hwQuizDivergence`, `dominantEffortPattern`) and **drift-gated**: regenerate only when driver inputs shift `≥ DRIFT_THRESHOLD = 0.15` (15% normalized); otherwise reuse cache, and on any LLM failure fall back to the deterministic sentence (graceful degrade — never blocks the screen).
+- **Thresholds (in `diagnosis.ts`, lines 57–60):** `DIVERGENCE_THRESHOLD = 25`, `LOW_HW_THRESHOLD = 50`, `OK_QUIZ_THRESHOLD = 60`, `LOW_QUIZ_THRESHOLD = 50`; plus `risk_level` catch-alls (`critical` → sev 3, `high` → sev 1).
+- **Inputs.** The already-computed signal aggregates (risk, hw_avg, quiz_avg, divergence) — no DB/fetch inside the pure function; the caller passes loaded data.
+- **Cold-start.** `diagnose` returns **null** when no priority pattern matches ("working fine — don't surface"); the cache returns the deterministic sentence until the LLM has run once. A student with no data is simply absent from the ranking, not shown as "fine."
+- **Edge cases.** The cache is keyed per-signal with an input hash — stale "why" can't outlive a meaningful driver shift; the audit row on each regen makes the copy traceable for review.
+- **Screen.** Student → Home (the one next step) and the plain "why" on Teacher → Today (§5.1a).
+- **Plain-language action.** "Do this one thing" — exactly one card, no jargon, no acronyms.
+
+### Risk Index (Pro feature) — the weighted ensemble
+
+- **Source (corrected).** The locked ensemble lives in `computeRisk()` inside `lib/signals/signalComputer.ts:310–367`, fed by the per-session sub-signals also computed there (`computeFrustration`, `computeAttention`, `computeVelocity`, `computeErrorPattern`, `computeConfidence`, `computeEngagement`). **`lib/signals/computeRiskIndex.ts` is a *different*, roster-level risk** (weights `avgHwScore 25 / avgQuizScore 25 / completionRate 20 / scoreTrend 15 / redoRate 10 / recency 5`) producing `risk_score`/`risk_level`/`risk_factors`. P1 must not confuse the two: the **§6 / SCOPE Risk Index = the cognitive ensemble** in `signalComputer.ts`; the gradebook-style `computeRiskIndex.ts` is the at-a-glance roster risk the School Admin list can also use. Both ship; name them distinctly in code (`computeCognitiveRiskIndex` vs `computeRosterRiskIndex`) to end the ambiguity.
+- **Weighted ensemble (LOCKED — `signalComputer.ts:323–363`):** `frustration .30` + `(1 − attention) .20` + `velocityRisk .20` (decelerating 0.8 / stable 0.3 / accelerating 0.05) + `(errorRisk × errorFrequency) .15` (conceptual 0.9 / procedural 0.6 / careless 0.4 / random 0.2) + `(1 − confidence.accuracy) .10` + `(1 − engagement) .05`. Output clamped to 0–1, then banded for the roster view (`0–24 low / 25–49 medium / 50–74 high / 75–100 critical`, per the sibling `computeRiskIndex.ts`). `risk_factors[]` carries the human-readable drivers ("Conceptual misunderstanding pattern", "Slowing learning pace", "Passive engagement").
+- **Inputs.** Per-session `StudentEvent[]` (keypress/backspace/focus_loss/hint_request/pause/tts_play/canvas) + `QuestionAttemptData[]` (timing, correctness, change-count). EMA-blended across sessions via `updateStudentModel` (`HISTORY_WINDOW = 10`).
+- **Gate.** `await checkFeature(schoolId, 'spark_experiences'?…)` → use the Pro feature flag (`requireFeature` server-side, `useLicenseGate` client-side, §6). Surfaced at school scale on the **School Admin** screen (§5.4); never to students/parents.
+- **Cold-start.** Sub-signals self-guard: `errorPattern` returns `insufficient_data` below 3 attempts; `confidence` returns neutral 0.5 below 3; `attention` returns 1.0 under 5s sessions; trend helpers return `stable` below 4 history points. So a thin-data student reads "low/unknown risk," not a fabricated spike.
+- **Noise warning (recalibrate from pilot — §4.9).** Frustration and attention are the two heaviest-weighted (.30 + .20 = half the index) and the two noisiest (keystroke/focus heuristics). Until recalibrated, consider **hiding the frustration/attention sub-drivers** at school scale and showing only the composite + the score-based roster risk.
+
+### 4.9 The "observation supersedes" credibility rule (mandatory, applies to every signal)
+
+V1's hard-won credibility lesson, encoded as a rule the surface obeys:
+
+- **Comprehension is readable from a quiz; a *strategy* is behavioral and accrues.** Never claim a Learning Strategy or Learner-Profile trait from 5 answers (SCOPE §6, §15). The 12 Strategies / 5 Powers / Learner Profile stay **cross-cutting and per-class** (`student_model`, §2.4) and only assert once *behavior* has accrued them — never a day-one verdict, never from a single skill.
+- **Mechanically enforced by the cold-start states.** `skill_learning_state` ships `insufficient_data` and `not_attempted` as first-class CHECK values; `computeMasteryBand` returns null below 1 quiz; `computeEffortLabel` returns null on ungraded; `diagnose` returns null when no pattern matches. Every consumer **must** handle null/"not yet assessed" rather than substitute a default — a fabricated band/strategy is the exact V1 trust failure CORE v2 is built to avoid (SCOPE §15: "observational, never diagnostic").
+- **A heavier claim needs more evidence.** `needs_different_instruction` (the "this isn't working" claim) requires `NDI_MIN_OBSERVATIONS = 4`; `ready_to_extend` requires `EXTEND_MIN_COLD_OBSERVATIONS = 4` at `≥ 0.95` cold accuracy. Lighter reads (`needs_more_time`) fire earlier at floor confidence. Confidence is rendered as **soft words, never the 0–100 number**.
+
+### 4.10 Heuristics flagged as noisy — recalibrate from pilot data
+
+SCOPE §6 mandates recalibrating the noisier V1 heuristics; the specific knobs and their files:
+
+| Heuristic | File / constant | Why noisy | Recalibration plan |
+|---|---|---|---|
+| **Frustration** | `signalComputer.ts::computeFrustration` (weight .30) | keystroke/backspace/focus proxies; .30 weight makes the whole Risk Index swing on it | re-fit indicator weights against pilot outcomes; hide sub-drivers until validated |
+| **Attention** | `signalComputer.ts::computeAttention` (weight .20) | focus-loss + response-time variance; browser-tab heuristics are device/context-dependent | recalibrate `awayFraction`/variance penalties on real classroom traffic |
+| **Effort (hint count)** | `computeEffortLabel.ts::EFFORT_THRESHOLD = 2` | hint count is a coarse effort proxy (one good question vs button-mashing) | blend with `articulation_used` + `self_unblock_flag` once first-class (file TODO) |
+| **Confidence-from-speed** | `signalComputer.ts::computeConfidence` (weight .10) | speed→confidence is a loose proxy; calibration via speed↔correctness correlation | validate the correlation holds per grade band before trusting it |
+| **Effort/success cuts** | `computeEffortLabel.ts::SUCCESS_THRESHOLD = 75` (Barb-pending) | the 75 cut is a pedagogy call, not yet Barb-ratified | confirm with Barb on pilot data (Stage D 50-attempt cold test) |
+
+All threshold constants are centralized in their named modules (`SKILL_STATE_WEIGHTS`, `SUCCESS_THRESHOLD`/`EFFORT_THRESHOLD`, the `W` weights in `computeRiskIndex.ts`, `ALIGNMENT_THRESHOLD`) precisely so recalibration is a one-file edit per signal, not a code hunt — keep that discipline in v2 (change values in the constant block, never inline at call sites).
 
 ---
 
