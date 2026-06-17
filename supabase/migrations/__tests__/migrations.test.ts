@@ -181,3 +181,27 @@ describe('0004 assignments_homework', () => {
     expect(s()).toMatch(/GRANT ALL ON public\.assignments\s+TO authenticated, anon, service_role/);
   });
 });
+
+describe('0005 skills', () => {
+  const s = () => sql('0005_skills.sql');
+  it('creates skills + skill_learning_state + linkage columns', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.skills/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.skill_learning_state/);
+    expect(s()).toMatch(/ALTER TABLE public\.quiz_questions[\s\S]*ADD COLUMN IF NOT EXISTS skill_id/);
+    expect(s()).toMatch(/ALTER TABLE public\.assignments[\s\S]*ADD COLUMN IF NOT EXISTS skill_ids uuid\[\]/);
+  });
+  it('skill_learning_state CHECK carries exactly the 6 states', () => {
+    for (const st of ['needs_different_instruction','needs_more_time','on_track','ready_to_extend','insufficient_data','not_attempted']) {
+      expect(s()).toContain(`'${st}'`);
+    }
+    expect(s()).toMatch(/UNIQUE \(student_id, skill_id\)/);
+  });
+  it('keeps the idempotent CHECK re-add (072:68-78)', () => {
+    expect(s()).toMatch(/DROP CONSTRAINT IF EXISTS skill_learning_state_state_check/);
+    expect(s()).toMatch(/ADD CONSTRAINT skill_learning_state_state_check CHECK/);
+  });
+  it('skill_learning_state is service-role-write only (no authenticated write policy)', () => {
+    expect(s()).not.toMatch(/CREATE POLICY[^\n]*skill_learning_state[^\n]*FOR INSERT TO authenticated/);
+    expect(s()).toMatch(/GRANT ALL ON public\.skill_learning_state TO authenticated, anon, service_role/);
+  });
+});
