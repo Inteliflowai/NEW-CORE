@@ -258,3 +258,98 @@ describe('0006 snapshots', () => {
     expect(s()).toMatch(/WHERE snapshot_schema_version = 'v2'/);
   });
 });
+
+describe('0007 licensing', () => {
+  const s = () => sql('0007_licensing.sql');
+
+  it('creates all five licensing tables', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.school_licenses/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.license_keys/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.license_usage/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.license_events/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.trial_events/);
+  });
+
+  it('school_licenses is one-per-school with the status gating enum', () => {
+    expect(s()).toMatch(/school_id\s+uuid\s+NOT NULL REFERENCES public\.schools\(id\) UNIQUE/);
+    expect(s()).toMatch(/status\s+text\s+NOT NULL CHECK \(status IN \('trialing','active','past_due','suspended','cancelled'\)\)/);
+  });
+
+  it('reconciles tier to professional on BOTH tables (spec §2.3 — no bare pro)', () => {
+    // Both school_licenses and license_keys must use 'professional', not 'pro'
+    const matches = s().match(/CHECK \(tier IN \('essentials','professional','enterprise'\)\)/g);
+    expect(matches, 'tier CHECK should appear on both school_licenses and license_keys').toBeTruthy();
+    expect(matches!.length).toBeGreaterThanOrEqual(2);
+    expect(s()).not.toMatch(/CHECK \(tier IN \('essentials', 'pro', 'enterprise'\)\)/);
+    expect(s()).not.toContain("'pro'");
+  });
+
+  it('keeps seat + trial date columns on school_licenses (LIFT 020+049)', () => {
+    expect(s()).toMatch(/student_limit\s+int\s+NOT NULL DEFAULT 300/);
+    expect(s()).toMatch(/trial_starts_at\s+timestamptz/);
+    expect(s()).toMatch(/trial_ends_at\s+timestamptz/);
+    expect(s()).toMatch(/trial_converted\s+bool/);
+  });
+
+  it('keeps reserved Stripe columns + override/block jsonb on school_licenses', () => {
+    for (const c of ['stripe_customer_id','stripe_subscription_id','feature_overrides','feature_blocks']) {
+      expect(s()).toContain(c);
+    }
+  });
+
+  it('license_keys has allowed_email_domains (anti-piracy domain-lock, LIFT 049)', () => {
+    expect(s()).toMatch(/allowed_email_domains\s+jsonb\s+DEFAULT '\[\]'/);
+  });
+
+  it('license_keys has signature column (HMAC burn ledger)', () => {
+    expect(s()).toMatch(/signature\s+text\s+NOT NULL/);
+  });
+
+  it('license_usage has monthly snapshot columns (LIFT 020)', () => {
+    expect(s()).toMatch(/UNIQUE\(school_id, month\)/);
+    for (const c of ['students_enrolled','active_students','quiz_attempts','hw_submissions','teli_interactions']) {
+      expect(s()).toContain(c);
+    }
+  });
+
+  it('trial_events has the full multi-value event_type CHECK (LIFT 035)', () => {
+    const src = s();
+    for (const evt of ['trial_signup','first_login','day_25_email_sent','day_30_email_sent','trial_converted','trial_cancelled','manual_nudge_sent','upgrade_clicked']) {
+      expect(src).toContain(`'${evt}'`);
+    }
+  });
+
+  it('activated_via_key_id back-ref added to school_licenses (LIFT 049)', () => {
+    expect(s()).toMatch(/activated_via_key_id\s+uuid\s+REFERENCES public\.license_keys\(id\)/);
+  });
+
+  it('no forward-refs — FKs only reference schools and users (0001)', () => {
+    // Collect all REFERENCES targets; none should reference tables created after 0007
+    const refs = s().match(/REFERENCES public\.(\w+)/g) || [];
+    for (const ref of refs) {
+      const table = ref.replace('REFERENCES public.', '');
+      expect(['schools','users','license_keys'], `unexpected forward-ref to ${table}`).toContain(table);
+    }
+  });
+
+  it('enables RLS on all five tables', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.school_licenses ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.license_keys\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.license_usage\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.license_events\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.trial_events\s+ENABLE ROW LEVEL SECURITY/);
+  });
+
+  it('uses DROP POLICY IF EXISTS before CREATE POLICY (re-runnable)', () => {
+    expect(s()).toMatch(/DROP POLICY IF EXISTS/);
+    expect(s()).toMatch(/CREATE POLICY/);
+  });
+
+  it('grants ALL to authenticated, anon, service_role on all five tables', () => {
+    expect(s()).toMatch(/GRANT ALL ON public\.school_licenses TO authenticated, anon, service_role/);
+    expect(s()).toMatch(/GRANT ALL ON public\.license_keys\s+TO authenticated, anon, service_role/);
+    expect(s()).toMatch(/GRANT ALL ON public\.license_usage\s+TO authenticated, anon, service_role/);
+    expect(s()).toMatch(/GRANT ALL ON public\.license_events\s+TO authenticated, anon, service_role/);
+    expect(s()).toMatch(/GRANT ALL ON public\.trial_events\s+TO authenticated, anon, service_role/);
+  });
+});
