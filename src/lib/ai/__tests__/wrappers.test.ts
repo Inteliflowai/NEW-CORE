@@ -132,6 +132,27 @@ describe('resilientClaudeChat', () => {
     expect(err.provider).toBe('claude');
     expect(err).toBeInstanceOf(Error);
   });
+
+  it('claudeChat rejects with LlmExhaustedError when resilientClaudeChat exhausts', async () => {
+    // Test that claudeChat propagates (does not catch) LlmExhaustedError from underlying resilientClaudeChat.
+    // Mock resilientClaudeChat to throw LlmExhaustedError immediately to avoid retry delays.
+    const { LlmExhaustedError: TestLlmExhaustedError } = await import('@/lib/ai/errors');
+
+    vi.doMock('@/lib/ai/claude', async () => {
+      const actual = await vi.importActual('@/lib/ai/claude');
+      return {
+        ...actual,
+        resilientClaudeChat: vi.fn().mockRejectedValue(
+          new TestLlmExhaustedError('claude', new Error('exhausted'))
+        ),
+      };
+    });
+
+    const { claudeChat: claudeChatFn } = await import('@/lib/ai/claude');
+    const err = await claudeChatFn('system', 'user').catch(e => e);
+    // Cross-module-isolation assertion style (matching existing pattern in this file)
+    expect(err.name).toBe('LlmExhaustedError');
+  });
 });
 
 // ── resilientChatCompletion behaviour ─────────────────────────────────────────
@@ -175,12 +196,12 @@ describe('resilientChatCompletion', () => {
     }));
 
     const { resilientChatCompletion } = await import('@/lib/ai/openai');
-    await expect(
-      resilientChatCompletion(
-        { model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] },
-        { maxRetries: 1, initialDelayMs: 0 },
-      ),
-    ).rejects.toThrow('LLM exhausted after retries (provider=openai)');
+    const err = await resilientChatCompletion(
+      { model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] },
+      { maxRetries: 1, initialDelayMs: 0 },
+    ).catch(e => e);
+    expect(err.name).toBe('LlmExhaustedError');
+    expect(err.provider).toBe('openai');
   });
 
   it('does NOT retry on non-retryable 400 status (throws immediately)', async () => {
