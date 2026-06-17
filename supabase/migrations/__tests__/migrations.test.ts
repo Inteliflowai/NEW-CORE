@@ -353,3 +353,75 @@ describe('0007 licensing', () => {
     expect(s()).toMatch(/GRANT ALL ON public\.trial_events\s+TO authenticated, anon, service_role/);
   });
 });
+
+describe('0008 platform', () => {
+  const s = () => sql('0008_platform.sql');
+
+  it('creates all 4 tables', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.platform_events/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.platform_links/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.external_identities/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.webhook_idempotency_keys/);
+  });
+
+  it('platform_events carries the full V1 034 column set (media-meter substrate)', () => {
+    for (const c of ['source', 'event_type', 'school_id', 'student_id', 'payload', 'processed', 'error', 'created_at']) {
+      expect(s(), `platform_events missing column: ${c}`).toContain(c);
+    }
+  });
+
+  it("platform_links product CHECK INCLUDES 'lift' (P1 LIFT pre-populate handoff)", () => {
+    // The CHECK must be ('spark','lift','custom') — 'lift' is required for LIFT row provisioning
+    expect(s()).toMatch(/product\s+text\s+NOT NULL CHECK \(product IN \('spark','lift','custom'\)\)/);
+    expect(s(), "product CHECK must contain 'lift'").toContain("'lift'");
+  });
+
+  it('platform_links has all required columns including GA-rework rotatable-key cols', () => {
+    for (const c of ['api_key', 'core_base_url', 'enabled', 'key_version', 'rotated_at', 'expires_at', 'last_used_at']) {
+      expect(s(), `platform_links missing column: ${c}`).toContain(c);
+    }
+    expect(s()).toMatch(/UNIQUE \(school_id, product\)/);
+  });
+
+  it('external_identities has UNIQUE (school_id, provider, external_id)', () => {
+    expect(s()).toMatch(/UNIQUE \(school_id, provider, external_id\)/);
+    for (const c of ['school_id', 'provider', 'external_id', 'core_student_id']) {
+      expect(s(), `external_identities missing column: ${c}`).toContain(c);
+    }
+  });
+
+  it('webhook_idempotency_keys has status CHECK (in_progress|completed|failed) + UNIQUE (endpoint, idempotency_key)', () => {
+    expect(s()).toMatch(/status\s+text\s+NOT NULL CHECK \(status IN \('in_progress','completed','failed'\)\)/);
+    expect(s()).toMatch(/UNIQUE \(endpoint, idempotency_key\)/);
+    for (const c of ['endpoint', 'idempotency_key', 'response_body', 'expires_at']) {
+      expect(s(), `webhook_idempotency_keys missing column: ${c}`).toContain(c);
+    }
+  });
+
+  it('enables RLS on all 4 tables', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.platform_events\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.platform_links\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.external_identities\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.webhook_idempotency_keys ENABLE ROW LEVEL SECURITY/);
+  });
+
+  it('uses DROP POLICY IF EXISTS before CREATE POLICY (re-runnable)', () => {
+    expect(s()).toMatch(/DROP POLICY IF EXISTS/);
+    expect(s()).toMatch(/CREATE POLICY/);
+  });
+
+  it('grants ALL to authenticated, anon, service_role on all 4 tables', () => {
+    expect(s()).toMatch(/GRANT ALL ON public\.platform_events\s+TO authenticated, anon, service_role/);
+    expect(s()).toMatch(/GRANT ALL ON public\.platform_links\s+TO authenticated, anon, service_role/);
+    expect(s()).toMatch(/GRANT ALL ON public\.external_identities\s+TO authenticated, anon, service_role/);
+    expect(s()).toMatch(/GRANT ALL ON public\.webhook_idempotency_keys TO authenticated, anon, service_role/);
+  });
+
+  it('no forward-refs — FKs only reference schools and users (0001)', () => {
+    const refs = s().match(/REFERENCES public\.(\w+)/g) || [];
+    for (const ref of refs) {
+      const table = ref.replace('REFERENCES public.', '');
+      expect(['schools', 'users'], `unexpected forward-ref to ${table}`).toContain(table);
+    }
+  });
+});
