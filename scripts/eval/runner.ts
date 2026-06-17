@@ -31,7 +31,7 @@ export function loadCorpus(scope: EvalScope): EvalTuple[] {
  *  (spec §1.11/§3.4). Optional now so the harness runs green with an empty corpus. */
 export type InvokeCandidate = (tuple: EvalTuple) => Promise<unknown>;
 
-export function runScope(scope: EvalScope, _invokeCandidate?: InvokeCandidate): RunReport {
+export function runScope(scope: EvalScope, _invokeCandidate?: InvokeCandidate): RunReport { // eslint-disable-line @typescript-eslint/no-unused-vars
   const corpus = loadCorpus(scope);
   const ran_at = new Date().toISOString();
   if (corpus.length < MIN_TUPLES_FOR_GATE) {

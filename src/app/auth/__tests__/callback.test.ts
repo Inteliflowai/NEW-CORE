@@ -35,19 +35,19 @@ describe('auth/callback/route.ts', () => {
    * Helper to set up Supabase mock
    */
   function mockSupabaseSuccess() {
-    (createServerSupabaseClient as any).mockResolvedValue({
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
       auth: {
         exchangeCodeForSession: vi.fn().mockResolvedValue({ error: null }),
       },
-    });
+    } as never);
   }
 
   function mockSupabaseError() {
-    (createServerSupabaseClient as any).mockResolvedValue({
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
       auth: {
         exchangeCodeForSession: vi.fn().mockResolvedValue({ error: new Error('exchange failed') }),
       },
-    });
+    } as never);
   }
 
   it('should redirect to /dashboard when next=/dashboard and code exchange succeeds', async () => {

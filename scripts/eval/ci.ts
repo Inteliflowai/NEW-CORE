@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // ============================================================
 // scripts/eval/ci.ts — CI entry for the eval rig.
 //
