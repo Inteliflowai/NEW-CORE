@@ -133,3 +133,30 @@ describe('0002 classes_enrollments', () => {
     expect(s()).toMatch(/enrollment_count\s+int/);
   });
 });
+
+describe('0003 lessons_quizzes', () => {
+  const s = () => sql('0003_lessons_quizzes.sql');
+
+  it('creates the 5 tables', () => {
+    for (const t of ['lessons','quizzes','quiz_questions','quiz_attempts','quiz_responses']) {
+      expect(s()).toMatch(new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${t}`));
+    }
+  });
+
+  it('uses the real V1 enums (lesson status, question_type, mastery_band)', () => {
+    expect(s()).toMatch(/status\s+text\s+DEFAULT 'draft' CHECK \(status IN \('draft','pending_review','approved','published','archived'\)\)/);
+    expect(s()).toMatch(/question_type\s+text NOT NULL CHECK \(question_type IN \('mcq','open'\)\)/);
+    expect(s()).toMatch(/mastery_band\s+text\s+CHECK \(mastery_band IN \('reteach','grade_level','advanced'\)\)/);
+  });
+
+  it('quiz_responses carries the cognitive + behavioral telemetry columns', () => {
+    for (const c of ['cognitive_notes','response_time_ms','hesitation_ms','answer_changes','navigation_backs','pause_count','total_pause_ms','word_count']) {
+      expect(s()).toContain(c);
+    }
+  });
+
+  it('enables RLS + grants on quiz_responses', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.quiz_responses ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/GRANT ALL ON public\.quiz_responses TO authenticated, anon, service_role/);
+  });
+});
