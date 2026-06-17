@@ -17,35 +17,37 @@
 
 This table is the live scoreboard. As each open item is settled, move it to ✅ and record the answer.
 
+> **STATUS — 2026-06-17: all punch-list items LOCKED.** Decided with the user and grounded in the V1 + SPARK mining (`v1-mining-findings.md`, `spark-mining-findings.md`). Only item 7 is ✅* — approach locked, pending Barb's sign-off on 3 pedagogy deltas (per-skill CL, misconception taxonomy, eval-corpus rebuild). Ready for the P1 design doc.
+
 | # | Section | Decision | Status | Answer |
 |---|---------|----------|--------|--------|
-| 0 | Big Fork | Lean Essentials-MVP first vs full three-tier rebuild | 🟠 | _pending_ |
-| 2 | Roles | All 5 roles in MVP vs student + teacher + thin admin | 🟠 | _pending_ |
-| 4a | Engine | Confirm grade-anchored difficulty | 🟠 | _pending_ |
-| 4b | Engine | Data threshold where Q4–Q5 start adapting | 🟠 | _pending_ |
-| 4c | Engine | CL is per-skill (confirm) | 🟠 | _pending_ |
-| 4d | Engine | What's "Super" about Super TELI | 🟠 | _pending_ |
-| 5 | Media | Which media in Essentials vs Pro; voice-on-non-reading; monthly limits | 🟠 | _pending_ |
-| 6 | Signals | Final signal set + exact gap threshold (V1 used 20+) | 🟠 | _pending_ |
-| 7 | Pedagogy | CL states, 12 Strategies, 5 Powers, 4 effort labels, mastery scale, OEQ rubric | 🟣 | _pending_ |
-| 8 | Screens | Right MVP screen set | 🟠 | _pending_ |
-| 10 | Packaging | Confirm tier gate map; any feature changing tiers | 🟠 | _pending_ |
-| 11 | Integrations | GC-only at MVP; SIS connector architected now / shipped P3 | 🟠 | _pending_ |
-| 12a | Licensing | Reuse V1 licensing vs redesign | 🟠 | _pending_ |
-| 12b | Licensing | Trial = Pro or Essentials level | 🟠 | _pending_ |
-| 12c | Licensing | "Downloadable" = cloud signup or installable | 🟠 | _pending_ |
-| 14 | Services | Reuse service configs vs clean reset; add/drop services | 🟠 | _pending_ |
-| 16 | Look & Feel | Vibrant replaces vs builds on indigo/amber; student-loud/adult-credible split; leaderboard off by default; the one "first 5 min" flow | 🟠 | _pending_ |
-| 17 | Sequence | Phasing matches Sept pilot | 🟠 | _pending_ |
-| 18 | Success | The 2–3 success metrics | 🟠 | _pending_ |
+| 0 | Big Fork | Lean Essentials-MVP first vs full three-tier rebuild | ✅ | **MVP discipline, Pro-tier baseline.** Build sequentially/one-loop-at-a-time, but the pilot ships on **Pro** (not Essentials) so the "Confirm" half of the loop is in-pilot. Enterprise deferred. |
+| 2 | Roles | All 5 roles in MVP vs student + teacher + thin admin | ✅ | **All five, full depth.** Guardrail: each role still obeys one-role-one-job — full depth = its single job polished, not added secondary features. |
+| 4a | Engine | Confirm grade-anchored difficulty | ✅ | **Locked as-is.** Hard generation constraint; lift V1's Bloom-to-grade calibration in the quiz/assignment prompts. |
+| 4b | Engine | Data threshold where Q4–Q5 start adapting | ✅ | **Both layered.** Within-attempt reshape (Q1–Q3 → Q4–Q5: 0–50 scaffolded / 50–79 grade / 80+ advanced, lift V1) always on; student history deepens personalization over time. |
+| 4c | Engine | CL granularity (per-skill vs per-student) | ✅ | **Per-skill CL + per-student LS/LP.** CL per skill (`skill_state`); Learning Strategies/Profile stay cross-cutting & behavioral per student. Cold-start = skill "not yet assessed" (null), no fabricated fallback. Most comprehensive + most actionable. |
+| 4d | Engine | What's "Super" about Super TELI | ✅ | **Full upgrade bundle.** Persistent cross-session memory + 3-level hint ladder (nudge→cue→walkthrough) + embedded Strategy naming + voice (TTS read-aloud + Whisper speak-back). |
+| 5 | Media | Which media in Essentials vs Pro; voice-on-non-reading; monthly limits | ✅ | **Adopt V1.** TTS+voice+Flux images+diagrams all tiers, Runway video Pro+. Caps = V1 table (TTS 100k/500k/∞, Whisper 12k/60k/∞, Flux 50/200/∞, Runway 10/50/∞, Teli 20/50/day). NEW adds: passage/question read-aloud + code-enforce voice-on-non-reading. |
+| 6 | Signals | Final signal set + exact gap threshold (V1 used 20+) | ✅ | **8-signal set locked; gap = 20** (V1's live value). Lift V1 formulas/thresholds. **Misconception: build a structured taxonomy + matcher for the pilot** (net-new vs V1's raw-store; needs Barb pedagogy input — see item 7). |
+| 7 | Pedagogy | CL states, 12 Strategies, 5 Powers, 4 effort labels, mastery scale, OEQ rubric | ✅* | **Carry V1's locked pedagogy verbatim** as the v2 basis. *Pending Barb sign-off* on 3 deltas only: per-skill CL, misconception taxonomy (6b), eval-corpus rebuild. Reconcile the eval-tuple key mismatch vs SPARK's rubric keys. (✅* = approach locked, Barb confirmation queued.) |
+| 8 | Screens | Right MVP screen set | ✅ | **Per-role set + onboarding.** Teacher: Today / One Student / Create / Classes. Student: Home / Do the Work / Spark (Pro+). Parent: child narrative. School Admin: adoption + Risk Index. Super Admin: schools / licensing / maintenance / changelog. **PLUS** a first-run onboarding/setup flow (GC connect, demo class, 30-min implementation). |
+| 10 | Packaging | Confirm tier gate map; any feature changing tiers | ✅ | **Adopt V1's `TIER_FEATURES` gate map as-is** (matches §10). Lift `checkFeature` (server) + `useLicenseGate` (client) + JSONB override/block. Spark = Pro+ (checked in CORE before the webhook fires; SPARK-side grade-band gate 3–12). No features move tiers. |
+| 11 | Integrations | GC-only at MVP; SIS connector architected now / shipped P3 | ✅ | **GC live at pilot (all tiers, free; lift V1 ~95%).** Architect a provider-agnostic **LMS** interface (GC + **Canvas**, net-new) **and SIS** interface (Blackbaud, Veracross, ManageBac, Clever) now; ship non-GC implementations in the Enterprise phase. **Platform API = SPARK's contract pattern + GA reworks** (rotatable/expiring keys, per-key rate-limit, idempotency TTL, codegen'd payload spec). |
+| 12a | Licensing | Reuse V1 licensing vs redesign | ✅ | **Reuse V1 as-is + minor hardening:** lift HMAC single-use keys + domain lock + DB-trigger seat enforcement + tenant isolation; add (1) trial grace-period enforcement, (2) *true* read-only maintenance mode, (3) key-expiry check at activation, (4) rate-limit activation. |
+| 12b | Licensing | Trial = Pro or Essentials level | ✅ | **Pro** — 30-day, no card, demo students pre-loaded (matches V1 + the Pro-baseline decision). |
+| 12c | Licensing | "Downloadable" = cloud signup or installable | ✅ | **Self-serve cloud signup** (no installable build — none exists in V1). |
+| 14 | Services | Reuse service configs vs clean reset; add/drop services | ✅ | **Reuse all V1 configs as-is** (Resend, Sentry, PostHog 2-project, Upstash, Flux, Runway, Whisper/TTS, diagram renderer). **Defer Stripe** — keep V1's admin-provisioned license-key model for the pilot (reserved Stripe columns stay ready). **Keep HighLevel** trial webhook. |
+| 16 | Look & Feel | Vibrant vs indigo/amber; student-loud/adult-credible split; leaderboard default; "first 5 min" flow | ✅ | **Fresh electric palette** (direction locked; exact colors explored visually in the design phase). **Student-loud / adult-credible split confirmed** (WCAG AA always). **Leaderboard off by default** ("You vs 4 weeks ago" is the frame). **Hero flow = teacher → first differentiated assignment, <5 min.** |
+| 17 | Sequence | Phasing matches Sept pilot | ✅ | **Full Pilot Baseline (Pro) targeted before September.** Build starts as soon as scope locks. Internal ordering front-loads proven V1 lifts (engine, signals, licensing, media, GC, Spark contract); net-new (per-skill CL, full Super TELI, misconception taxonomy, Canvas, fresh design) layers on after. |
+| 18 | Success | The 2–3 success metrics | ✅ | **3-metric scoreboard:** (1) teacher takes a CORE-recommended action; (2) time-to-first-value < 5 min (first differentiated assignment) + weekly return; (3) flagged students improve (assignment grades up and/or Assignment-vs-Quiz gap narrows). |
 
 ---
 
 ## 0. The Big Fork: How Much Do We Build First? 🟠
 
 - **V1 lesson:** We built 150+ features at once, in parallel; the result was a screen nobody could read. Breadth killed clarity.
-- **Recommendation:** Build a lean **Essentials-tier MVP that nails one loop end-to-end** in real classrooms first, then layer Pro (signals) and Enterprise (longitudinal) on top. The tiers give the phasing for free.
-- **Decision:** Lean MVP-first (Essentials core), or full three-tier rebuild at once? *Everything below assumes MVP-first.*
+- **Original recommendation (refined by the decision below):** a lean Essentials-first MVP that nails one loop end-to-end, then layer Pro and Enterprise. The decision kept the MVP *discipline* but moved the **pilot baseline to Pro** so the loop actually closes in-pilot.
+- **DECIDED:** MVP *discipline* (sequenced, one loop end-to-end — not 150 features at once), but the **pilot baseline is the Pro tier**, not Essentials. Rationale: the "Confirm" half of Notice→Act→Confirm (did the intervention work, cognitive signals, Risk Index) lives in Pro — an Essentials-only pilot would repeat the V1 mistake of never closing the loop. **Enterprise (longitudinal, SIS, white-label) stays deferred.** This merges the old P1+P2 into a single "pilot baseline" phase (see §17).
 
 ## 1. What CORE v2 Is ✅
 
@@ -64,7 +66,7 @@ Each role gets *one* primary job. A screen that serves two masters serves neithe
 | **School Admin** | Are teachers and students actually being helped? (adoption + risk) |
 | **Platform Super Admin** | Run the platform — schools, licensing, maintenance mode, changelog. |
 
-- **Decision:** All five in the MVP, or start with student + teacher + a thin admin first?
+- **DECIDED:** All five roles in the pilot at **full depth** (School Admin confirmed in). Guardrail: each role still obeys one-role-one-job — "full depth" = its single job polished and complete, not added secondary features per role.
 
 ## 3. The Core Loop ✅
 
@@ -83,7 +85,11 @@ Pipeline: **Lesson Plan → Quiz (3 MCQ + 2 OEQ) → read cognitive + behavior s
 - **LS detection** from the 12 Strategies. Quiz *seeds* LS weakly; **behavior signals confirm it** over time. Never a day-one verdict.
 - **CL drives generation:** Reinforce → scaffolded work + more Super TELI. On Track → grade-level. Enrich → Spark / stretch + Socratic-only Super TELI.
 - **Media-rich outputs.** Every passage, question, and hint can be read aloud; students can speak back; assignments include generated illustrations and diagrams (§5).
-- **Decisions:** (a) confirm grade-anchored difficulty + set the data threshold where Q4–Q5 start adapting; (b) confirm CL per-skill; (c) what is "Super" about Super TELI vs today's Teli?
+- **DECIDED (V1+SPARK-informed):**
+  - **(4a) Grade-anchored difficulty — locked.** Already a hard constraint in V1 (Bloom matched to grade band in the quiz prompt); lift the calibration.
+  - **(4b) Adaptive Q4–Q5 — both layered.** V1 already reshapes Q4–Q5 *within the attempt* off Q1–Q3 MCQ % (0–50 scaffolded / 50–79 grade / 80+ advanced) — keep that, always on. Layer student-history personalization on top over time. (Supersedes the earlier "after N quizzes" framing.)
+  - **(4c) CL per-skill; LS/LP per-student.** Comprehension Level is computed per skill (`skill_state`) — strictly more comprehensive and more actionable than V1's per-student band. Learning Strategies / Learner Profile remain cross-cutting, behavioral, and accruing per student (observation supersedes; never claim a strategy from one skill). Cold-start: a skill with no evidence is "not yet assessed" (null), not a fabricated fallback.
+  - **(4d) Super TELI = full upgrade bundle.** Persistent cross-session memory + 3-level hint ladder (nudge→cue→walkthrough) + embedded Inteliflow Strategy naming + tight voice (TTS read-aloud + Whisper speak-back). V1's Teli is the Socratic base to build on. NOTE (from SPARK mining): Spark's in-runner tutor stays SPARK-owned and separate behind the contract — do not unify the two tutors in the pilot.
 
 ## 5. Media: Audio & Visuals 🟠
 
@@ -95,7 +101,10 @@ Audio and visuals are core to **accessibility** (struggling readers, ELL, younge
 - **Visuals — diagrams.** Auto-generated diagrams (processes, structures, concept maps) where a picture beats a paragraph.
 - **Video.** Richer generated media for select content — heavier cost, so Pro+.
 - **Tier-gated limits.** Generous monthly AI-media allowances on Essentials; Pro raises every ceiling. Limits double as the cost guardrail (§14).
-- **Decisions:** which media in Essentials MVP vs Pro? Confirm voice-on-non-reading-tasks. Set monthly limit numbers per tier.
+- **DECIDED (lift V1 metering):**
+  - **(5a) Tier split = V1's:** TTS + voice + illustrations (Flux) + diagrams on all tiers incl. Essentials; **video (Runway) = Pro+**.
+  - **(5b) Caps = V1's table** (TTS 100k/500k/∞ chars, Whisper 12k/60k/∞ sec, Flux 50/200/∞ images, Runway 10/50/∞ videos, Teli 20/50/∞ msgs/day) — lift `lib/licensing/usageCaps.ts` + `platform_events` metering; tune from pilot usage.
+  - **(5c) Two NEW adds on top of V1:** read-aloud on passages/questions/hints (V1 only does Teli replies today) + **code-enforce "voice only on non-reading tasks."**
 
 ## 6. Signals → Actions 🟠
 
@@ -113,7 +122,7 @@ A signal only reaches the screen if it passes the 5-second test *and* resolves t
 | One next step, plain words | Student | Do this one thing |
 
 - **V1 credibility risk:** don't claim a learning *strategy* from 5 answers. Comprehension you can read from a quiz; strategy is behavioral and accrues. "Observation supersedes."
-- **Decision:** final signal set + exact gap threshold (V1 used 20+).
+- **DECIDED:** 8-signal set locked as the pilot set (all proven in V1 — see `v1-mining-findings.md` for formulas). **Gap threshold = 20** (V1's live `divergence_score` gating value). The "did-it-work" confirmation (reteach effectiveness + mastery-regression alert) closes the loop and is in-pilot. **Misconception signal: build a structured taxonomy + matcher for the pilot** (V1 only stores raw `cognitive_notes`/`error_type` — the taxonomy is net-new and needs Barb's pedagogy input; tracked under item 7). Recalibrate the noisier V1 heuristics (frustration, attention) from pilot data.
 
 ## 7. Pedagogy Decisions to Lock 🟣 (Barb)
 
@@ -124,6 +133,8 @@ A signal only reaches the screen if it passes the 5-second test *and* resolves t
 - **Mastery scale:** how many levels + human labels ("Mastery," never "Band").
 - **OEQ rubric:** what the 2 open-ended questions are scored on + the expected-output set for the eval rig.
 
+- **DECIDED (approach):** carry V1's locked pedagogy **verbatim** as the v2 basis — all of the above already exists and is Barb-locked in V1 (`lib/openai/prompts.ts` `INTELIFLOW_STRATEGIES`, `lib/strategies/powerDisplay.ts`, `lib/copy/effortLabels.ts`, `BAND_LABEL`, the grading prompt). **Barb confirmation is queued for only 3 deltas:** (1) CL is now **per-skill** (V1 was per-student), (2) the **new misconception taxonomy** (item 6b), (3) **rebuilding the eval corpus** (V1's is empty / Stage A). Reconcile the eval-tuple dimension-key mismatch (`analysis_evidence`/`metacognition`/`growth_mindset` vs SPARK's runtime keys) during the rebuild. Any change to this content must go through Barb + bump the drift suite.
+
 ## 8. Screen Map (MVP) 🟠
 
 - **Teacher: Today** — 5-second triage. Who needs me, ranked, reason in plain words, one-click action.
@@ -131,7 +142,7 @@ A signal only reaches the screen if it passes the 5-second test *and* resolves t
 - **Teacher: Create** — one sentence or upload → lesson + quiz; one goal → CORE differentiates.
 - **Student: Home** — "you're improving at X" + today's one next step.
 - **Student: Do the work** — two-phase assignment (read, then tasks) + Super TELI (voice + read-aloud).
-- **Decision:** right MVP screen set? Anything a real teacher needs day one that's missing?
+- **DECIDED:** per-role set above is locked (mirrors V1's proven screens; one job per role), **plus a named first-run onboarding/setup flow** (Google Classroom connect → roster import → demo class pre-loaded → first differentiated assignment) — designed explicitly, since "time-to-first-value <5 min / 30-min implementation" is a success metric (§16, §18). "Did it work" lives inside Teacher: One Student. Spark surfaces on Student for Enrich (Pro+).
 
 ## 9. Data Model ✅ (draft)
 
@@ -158,7 +169,7 @@ The build must **license-gate features by tier** from day one.
 | **Enterprise** | Learns over time | + full Longitudinal Intelligence, trajectory tab, cohort benchmarking, learning velocity, SIS integration, Pulse/LIFT API, white-label, division-scoped admin, custom reports, CSM. |
 
 - Spark is built into the engine but **gated to Pro+**. Learning Support Intelligence is an add-on for any tier.
-- **Decision:** confirm the gate map. Any feature moving tiers in v2?
+- **DECIDED:** adopt V1's `lib/licensing/tiers.ts` `TIER_FEATURES` as the v2 gate map (it matches this table). Lift the central gate verbatim: `checkFeature()` server-side + `requireFeature()` in API routes + `useLicenseGate` client hook, 60s Redis cache, JSONB `feature_overrides`/`feature_blocks` for negotiated deals. **Spark stays Pro+**, gated by the `spark_experiences` feature checked in CORE *before* the webhook fires (+ SPARK-side grade-band gate 3–12). No features move tiers for v2.
 
 ## 11. Integrations 🟠
 
@@ -169,7 +180,10 @@ The build must **license-gate features by tier** from day one.
 | Spark (internal) | Pro+ — via typed contract, never shared seeds |
 | Pulse / LIFT ecosystem API | Enterprise — deferred from pilot |
 
-- **Decision:** confirm GC is the only MVP integration; SIS connector architected up front, shipped Phase 3.
+- **DECIDED:**
+  - **Google Classroom is the only *live* integration at pilot** (all tiers, free) — lift V1's ~95%-complete connector (`lib/integrations/lms/google-classroom.ts` + `app/api/teacher/google/*`); add grade *pull* (V1 only pushes).
+  - **Architect now, ship later:** a provider-agnostic **LMS adapter interface** (Google Classroom + **Canvas** — Canvas is net-new vs V1) and the **SIS adapter interface** (Blackbaud, Veracross, ManageBac, Clever — V1 has a base adapter + stubs). Non-GC implementations ship in the **Enterprise** phase.
+  - **v2 Platform API = SPARK's proven contract pattern** (typed HTTP POST + inline payloads; asymmetric auth — CORE signs HS256 JWTs, products return via per-school Bearer secret; one school-scoped `api_key` per link; per-tenant feature-flag gating both entry points; webhook idempotency; per-school `core_base_url` override) **+ GA reworks:** rotatable/expiring keys (not bare UUIDs), per-key rate limiting (Upstash), idempotency-row TTL (~30d), and codegen the payload spec so both sides auto-validate. Wrap the call site in a `lib/spark/sendAssignmentToSpark` service layer.
 
 ## 12. Licensing, Anti-Piracy & Free Trial 🟠
 
@@ -179,7 +193,7 @@ Carry forward the licensing system already built — it's a moat. Bake in from l
 - **Anti-copying / anti-piracy** — keep V1's mechanism so the platform can't be cloned or run off-license. Server-validated, not client-trustable.
 - **30-day free trial, self-service** — no credit card, 8 demo students pre-loaded, every feature unlocked, onboarding wizard, no cap. Converts to a paid tier or expires cleanly.
 - **Maintenance mode** — Super Admin can put CORE read-only with a user-facing banner.
-- **Decisions:** (a) reuse V1 licensing as-is or redesign cleaner? (b) Trial = Pro or Essentials level? (c) "Downloadable" = self-serve cloud signup or installable build?
+- **DECIDED:** **(12a) Reuse V1's licensing as-is** — proven moat (HMAC single-use activation keys, domain locking, DB-trigger seat enforcement, per-school API keys + tenant-mismatch checks). Add only 4 small hardening fixes: enforce the trial grace period, make maintenance mode *actually* read-only (today banner-only), check key expiry at activation, rate-limit the activation endpoint. **(12b) Trial = Pro tier**, 30-day, no credit card, demo students pre-loaded. **(12c) "Downloadable" = self-serve cloud signup** — there is no installable build (none in V1).
 
 ## 13. Tech Architecture & V1 Gotchas ✅
 
@@ -212,7 +226,7 @@ Carry forward, configured from day one — not bolted on after launch.
 | **Stripe** | Billing / licensing payments |
 
 - **Cost guardrail:** Runway, image generation, and TTS each cost per use. The per-tier media limits in §5 keep spend bounded — wire usage counters in from the start.
-- **Decision:** reuse existing service configs as-is, or clean reset? Any service to add/drop for v2?
+- **DECIDED:** **reuse all V1 service configs as-is** (incl. Sentry's PII scrubbing + free-tier tuning, PostHog's two-project split with Zod allow-list + FERPA delete path, Upstash rate-limiters). **Defer Stripe** — V1 has no payment system; licensing is admin-provisioned keys (sales-led / PO), which fits edu and the Sept pilot. The `school_licenses` table's reserved Stripe columns stay ready for a post-pilot self-serve billing add. **Keep** the HighLevel CRM trial-signup webhook (non-blocking lead capture).
 
 ## 15. Non-Negotiable Language & Brand ✅
 
@@ -233,25 +247,26 @@ Carry forward, configured from day one — not bolted on after launch.
   - **Avoid the generic AI look.** Specific, intentional palette — not stock Memphis squiggles.
 - **Starter tokens (react to, not final):** electric palette — vivid violet + hot coral + acid lime accents over clean near-white, deep ink text — or a louder evolution of the current indigo/amber. Expressive geometric display face + highly legible body face. Motion with purpose.
 - **The rest of "better" is discipline:** time-to-first-value < 5 min · 30-minute implementation · defaults over settings · one screen/one job/one action · healthy engagement (You-vs-4-weeks-ago default, leaderboard off by default) · plain language is the product · trust as a feature · mobile + accessible by default.
-- **Decisions:** vibrant *replaces* or *builds on* indigo/amber? Confirm student-loud / adult-credible split. Leaderboard off by default? Pick the one "first 5 minutes" flow to obsess over.
+- **DECIDED:** **Fresh electric palette** — a new, intentional pop-art palette (not the V1 indigo/amber); direction locked now, exact colors + the signature element explored visually in the design phase (frontend-design + visual companion). **Student-loud / adult-credible split confirmed:** full pop-art energy on student screens; same DNA dialed for credibility on teacher/parent/admin; bold skin + disciplined bones; WCAG AA always. **Leaderboard off by default** (keep XP/streaks/badges, but "You vs 4 weeks ago" is the default frame; opt-in only). **The one "first 5 minutes" flow to obsess over:** teacher signs in → connects GC / picks demo class → one sentence → a real differentiated assignment in hand in under 5 minutes (the time-to-first-value metric, §18).
 
-## 17. Build Sequence 🟠
+## 17. Build Sequence 🟠 (phasing reshaped by decisions 0, 2, 4)
+
+Per decision 0, the old P1 (Essentials) and P2 (Pro) **merge into a single Pilot Baseline (Pro tier)** phase; Enterprise is deferred. Per decision 2, all 5 roles are full-depth in the pilot.
 
 | Phase | What ships |
 |-------|------------|
 | **P0** | This sheet, fully locked. (We're here.) |
-| **P1 — Essentials core** | The engine (§4) end-to-end with read-aloud + visuals; Teacher Today + One Student + Create; CL + gap + effort signals; Google Classroom; licensing + 30-day trial; 5 roles thin. |
-| **P2 — Pro / close the loop** | Spark; Risk Index; cognitive signals; video media; "did it work" confirmation; student trajectory; parent dashboard. |
-| **P3 — Enterprise** | Longitudinal layer; SIS connectors; cohort benchmarking; white-label; ecosystem API. |
+| **P1 — Pilot Baseline (Pro tier)** | Engine (§4) end-to-end with read-aloud + visuals + **full Super TELI**; **all 5 roles at full depth**; **per-skill CL** + gap + effort + cognitive signals + Risk Index; **"did it work" confirmation** (loop close); **Spark (Pro+, via the typed contract)**; student trajectory; parent dashboard; Google Classroom; licensing + 30-day Pro trial. |
+| **P2 — Enterprise** | Longitudinal layer; SIS connectors; cohort benchmarking; white-label; ecosystem API. |
 
-- **Decision:** does this match the pilot timeline (Sept start)?
+- **DECIDED:** target the **full Pilot Baseline (Pro) before September**; build begins as soon as the scope locks. **Build ordering** (to protect the date): front-load the proven V1 lifts — engine + prompts, signal math, licensing/anti-piracy, media metering, Google Classroom, the SPARK contract — onto a working spine *first*, then layer the net-new work: per-skill CL, full Super TELI, the misconception taxonomy, the Canvas LMS adapter, and the fresh design system.
 
 ## 18. How We'll Know It Has Value 🟠
 
 - **V1 lesson:** "We don't even know if it has value" — because we never defined it upfront.
 - **Leading signs:** teachers log in weekly without nagging · teachers take a CORE-recommended action · login→insight < ~30s, first differentiated assignment < 5 min.
 - **Proof it worked:** flagged students' assignment grades trend up · the Assignment-vs-Quiz gap narrows for students we intervened on · teachers say, unprompted, "this changed what I did in class."
-- **Decision:** pick the 2–3 metrics that define success — those become the pilot scoreboard.
+- **DECIDED — the pilot scoreboard (3 metrics):** (1) **Teacher takes a CORE-recommended action** (the click that proves the insight landed). (2) **Time-to-first-value < 5 min** — first session produces one real differentiated assignment; teachers return weekly without nagging. (3) **Flagged students improve** — for students CORE flagged and the teacher acted on, assignment grades trend up and/or the Assignment-vs-Quiz gap narrows.
 
 ## 19. Explicitly Out of Scope (v2 pilot) ✅
 
