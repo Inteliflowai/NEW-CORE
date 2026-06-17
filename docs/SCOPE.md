@@ -286,6 +286,14 @@ Per decision 0, the old P1 (Essentials) and P2 (Pro) **merge into a single Pilot
 - **Why it's compliant:** FERPA governs *disclosure/handling of PII*, not "using data to improve the service." Properly de-identified/aggregated data falls outside FERPA's PII constraints. Guardrails: operate as a school official under a data-handling agreement; de-identify before any cross-student learning; opaque IDs; raw student work stays in-context only.
 - **Architected in P1, built in P2+:** P1 already captures the substrate (weekly snapshots, per-attempt history, reteach outcomes, signal aggregates, V1's PostHog typed-allow-list/opaque-ID/no-PII analytics). The loop drops in later **without a retrofit** — same discipline as longitudinal (§9). **Pilot does not build the loop; it must not foreclose it.**
 
+## 18c. Multi-region architecture — BR/EduFlux (deferred, seam kept clean) ✅ (direction)
+
+**Decided 2026-06-17.** When the Brazil/EduFlux (pt-BR) version comes into scope, the architecture is **one Git repo → a separate Vercel *project* per region, each with its own Supabase DB and its own domain.**
+
+- **Separate DB per region** (not just separate domain on one project): clean **data residency** — Brazil **LGPD** + FERPA isolation, US and BR student data never share a database — and no runtime multi-DB routing complexity. Same code, two deploys, two DBs.
+- **One codebase, not a fork:** region differences (locale, BNCC curriculum, palette) are **config / feature-flags** — lift V1's `NEXT_PUBLIC_BRAND=core|eduflux` seam.
+- **Deferred per §19:** pt-BR is **not built** in the v2 pilot (near-term EduFlux pilot runs on V1). But the P1 foundation **keeps the seam clean** — locale is an input signal, brand resolves from env, nothing hardcoded en-US — so adding BR later is config, not surgery. **Pilot must not foreclose it.**
+
 ## 19. Explicitly Out of Scope (v2 pilot) ✅
 
 - Portuguese / Brazil localization (Pulse track).
