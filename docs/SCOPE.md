@@ -277,6 +277,15 @@ Per decision 0, the old P1 (Essentials) and P2 (Pro) **merge into a single Pilot
 - **Proof it worked:** flagged students' assignment grades trend up · the Assignment-vs-Quiz gap narrows for students we intervened on · teachers say, unprompted, "this changed what I did in class."
 - **DECIDED — the pilot scoreboard (3 metrics):** (1) **Teacher takes a CORE-recommended action** (the click that proves the insight landed). (2) **Time-to-first-value < 5 min** — first session produces one real differentiated assignment; teachers return weekly without nagging. (3) **Flagged students improve** — for students CORE flagged and the teacher acted on, assignment grades trend up and/or the Assignment-vs-Quiz gap narrows.
 
+## 18b. CORE Learning Loop — self-improvement (P2+, architected in P1) ✅ (direction)
+
+**Decided 2026-06-17.** CORE should be a **self-improving system** that gets better at identifying and differentiating as it accumulates data — *not* by training LLM weights on raw student work, but via an **aggregate / de-identified learning layer**:
+
+- **What it learns:** cross-cohort outcome patterns — e.g. "misconception X on skill Y at grade Z responded best to strategy S," "reteach approach A moved mastery more than B" — fed back into generation, the strategy-prescription rules, the recommendations, and signal thresholds.
+- **Three grains (keep them distinct):** (1) **in-context per-student** personalization (in P1); (2) **aggregate/de-identified** pattern learning (the loop — P2+); (3) **fine-tuning on raw PII = the one red line** — avoided; any future fine-tuning uses de-identified/aggregated/derived features only.
+- **Why it's compliant:** FERPA governs *disclosure/handling of PII*, not "using data to improve the service." Properly de-identified/aggregated data falls outside FERPA's PII constraints. Guardrails: operate as a school official under a data-handling agreement; de-identify before any cross-student learning; opaque IDs; raw student work stays in-context only.
+- **Architected in P1, built in P2+:** P1 already captures the substrate (weekly snapshots, per-attempt history, reteach outcomes, signal aggregates, V1's PostHog typed-allow-list/opaque-ID/no-PII analytics). The loop drops in later **without a retrofit** — same discipline as longitudinal (§9). **Pilot does not build the loop; it must not foreclose it.**
+
 ## 19. Explicitly Out of Scope (v2 pilot) ✅
 
 - Portuguese / Brazil localization (Pulse track).
