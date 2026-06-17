@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    { "path": "/api/cron/idempotency-sweep", "schedule": "0 3 * * *" },
+    { "path": "/api/cron/weekly-snapshot", "schedule": "0 6 * * 1" },
+    { "path": "/api/cron/parent-narrative", "schedule": "0 7 * * 1" },
+    { "path": "/api/cron/trial-expiry", "schedule": "0 8 * * *" }
+  ]
+}
