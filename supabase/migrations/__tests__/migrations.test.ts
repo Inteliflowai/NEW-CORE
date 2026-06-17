@@ -160,3 +160,24 @@ describe('0003 lessons_quizzes', () => {
     expect(s()).toMatch(/GRANT ALL ON public\.quiz_responses TO authenticated, anon, service_role/);
   });
 });
+
+describe('0004 assignments_homework', () => {
+  const s = () => sql('0004_assignments_homework.sql');
+  it('creates assignments + homework_attempts', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.assignments/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.homework_attempts/);
+  });
+  it('assignments has content NOT NULL + mastery_band enum', () => {
+    expect(s()).toMatch(/content\s+jsonb\s+NOT NULL/);
+    expect(s()).toMatch(/mastery_band\s+text\s+CHECK \(mastery_band IN \('reteach','grade_level','advanced'\)\)/);
+  });
+  it('homework_attempts carries the gap-signal columns', () => {
+    for (const c of ['score_pct','ai_feedback','teli_hint_count','submitted_on_time']) {
+      expect(s()).toContain(c);
+    }
+  });
+  it('enables RLS + grants', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.homework_attempts\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/GRANT ALL ON public\.assignments\s+TO authenticated, anon, service_role/);
+  });
+});
