@@ -1131,6 +1131,8 @@ Set `data-intensity` from the route group: student → `loud`; all other shells 
 ## 10. Build Sequence & Milestones (toward September)
 
 > Implements SCOPE §17's locked ordering: front-load proven V1/SPARK lifts onto a working spine, then layer net-new. Target = full **Pilot Baseline (Pro tier)** before September.
+>
+> **⚠️ Build parameters resolved 2026-06-17 (SCOPE §17 supersedes the calendar below).** Team = **solo + Claude Code** (single ordered track — *not* the parallel team §10.1 assumes). **Near-term pilots (EduFlux ~next week, US ~2–3 weeks) run on V1**, the committed safety net; **v2 builds core-loop-first** as the forward platform so the earliest usable slice can come online ASAP. The parallel-staffed calendar in §10.2/§10.3 is therefore a *capacity model*, not the plan — the **implementation plan reflects the resolved single-track, core-loop-first ordering**. Grading keeps V1's Sonnet/GPT with an Opus 4.8 week-1 spike; adaptive ships Layer 1 now + Layer 2 self-activating ~2–3 weeks in; Barb is on-demand (not blocking).
 
 ### 10.1 Staffing assumption (the headline gating fact, not a footnote)
 

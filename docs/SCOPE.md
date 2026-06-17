@@ -38,7 +38,7 @@ This table is the live scoreboard. As each open item is settled, move it to ✅ 
 | 12c | Licensing | "Downloadable" = cloud signup or installable | ✅ | **Self-serve cloud signup** (no installable build — none exists in V1). |
 | 14 | Services | Reuse service configs vs clean reset; add/drop services | ✅ | **Reuse all V1 configs as-is** (Resend, Sentry, PostHog 2-project, Upstash, Flux, Runway, Whisper/TTS, diagram renderer). **Defer Stripe** — keep V1's admin-provisioned license-key model for the pilot (reserved Stripe columns stay ready). **Keep HighLevel** trial webhook. |
 | 16 | Look & Feel | Vibrant vs indigo/amber; student-loud/adult-credible split; leaderboard default; "first 5 min" flow | ✅ | **Fresh electric palette** (direction locked; exact colors explored visually in the design phase). **Student-loud / adult-credible split confirmed** (WCAG AA always). **Leaderboard off by default** ("You vs 4 weeks ago" is the frame). **Hero flow = teacher → first differentiated assignment, <5 min.** |
-| 17 | Sequence | Phasing matches Sept pilot | ✅ | **Full Pilot Baseline (Pro) targeted before September.** Build starts as soon as scope locks. Internal ordering front-loads proven V1 lifts (engine, signals, licensing, media, GC, Spark contract); net-new (per-skill CL, full Super TELI, misconception taxonomy, Canvas, fresh design) layers on after. |
+| 17 | Sequence | Phasing matches Sept pilot | ✅ | **V1 carries near-term pilots (EduFlux next wk, US 2–3 wks); v2 builds core-loop-first as the forward platform, V1 is the safety net.** Solo + Claude Code (single track). Front-load proven V1 lifts + the core loop so v2 can come online ASAP; full Pro Baseline ~September. |
 | 18 | Success | The 2–3 success metrics | ✅ | **3-metric scoreboard:** (1) teacher takes a CORE-recommended action; (2) time-to-first-value < 5 min (first differentiated assignment) + weekly return; (3) flagged students improve (assignment grades up and/or Assignment-vs-Quiz gap narrows). |
 
 ---
@@ -262,6 +262,13 @@ Per decision 0, the old P1 (Essentials) and P2 (Pro) **merge into a single Pilot
 | **P2 — Enterprise** | Longitudinal layer; SIS connectors; cohort benchmarking; white-label; ecosystem API. |
 
 - **DECIDED:** target the **full Pilot Baseline (Pro) before September**; build begins as soon as the scope locks. **Build ordering** (to protect the date): front-load the proven V1 lifts — engine + prompts, signal math, licensing/anti-piracy, media metering, Google Classroom, the SPARK contract — onto a working spine *first*, then layer the net-new work: per-skill CL, full Super TELI, the misconception taxonomy, the Canvas LMS adapter, and the fresh design system.
+
+- **BUILD PARAMETERS (resolved 2026-06-17, gating Q&A):**
+  - **(1) Team = solo + Claude Code** → single ordered build track (no parallel workstreams); the §10 calendar assumes one decision-maker, with Claude Code lifting throughput.
+  - **(2) Near-term pilots run on V1.** EduFlux pilot (~next week) + potential US pilot (~2–3 weeks) run on the existing `core-platform` (which already runs EduFlux/pt-BR). **v2 (NEW-CORE) is the forward platform**, built core-loop-first so the earliest usable slice can come online ASAP — but **V1 is the committed safety net**; no real pilot is bet on unbuilt v2. (Consistent with §19: pt-BR stays out of v2.)
+  - **(3) OEQ grading = keep V1's Sonnet/GPT for the pilot;** run an **Opus 4.8 spike in week 1** as an upgrade candidate, not a day-1 dependency.
+  - **(4) Adaptive = full power (both layers).** Layer 1 (within-attempt reshape) ships in the engine; Layer 2 (history-informed entry point off `skill_learning_state`, ≥3 observations) self-activates ~2–3 weeks into live use (can't history-gate with no history). Build both hooks now.
+  - **(5) Barb on-demand** → pedagogy deltas + ~300-tuple eval-corpus rebuild are *not* a blocking critical-path dependency; schedule when needed.
 
 ## 18. How We'll Know It Has Value 🟠
 
