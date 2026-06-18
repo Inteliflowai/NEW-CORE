@@ -13,7 +13,7 @@
 
 import { claudeChat } from '@/lib/ai/claude';
 import { resilientChatCompletion } from '@/lib/ai/openai';
-import { OPENAI_GEN_MODEL } from '@/lib/ai/models';
+import { OPENAI_GEN_MODEL, CLAUDE_GEN_MODEL } from '@/lib/ai/models';
 import {
   ASSIGNMENT_SYSTEM,
   assignmentPrompt,
@@ -73,6 +73,7 @@ export async function generateAssignment(input: AssignmentInput): Promise<Assign
       temperature: 0.7,
       maxTokens: 4500,
       timeoutMs: 120000,
+      model: CLAUDE_GEN_MODEL,
     });
   } catch {
     // C1: swallow LlmExhaustedError or any other throw — fall through to GPT

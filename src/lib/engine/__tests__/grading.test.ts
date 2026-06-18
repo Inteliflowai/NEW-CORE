@@ -10,8 +10,10 @@
 //   6. Claude unparseable + GPT null → rejects (never a default object).
 //   7. Claude unparseable + GPT throws → rejects with LlmExhaustedError.
 //   8. rubricVersion is passed through.
+//   9. claudeChat is called with CLAUDE_GRADING_MODEL in options.model (routing assertion).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LlmExhaustedError } from '@/lib/ai/errors';
+import { CLAUDE_GRADING_MODEL } from '@/lib/ai/models';
 
 const mockClaude = vi.fn();
 const mockOpenAI = vi.fn();
@@ -110,5 +112,14 @@ describe('gradeOpenResponse', () => {
     const call = mockClaude.mock.calls[0];
     // Second arg is the userPrompt — should contain the rubric version
     expect(call[1]).toContain('v2');
+  });
+
+  // ── Case 9: claudeChat is called with CLAUDE_GRADING_MODEL (routing assertion) ──
+  it('claudeChat is called with CLAUDE_GRADING_MODEL in options.model (routing assertion)', async () => {
+    mockClaude.mockResolvedValue(VALID);
+    await gradeOpenResponse({ questionText: 'Q', rubric: 'R', response: 'ans' });
+    // 3rd arg (options) must contain model === CLAUDE_GRADING_MODEL
+    const options = mockClaude.mock.calls[0][2] as { model?: string };
+    expect(options?.model).toBe(CLAUDE_GRADING_MODEL);
   });
 });
