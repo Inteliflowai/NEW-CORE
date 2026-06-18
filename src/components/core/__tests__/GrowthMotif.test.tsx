@@ -56,26 +56,17 @@ describe('GrowthMotif', () => {
     expect(container.textContent).not.toMatch(/class average|other students|compared to peers/i);
   });
 
-  it('loud context (data-intensity=loud) renders the component inside an appropriately marked wrapper', () => {
-    const { container } = render(
-      <div data-intensity="loud">
-        <GrowthMotif history={[40, 60, 55, 80]} deltaLabel="+18 pts vs 4 weeks ago" />
-      </div>
-    );
-    // The motif renders bars inside a loud wrapper — the wrapper carries data-intensity, not the component itself
-    expect(container.querySelector('[data-intensity="loud"]')).toBeTruthy();
-    // Bars are still present regardless of intensity context
-    expect(screen.getAllByRole('presentation')).toHaveLength(4);
+  it('component root does NOT emit a data-intensity attribute (intensity is inherited from ancestor, not self-set)', () => {
+    render(<GrowthMotif history={[40, 60, 55, 80]} />);
+    const root = screen.getByTestId('growth-motif');
+    expect(root).not.toHaveAttribute('data-intensity');
   });
 
-  it('calm context (data-intensity=calm) renders the component without altering bar count', () => {
-    const { container } = render(
-      <div data-intensity="calm">
-        <GrowthMotif history={[40, 60, 55, 80]} deltaLabel="+18 pts vs 4 weeks ago" />
-      </div>
-    );
-    expect(container.querySelector('[data-intensity="calm"]')).toBeTruthy();
-    expect(screen.getAllByRole('presentation')).toHaveLength(4);
+  it('tallest bar renders at 100% height (series-max normalization)', () => {
+    render(<GrowthMotif history={[40, 60, 55, 80]} />);
+    const bars = screen.getAllByRole('presentation');
+    // bars[3] corresponds to value 80 — the tallest in [40,60,55,80]
+    expect(bars[3]).toHaveStyle({ height: '100%' });
   });
 
   it('component root carries data-growth-motif attribute distinguishing it', () => {

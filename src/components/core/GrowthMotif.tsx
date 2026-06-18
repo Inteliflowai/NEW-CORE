@@ -14,7 +14,7 @@ interface GrowthMotifProps {
 /** Minimum number of data points required to render the stepped bars. */
 const COLD_START_THRESHOLD = 4;
 
-/** Maximum value used for bar scaling ceiling. */
+/** Ceiling used only for clamping the computed percentage. */
 const SCALE_CEIL = 100;
 
 function clamp(n: number): number {
@@ -51,8 +51,9 @@ export function GrowthMotif({ history, deltaLabel }: GrowthMotifProps) {
     );
   }
 
+  // Normalize to the series' own max so the tallest bar always fills the chart.
+  // Guard maxVal ≥ 1 to avoid divide-by-zero; all-zero history → 0% → 2px floor.
   const maxVal = Math.max(...history, 1);
-  const scaleFactor = SCALE_CEIL / Math.max(maxVal, SCALE_CEIL);
 
   return (
     <div
@@ -73,7 +74,7 @@ export function GrowthMotif({ history, deltaLabel }: GrowthMotifProps) {
         }}
       >
         {history.map((value, i) => {
-          const heightPct = clamp(value * scaleFactor);
+          const heightPct = clamp((value / maxVal) * 100);
           const isLast = i === history.length - 1;
           return (
             <div
