@@ -9,6 +9,7 @@ import { guardClassAccess } from '@/lib/auth/guards';
 import { generateQuiz } from '@/lib/engine/quizGen';
 import { OPENAI_GEN_MODEL } from '@/lib/ai/models';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
+import { resolveSkillIds } from '@/lib/skills/resolveSkills';
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'school_sysadmin', 'platform_admin']);
 
@@ -20,11 +21,12 @@ export async function POST(req: NextRequest) {
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { data: profile } = await supabase
-      .from('users').select('role').eq('id', user.id).single();
+      .from('users').select('role, school_id').eq('id', user.id).single();
     const role: string | null = profile?.role ?? null;
     if (!role || !TEACHER_ROLES.has(role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const schoolId: string | null = (profile as Record<string, unknown> | null)?.school_id as string | null ?? null;
 
     // ── 2. Parse body ────────────────────────────────────────────────────────
     const { lesson_id } = await req.json();
@@ -58,6 +60,27 @@ export async function POST(req: NextRequest) {
     // C1: no degrade path. A malformed quiz (fails GeneratedQuizSchema 3+2 structure)
     // is a terminal generation failure — route catch maps to respondEngineError → 503.
     const result = await generateQuiz(JSON.stringify(lesson.parsed_content, null, 2), subject);
+
+    // ── 6b. Resolve concept_tags → skill_ids (fail-soft) ────────────────────
+    // Tags from the generated questions, resolved against the school skill registry.
+    // A registry hiccup NEVER fails quiz generation (fail-soft, C1).
+    let skillIdByTag = new Map<string, string>();
+    try {
+      const conceptTags = result.questions
+        .map((q: { concept_tag?: string | null }) => q.concept_tag)
+        .filter((t): t is string => typeof t === 'string' && t.length > 0);
+      // Skip when the teacher has no school_id — never create skills under school_id='' (orphan rows).
+      if (conceptTags.length > 0 && schoolId) {
+        skillIdByTag = await resolveSkillIds(admin, {
+          schoolId,
+          subject,
+          tags: conceptTags,
+          createdBy: 'ai',
+        });
+      }
+    } catch (skillErr) {
+      console.error('[quizzes/generate] skill resolution failed — proceeding without skill_id', skillErr);
+    }
 
     const isMath = result.questions.some(q => q.question_type === 'numeric');
 
@@ -93,6 +116,7 @@ export async function POST(req: NextRequest) {
       rubric_version: 'v1',
       numeric_spec: q.numeric_spec ?? null,
       concept_tag: q.concept_tag ?? null,
+      skill_id: (q.concept_tag && skillIdByTag.get(q.concept_tag)) || null,
     }));
 
     const { error: qErr } = await admin.from('quiz_questions').insert(rows);

@@ -63,6 +63,7 @@ function makeChain(data: unknown, error: unknown = null) {
   const chain: Record<string, unknown> = {};
   chain['select'] = vi.fn().mockReturnValue(chain);
   chain['eq'] = vi.fn().mockReturnValue(chain);
+  chain['in'] = vi.fn().mockReturnValue(chain);
   chain['gte'] = vi.fn().mockReturnValue(chain);
   chain['lte'] = vi.fn().mockReturnValue(chain);
   chain['update'] = vi.fn().mockReturnValue(chain);
@@ -82,6 +83,10 @@ function makeChain(data: unknown, error: unknown = null) {
 // quiz_attempts.update() always goes through one chain whose error can be
 // configured independently via finalUpdateError (applies to ALL attempts updates,
 // including any best-effort pending fallback write).
+//
+// usersSchoolId: when set, .from('users').select().eq().single() returns { school_id }.
+// oeqResponseRows: when set, .from('quiz_responses').select().eq().in() returns these rows
+//   (used by the misconceptions hook to resolve real quiz_responses.id uuids, C2).
 function makeAdminMock(opts: {
   attempt?: unknown;
   attemptError?: unknown;
@@ -93,6 +98,10 @@ function makeAdminMock(opts: {
   finalUpdateError?: unknown;
   // MCQ/numeric is_correct write error
   mcqUpdateError?: unknown;
+  // school_id returned from users table (for misconceptions hook, C2)
+  usersSchoolId?: string | null;
+  // OEQ response rows returned when the hook re-selects quiz_responses (C2)
+  oeqResponseRows?: Array<{ id: string; position: number }>;
 } = {}) {
   const {
     attempt = FAKE_ATTEMPT,
@@ -102,13 +111,17 @@ function makeAdminMock(opts: {
     responseUpdateError = null,
     finalUpdateError = null,
     mcqUpdateError = null,
+    usersSchoolId = null,
+    oeqResponseRows = null,
   } = opts;
 
   // Attempt chain — supports .select().eq().eq().single()
   const attemptChain = makeChain(attempt, attemptError);
 
-  // Responses chain — supports .select().eq().then()
+  // Responses chain — supports .select().eq().then() and .select().eq().in().then()
   const responsesChain = makeChain(responses, responsesError);
+  // OEQ hook re-select chain: returns real response rows by position
+  const oeqHookChain = makeChain(oeqResponseRows, null);
 
   // MCQ/numeric is_correct update chain
   const mcqUpdateChain: Record<string, unknown> = {};
@@ -128,6 +141,9 @@ function makeAdminMock(opts: {
   attemptsUpdateChain['then'] = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data: null, error: finalUpdateError }).then(resolve);
 
+  // users chain — returns school_id for the misconceptions hook (C2)
+  const usersChain = makeChain(usersSchoolId != null ? { school_id: usersSchoolId } : null);
+
   return {
     from: vi.fn((table: string) => {
       if (table === 'quiz_attempts') {
@@ -145,7 +161,33 @@ function makeAdminMock(opts: {
           if ('is_correct' in payload) return mcqUpdateChain;
           return oeqUpdateChain;
         });
+        // The misconceptions hook re-selects quiz_responses with .in('position', [...])
+        // We detect this by checking if oeqResponseRows was provided.
+        if (oeqResponseRows !== null) {
+          // Return a chain that supports both the initial .select().eq().then() (responses)
+          // and the hook's .select().eq().in().then() (oeqHookChain).
+          // We differentiate by tracking whether .in() was called on the chain.
+          const dualChain: Record<string, unknown> = { ...chain };
+          dualChain['select'] = vi.fn().mockImplementation(() => {
+            // Returns a new chain that supports both paths
+            const selectChain: Record<string, unknown> = {};
+            selectChain['eq'] = vi.fn().mockImplementation(() => {
+              const eqChain: Record<string, unknown> = {};
+              eqChain['eq'] = vi.fn().mockReturnValue(eqChain);
+              eqChain['in'] = vi.fn().mockReturnValue(oeqHookChain);
+              eqChain['then'] = (resolve: (v: unknown) => unknown) =>
+                Promise.resolve({ data: responses, error: responsesError }).then(resolve);
+              return eqChain;
+            });
+            return selectChain;
+          });
+          dualChain['update'] = chain['update'] as typeof chain['update'];
+          return dualChain;
+        }
         return chain;
+      }
+      if (table === 'users') {
+        return usersChain;
       }
       return makeChain(null);
     }),
@@ -168,11 +210,27 @@ vi.mock('@/lib/engine/grading', () => ({
   gradeOpenResponse: (...a: unknown[]) => mockGradeOpenResponse(...a),
 }));
 
+const mockRecomputeSkillStates = vi.fn();
+vi.mock('@/lib/skills/recomputeSkillStates', () => ({
+  recomputeSkillStatesForStudent: (...a: unknown[]) => mockRecomputeSkillStates(...a),
+}));
+
+const mockRecordMisconceptions = vi.fn();
+vi.mock('@/lib/misconceptions/recordMisconceptions', () => ({
+  recordMisconceptions: (...a: unknown[]) => mockRecordMisconceptions(...a),
+}));
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('POST /api/attempts/[attemptId]/submit', () => {
   beforeEach(() => {
     mockGradeOpenResponse.mockReset();
+    mockRecomputeSkillStates.mockReset();
+    mockRecordMisconceptions.mockReset();
+    // Default: recompute resolves successfully
+    mockRecomputeSkillStates.mockResolvedValue({ ok: true, skillsRecomputed: 1, states: {} });
+    // Default: recordMisconceptions resolves successfully
+    mockRecordMisconceptions.mockResolvedValue({ written: 0 });
     vi.resetModules();
   });
 
@@ -369,5 +427,186 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     const calls = mockGradeOpenResponse.mock.calls;
     expect(calls.some((c: unknown[]) => (c[0] as { questionText: string }).questionText === 'Q4 adapted text')).toBe(true);
     expect(calls.some((c: unknown[]) => (c[0] as { questionText: string }).questionText === 'Q5 adapted text')).toBe(true);
+  });
+
+  // ── Recompute hook: fires on all-clean path ───────────────────────────────
+  it('recompute hook: fires recomputeSkillStatesForStudent on the all-clean path', async () => {
+    mockGradeOpenResponse.mockResolvedValue(VALID_GRADE);
+    mockRecomputeSkillStates.mockResolvedValue({ ok: true, skillsRecomputed: 1, states: {} });
+
+    const adminMock = makeAdminMock();
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    // Submit must still succeed
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grading_delayed).toBeFalsy();
+
+    // Recompute was called — allow microtask queue to flush
+    await Promise.resolve();
+    expect(mockRecomputeSkillStates).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ studentId: 'student-1' }),
+    );
+  });
+
+  // ── Recompute hook: a throw does NOT fail submit ──────────────────────────
+  it('recompute hook: a recompute throw does NOT fail submit (fail-isolated)', async () => {
+    mockGradeOpenResponse.mockResolvedValue(VALID_GRADE);
+    mockRecomputeSkillStates.mockRejectedValue(new Error('recompute exploded'));
+
+    const adminMock = makeAdminMock();
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    // Submit must still return 200 with grades — recompute error is non-blocking
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grading_delayed).toBeFalsy();
+    expect(body.grades).toBeDefined();
+  });
+
+  // ── Recompute hook: does NOT fire on pending/failed path ─────────────────
+  it('recompute hook: does NOT fire when grading fails (pending path)', async () => {
+    // First OEQ fails → pending path
+    mockGradeOpenResponse
+      .mockResolvedValueOnce(VALID_GRADE)
+      .mockRejectedValueOnce(new Error('LLM down'));
+    mockRecomputeSkillStates.mockResolvedValue({ ok: true, skillsRecomputed: 0, states: {} });
+
+    const adminMock = makeAdminMock();
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grading_delayed).toBe(true);
+
+    // Allow microtask queue to flush — recompute must NOT have been called
+    await Promise.resolve();
+    expect(mockRecomputeSkillStates).not.toHaveBeenCalled();
+  });
+
+  // ── Misconceptions hook: fires on all-clean path with real response ids (C2) ─
+  it('misconceptions hook: fires recordMisconceptions on all-clean path with real response ids + users.school_id (C2)', async () => {
+    mockGradeOpenResponse.mockResolvedValue(VALID_GRADE);
+    mockRecordMisconceptions.mockResolvedValue({ written: 2 });
+
+    const adminMock = makeAdminMock({
+      usersSchoolId: 'school-abc',
+      oeqResponseRows: [
+        { id: 'real-uuid-4', position: 4 },
+        { id: 'real-uuid-5', position: 5 },
+      ],
+    });
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grading_delayed).toBeFalsy();
+
+    // Hook is fire-and-forget (void IIFE) — wait for it to complete by polling
+    // until the mock is called (covers dynamic import + DB query latency).
+    await vi.waitFor(() => {
+      expect(mockRecordMisconceptions).toHaveBeenCalled();
+    });
+
+    // recordMisconceptions was called with schoolId from users.school_id (not quizzes)
+    expect(mockRecordMisconceptions).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ schoolId: 'school-abc' }),
+    );
+
+    // The real response ids (not composite keys) should be in the perResponse
+    const callArgs = mockRecordMisconceptions.mock.calls[0][1] as { schoolId: string; perResponse: Array<{ responseId: string }> };
+    const responseIds = callArgs.perResponse.map(r => r.responseId);
+    expect(responseIds).toContain('real-uuid-4');
+    expect(responseIds).toContain('real-uuid-5');
+  });
+
+  // ── Misconceptions hook: a throw does NOT fail submit ────────────────────────
+  it('misconceptions hook: a throw does NOT fail submit (fail-isolated)', async () => {
+    mockGradeOpenResponse.mockResolvedValue(VALID_GRADE);
+    mockRecordMisconceptions.mockRejectedValue(new Error('taxonomy exploded'));
+
+    const adminMock = makeAdminMock({
+      usersSchoolId: 'school-abc',
+      oeqResponseRows: [
+        { id: 'real-uuid-4', position: 4 },
+        { id: 'real-uuid-5', position: 5 },
+      ],
+    });
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    // Submit must still return 200 — hook throw is non-blocking (fire-and-forget)
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grading_delayed).toBeFalsy();
+    expect(body.grades).toBeDefined();
+
+    // Wait for the fire-and-forget IIFE to settle (the rejection is swallowed by the catch)
+    await vi.waitFor(() => {
+      expect(mockRecordMisconceptions).toHaveBeenCalled();
+    });
+  });
+
+  // ── Misconceptions hook: does NOT fire on pending/failed path ────────────────
+  it('misconceptions hook: does NOT fire when grading fails (pending path)', async () => {
+    mockGradeOpenResponse
+      .mockResolvedValueOnce(VALID_GRADE)
+      .mockRejectedValueOnce(new Error('LLM down'));
+    mockRecordMisconceptions.mockResolvedValue({ written: 0 });
+
+    const adminMock = makeAdminMock({ usersSchoolId: 'school-abc' });
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grading_delayed).toBe(true);
+
+    // Allow microtask queue to flush — the hook must NOT fire on the pending path
+    // (it only runs on the all-clean path; early returns happen before the void IIFE).
+    await new Promise(r => setImmediate(r));
+    expect(mockRecordMisconceptions).not.toHaveBeenCalled();
   });
 });

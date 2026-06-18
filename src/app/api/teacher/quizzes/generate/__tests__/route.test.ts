@@ -29,8 +29,8 @@ function makeChain(data: unknown, error: unknown = null) {
   return chain;
 }
 
-function makeServerMock(user: { id: string } | null, profile: { role: string } | null) {
-  const profileChain = makeChain(profile);
+function makeServerMock(user: { id: string } | null, profile: { role: string; school_id?: string } | null) {
+  const profileChain = makeChain(profile ? { school_id: 'school-1', ...profile } : null);
   return {
     auth: { getUser: vi.fn().mockResolvedValue({ data: { user }, error: null }) },
     from: vi.fn().mockReturnValue(profileChain),
@@ -123,6 +123,11 @@ vi.mock('@/lib/auth/guards', () => ({
   guardClassAccess: (...a: unknown[]) => mockGuardClassAccess(...a),
 }));
 
+const mockResolveSkillIds = vi.fn();
+vi.mock('@/lib/skills/resolveSkills', () => ({
+  resolveSkillIds: (...a: unknown[]) => mockResolveSkillIds(...a),
+}));
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('POST /api/teacher/quizzes/generate', () => {
@@ -130,6 +135,8 @@ describe('POST /api/teacher/quizzes/generate', () => {
     mockGenerateQuiz.mockReset();
     mockGuardClassAccess.mockReset();
     mockGuardClassAccess.mockResolvedValue(null); // guard passes by default
+    mockResolveSkillIds.mockReset();
+    mockResolveSkillIds.mockResolvedValue(new Map()); // default: empty map (no skills resolved)
   });
 
   // ── 1. Auth: 401 when unauthenticated ─────────────────────────────────────
@@ -161,7 +168,7 @@ describe('POST /api/teacher/quizzes/generate', () => {
     const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
     vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-2' }, { role: 'teacher' }) as never);
     vi.mocked(createAdminSupabaseClient).mockReturnValue(makeAdminMock({
-      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', parsed_content: { subject: 'History' } },
+      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
     }) as never);
 
     const { NextResponse } = await import('next/server');
@@ -180,7 +187,7 @@ describe('POST /api/teacher/quizzes/generate', () => {
     vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
 
     const adminMock = makeAdminMock({
-      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', parsed_content: { subject: 'History' } },
+      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
     });
     vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
 
@@ -203,7 +210,7 @@ describe('POST /api/teacher/quizzes/generate', () => {
     vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
 
     const adminMock = makeAdminMock({
-      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', parsed_content: { subject: 'History' } },
+      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
       quizInsert: { id: 'quiz-1', lesson_id: 'lesson-1' },
       questionsInsertError: { message: 'constraint violation', code: '23000' },
     });
@@ -226,7 +233,7 @@ describe('POST /api/teacher/quizzes/generate', () => {
     const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
     vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
     vi.mocked(createAdminSupabaseClient).mockReturnValue(makeAdminMock({
-      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', parsed_content: { subject: 'History' } },
+      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
       quizInsert: { id: 'quiz-1', lesson_id: 'lesson-1' },
     }) as never);
 
@@ -239,5 +246,105 @@ describe('POST /api/teacher/quizzes/generate', () => {
     const body = await res.json();
     expect(body.quiz_id).toBe('quiz-1');
     expect(body.questions).toHaveLength(5);
+  });
+
+  // ── 7. skill_id populated: resolveSkillIds succeeds → skill_id on rows ────
+  it('populates skill_id on inserted quiz_question rows when resolveSkillIds succeeds', async () => {
+    const quizResult = {
+      title: 'Fractions Quiz',
+      questions: [
+        { position: 1, question_type: 'open', question_text: 'Explain fractions.', concept_tag: 'Fractions', choices: null, correct_answer: null, rubric: 'Full credit for correct explanation.', numeric_spec: null },
+        { position: 2, question_type: 'open', question_text: 'What is 1/2 + 1/4?', concept_tag: 'Adding Fractions', choices: null, correct_answer: null, rubric: 'Award 1 for correct answer.', numeric_spec: null },
+      ],
+    };
+    mockGenerateQuiz.mockResolvedValue(quizResult);
+    mockResolveSkillIds.mockResolvedValue(
+      new Map([
+        ['Fractions', 'skill-id-fractions'],
+        ['Adding Fractions', 'skill-id-adding'],
+      ]),
+    );
+
+    const qqInsertSpy = vi.fn().mockReturnValue({
+      then: (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: null, error: null }).then(resolve),
+    });
+
+    const adminMock = makeAdminMock({
+      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Fractions', subject: 'Math', school_id: 'school-1', parsed_content: { subject: 'Math' } },
+      quizInsert: { id: 'quiz-uuid-1', lesson_id: 'lesson-1' },
+    });
+
+    // Patch quiz_questions chain to capture insert args
+    const origFrom = adminMock.from.bind(adminMock);
+    adminMock.from = vi.fn((table: string) => {
+      if (table === 'quiz_questions') {
+        return { insert: qqInsertSpy };
+      }
+      return origFrom(table);
+    });
+
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
+    const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
+
+    expect(res.status).toBe(200);
+    expect(qqInsertSpy).toHaveBeenCalledOnce();
+    const insertedRows = qqInsertSpy.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(insertedRows[0].skill_id).toBe('skill-id-fractions');
+    expect(insertedRows[1].skill_id).toBe('skill-id-adding');
+  });
+
+  // ── 8. Fail-soft: resolveSkillIds throws → quiz still 200, questions inserted without skill_id ──
+  it('fail-soft: resolveSkillIds throws → quiz generation succeeds (200) and questions inserted', async () => {
+    mockGenerateQuiz.mockResolvedValue(makeQuizResult());
+    mockResolveSkillIds.mockRejectedValue(new Error('registry DB down'));
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const qqInsertSpy = vi.fn().mockReturnValue({
+      then: (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: null, error: null }).then(resolve),
+    });
+
+    const adminMock = makeAdminMock({
+      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
+      quizInsert: { id: 'quiz-1', lesson_id: 'lesson-1' },
+    });
+
+    const origFrom = adminMock.from.bind(adminMock);
+    adminMock.from = vi.fn((table: string) => {
+      if (table === 'quiz_questions') {
+        return { insert: qqInsertSpy };
+      }
+      return origFrom(table);
+    });
+
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
+    const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
+
+    // Quiz generation must succeed despite the registry failure
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.quiz_id).toBe('quiz-1');
+
+    // Questions must still be inserted (without skill_id)
+    expect(qqInsertSpy).toHaveBeenCalledOnce();
+    const insertedRows = qqInsertSpy.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(insertedRows[0].skill_id).toBeNull();
+
+    // Registry error must have been logged
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[quizzes/generate] skill resolution failed'),
+      expect.any(Error),
+    );
+    consoleSpy.mockRestore();
   });
 });

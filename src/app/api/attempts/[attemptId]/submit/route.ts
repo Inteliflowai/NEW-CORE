@@ -24,6 +24,7 @@ import { gradeOpenResponse } from '@/lib/engine/grading';
 import { scoreMCQ, computeFinalScore, computeMasteryBand } from '@/lib/utils/scoring';
 import { checkNumericAnswer } from '@/lib/math/checkNumericAnswer';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
+import { recomputeSkillStatesForStudent } from '@/lib/skills/recomputeSkillStates';
 
 export async function POST(
   _req: NextRequest,
@@ -284,6 +285,82 @@ export async function POST(
         message: 'Your answers have been saved. Grading is temporarily delayed — check back shortly.',
       });
     }
+
+    // ── Skill state recompute (fail-isolated; Plan 3 Task 6) ─────────────────
+    // Fired on the all-clean path only (grading_status:'complete' written above).
+    // A recompute error logs but NEVER fails the submit response — the student's
+    // grade is already committed at this point.
+    // Does NOT fire on pending/failed paths (those return early above).
+    try {
+      void recomputeSkillStatesForStudent(admin, {
+        studentId: attempt.student_id,
+        schoolId: null, // recomputeSkillStatesForStudent resolves school_id from users.school_id internally when null
+      }).catch((recomputeErr) => {
+        console.warn('[submit] skill state recompute failed (non-blocking):', recomputeErr);
+      });
+    } catch (recomputeErr) {
+      console.error('[submit] skill state recompute hook threw (non-blocking):', recomputeErr);
+    }
+
+    // ── Misconception observations hook (fail-isolated; Plan 3 Task 13) ──────
+    // Fires on the all-clean path only. Fire-and-forget — does NOT block the
+    // submit response (consistent with the recompute hook above).
+    // C2: uses REAL quiz_responses.id (uuid), not a composite key.
+    // C2: school_id sourced from users.school_id, NOT quizzes (quizzes has no school_id).
+    void (async () => {
+      try {
+        const { recordMisconceptions } = await import('@/lib/misconceptions/recordMisconceptions');
+
+        // Fetch school_id from the student's users row (C2 — not from quizzes)
+        const { data: userRow } = await admin
+          .from('users')
+          .select('school_id')
+          .eq('id', attempt.student_id)
+          .single();
+        const schoolId: string | null = (userRow as { school_id?: string | null } | null)?.school_id ?? null;
+
+        if (!schoolId) {
+          console.warn('[submit] recordMisconceptions skipped: student has no school_id', { studentId: attempt.student_id, attemptId });
+          return;
+        }
+
+        // Query back the REAL quiz_responses.id for each OEQ position (C2).
+        // Also fetch skill_id via the question's concept linkage.
+        const oeqPositions = (oeqResults as Array<{ task: OeqTask; grade: NonNullable<OeqResult['grade']> }>)
+          .map(r => r.task.position);
+
+        const { data: oeqResponseRows } = await admin
+          .from('quiz_responses')
+          .select('id, position')
+          .eq('attempt_id', attemptId)
+          .in('position', oeqPositions);
+
+        const responseIdByPosition = new Map<number, string>(
+          (oeqResponseRows ?? []).map((row: { id: string; position: number }) => [row.position, row.id]),
+        );
+
+        const perResponse = (oeqResults as Array<{ task: OeqTask; grade: NonNullable<OeqResult['grade']> }>)
+          .map((r) => {
+            const realResponseId = responseIdByPosition.get(r.task.position) ?? null;
+            if (!realResponseId) return null; // skip if we couldn't resolve the real id
+            const q = allQuestions.find(qq => qq.position === r.task.position);
+            const skillId = (q as { skill_id?: string | null } | undefined)?.skill_id ?? null;
+            return {
+              responseId: realResponseId, // REAL quiz_responses.id uuid (C2)
+              studentId: attempt.student_id,
+              skillId,
+              error_type: r.grade.error_type,
+              reasoning_pattern: r.grade.reasoning_pattern,
+              questionTypeScored: 'open' as const,
+            };
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+
+        await recordMisconceptions(admin, { schoolId, perResponse });
+      } catch (err) {
+        console.warn('[submit] recordMisconceptions hook failed (non-fatal):', err);
+      }
+    })();
 
     return NextResponse.json({
       attempt_id: attemptId,
