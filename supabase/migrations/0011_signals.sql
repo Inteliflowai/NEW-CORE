@@ -68,6 +68,16 @@ VALUES
   ('blank_or_off_topic',   'reasoning_pattern', 'Blank or off-topic',   6, true)
 ON CONFLICT (code) DO NOTHING;
 
+-- RLS on the reference vocabulary: public read-only (non-sensitive labels), service_role writes.
+-- (Enabled to satisfy the rls_disabled_in_public linter; the table is intentionally world-readable.)
+ALTER TABLE public.misconception_types ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "mt_public_read" ON public.misconception_types;
+CREATE POLICY "mt_public_read" ON public.misconception_types
+  FOR SELECT TO authenticated, anon USING (true);
+DROP POLICY IF EXISTS "mt_service_role_all" ON public.misconception_types;
+CREATE POLICY "mt_service_role_all" ON public.misconception_types
+  FOR ALL TO service_role USING (true) WITH CHECK (true);
+
 -- ── misconception_observations: per-OEQ occurrence ────────────────────────────
 CREATE TABLE IF NOT EXISTS public.misconception_observations (
   id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
