@@ -21,11 +21,12 @@ export async function POST(req: NextRequest) {
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { data: profile } = await supabase
-      .from('users').select('role').eq('id', user.id).single();
+      .from('users').select('role, school_id').eq('id', user.id).single();
     const role: string | null = profile?.role ?? null;
     if (!role || !TEACHER_ROLES.has(role)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+    const schoolId: string | null = (profile as Record<string, unknown> | null)?.school_id as string | null ?? null;
 
     // ── 2. Parse body ────────────────────────────────────────────────────────
     const { lesson_id } = await req.json();
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
     const admin = createAdminSupabaseClient();
     const { data: lesson } = await admin
       .from('lessons')
-      .select('id, class_id, teacher_id, title, subject, school_id, parsed_content')
+      .select('id, class_id, teacher_id, title, subject, parsed_content')
       .eq('id', lesson_id)
       .single();
 
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
         .filter((t): t is string => typeof t === 'string' && t.length > 0);
       if (conceptTags.length > 0) {
         skillIdByTag = await resolveSkillIds(admin, {
-          schoolId: lesson.school_id as string,
+          schoolId: schoolId ?? '',
           subject,
           tags: conceptTags,
           createdBy: 'ai',

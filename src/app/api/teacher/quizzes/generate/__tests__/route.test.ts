@@ -29,8 +29,8 @@ function makeChain(data: unknown, error: unknown = null) {
   return chain;
 }
 
-function makeServerMock(user: { id: string } | null, profile: { role: string } | null) {
-  const profileChain = makeChain(profile);
+function makeServerMock(user: { id: string } | null, profile: { role: string; school_id?: string } | null) {
+  const profileChain = makeChain(profile ? { school_id: 'school-1', ...profile } : null);
   return {
     auth: { getUser: vi.fn().mockResolvedValue({ data: { user }, error: null }) },
     from: vi.fn().mockReturnValue(profileChain),
