@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "eval": "tsx scripts/eval/ci.ts",
-    "spike:grader": "tsx scripts/eval/grader-spike.ts"
+    "spike:grader": "tsx scripts/eval/grader-spike.ts",
+    "a11y": "npx tsx scripts/a11y/contrast-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.2",
