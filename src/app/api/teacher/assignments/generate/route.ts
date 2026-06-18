@@ -1,11 +1,11 @@
-// src/app/api/teacher/assignments/generate/route.ts
+﻿// src/app/api/teacher/assignments/generate/route.ts
 // POST /api/teacher/assignments/generate
-// Engine call #5 (+ #5a) — generate a differentiated assignment for a student.
+// Engine call #5 (+ #5a) â€” generate a differentiated assignment for a student.
 //
-// Auth: auth.getUser() → 401. guardStudentAccess(attempt.student_id) → guard response.
+// Auth: auth.getUser() â†’ 401. guardStudentAccess(attempt.student_id) â†’ guard response.
 // C15: class_id + lesson_id are read from the quizzes join (NOT from quiz_attempts).
-// C20: if mastery_band is null → 409 refusal; generateAssignment is NOT called.
-// C17: if no valid learning_style → build behavioral signals, call inferLearningStyle (#5a).
+// C20: if mastery_band is null â†’ 409 refusal; generateAssignment is NOT called.
+// C17: if no valid learning_style â†’ build behavioral signals, call inferLearningStyle (#5a).
 // C6:  normalizeLearningStyle applied ONLY at the persist boundary.
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
@@ -18,14 +18,14 @@ import { computeBehavioralSummary, formatSignalsForPrompt } from '@/lib/utils/sc
 
 export async function POST(req: NextRequest) {
   try {
-    // ── Auth ─────────────────────────────────────────────────────────────────
+    // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // ── Input ────────────────────────────────────────────────────────────────
+    // â”€â”€ Input â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const body = await req.json();
     const { quiz_attempt_id, learning_style: requestedStyle } = body as {
       quiz_attempt_id?: string;
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing quiz_attempt_id' }, { status: 400 });
     }
 
-    // ── Fetch attempt with quizzes join (C15: class_id + lesson_id from quizzes) ──
+    // â”€â”€ Fetch attempt with quizzes join (C15: class_id + lesson_id from quizzes) â”€â”€
     const admin = createAdminSupabaseClient();
     const { data: attempt } = await admin
       .from('quiz_attempts')
@@ -49,23 +49,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
     }
 
-    // ── Object-level guard: IDOR — RLS is NOT the backstop on the admin client ──
+    // â”€â”€ Object-level guard: IDOR â€” RLS is NOT the backstop on the admin client â”€â”€
     const guard = await guardStudentAccess(attempt.student_id as string);
     if (guard) return guard;
 
-    // ── C20: refuse when mastery_band is null (do NOT silently default) ──────
+    // â”€â”€ C20: refuse when mastery_band is null (do NOT silently default) â”€â”€â”€â”€â”€â”€
     const band = attempt.mastery_band as 'reteach' | 'grade_level' | 'advanced' | null;
     if (!band) {
       return NextResponse.json(
         {
           error:
-            'Attempt not graded yet — submit and grade the quiz before generating an assignment.',
+            'Attempt not graded yet â€” submit and grade the quiz before generating an assignment.',
         },
         { status: 409 },
       );
     }
 
-    // ── Resolve lesson content from the quizzes join (C15) ───────────────────
+    // â”€â”€ Resolve lesson content from the quizzes join (C15) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const quizzesJoin = attempt.quizzes as unknown as {
       class_id: string;
       lesson_id: string;
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
       (attempt.users as { full_name?: string } | null)?.full_name ?? 'Student';
     const lessonSummary = JSON.stringify(lesson?.parsed_content ?? {}, null, 2);
 
-    // ── C17: resolve learning style — infer if absent ────────────────────────
+    // â”€â”€ C17: resolve learning style â€” infer if absent â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // The brief's `style = learning_style || 'emerging'` silently skips #5a.
     // Correct path: if no style is present, build behavioral signals and invoke
     // inferLearningStyle so the 6-value style is actually determined, not assumed.
@@ -87,11 +87,14 @@ export async function POST(req: NextRequest) {
     if (attemptStyle) {
       style = attemptStyle;
     } else {
-      // No style on attempt or request — fetch behavioral telemetry and infer
-      const { data: responses } = await admin
+      // No style on attempt or request â€” fetch behavioral telemetry and infer
+      const { data: responses, error: responsesError } = await admin
         .from('quiz_responses')
         .select('response_time_ms, hesitation_ms, answer_changes, word_count, response_text')
-        .eq('quiz_attempt_id', quiz_attempt_id);
+        .eq('attempt_id', quiz_attempt_id);
+      if (responsesError) {
+        console.error('[teacher/assignments/generate] quiz_responses fetch error:', responsesError);
+      }
 
       const safeResponses = (responses ?? []) as Array<{
         response_time_ms?: number;
@@ -105,12 +108,12 @@ export async function POST(req: NextRequest) {
       const wordCounts = safeResponses.map((r) => r.word_count ?? 0);
       const signals = formatSignalsForPrompt(behavioral, wordCounts);
 
-      // #5a — infer; degrades to 'emerging' on failure (C1 within inferLearningStyle)
+      // #5a â€” infer; degrades to 'emerging' on failure (C1 within inferLearningStyle)
       const inferred = await inferLearningStyle(signals);
       style = inferred.learning_style;
     }
 
-    // ── Engine call #5: generate assignment ──────────────────────────────────
+    // â”€â”€ Engine call #5: generate assignment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const assignment = await generateAssignment({
       lessonSummary,
       band,
@@ -118,7 +121,7 @@ export async function POST(req: NextRequest) {
       studentName,
     });
 
-    // ── Persist (C6: normalizeLearningStyle ONLY at the write boundary) ──────
+    // â”€â”€ Persist (C6: normalizeLearningStyle ONLY at the write boundary) â”€â”€â”€â”€â”€â”€
     const { data: row, error: insErr } = await admin
       .from('assignments')
       .insert({
@@ -145,3 +148,4 @@ export async function POST(req: NextRequest) {
     return respondEngineError(err);
   }
 }
+

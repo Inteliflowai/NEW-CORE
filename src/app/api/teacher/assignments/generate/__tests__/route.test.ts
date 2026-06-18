@@ -97,7 +97,7 @@ function makeChain(data: unknown, error: unknown = null) {
 // Build admin Supabase mock for the generate route.
 // The route does:
 //   1. quiz_attempts.select(...).eq('id', id).single()   → attempt
-//   2. quiz_responses.select(...).eq('quiz_attempt_id', id) → responses (only when no style → C17)
+//   2. quiz_responses.select(...).eq('attempt_id', id)   → responses (only when no style → C17)
 //   3. assignments.insert(...).select().single()         → inserted row
 function makeAdminMock(opts: {
   attempt?: unknown;
@@ -241,9 +241,8 @@ describe('POST /api/teacher/assignments/generate', () => {
     vi.mocked(createServerSupabaseClient).mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'teacher-1' } }, error: null }) },
     } as never);
-    vi.mocked(createAdminSupabaseClient).mockReturnValue(
-      makeAdminMock({ attempt: FAKE_ATTEMPT_NO_STYLE }) as never,
-    );
+    const adminMock = makeAdminMock({ attempt: FAKE_ATTEMPT_NO_STYLE });
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
     mockGuardStudentAccess.mockResolvedValue(null);
     // inferLearningStyle returns a style
     mockInferLearningStyle.mockResolvedValue({ learning_style: 'visual', confidence: 0.75 });
@@ -255,6 +254,15 @@ describe('POST /api/teacher/assignments/generate', () => {
     // inferLearningStyle MUST have been called (assert the learning-style GPT call fired)
     expect(mockInferLearningStyle).toHaveBeenCalledOnce();
     expect(res.status).toBe(200);
+
+    // C17 regression guard: quiz_responses must be queried by 'attempt_id', NOT 'quiz_attempt_id'.
+    // PostgREST returns {data:null, error} for an unknown column — so the wrong name silently
+    // collapses safeResponses to [] and forces inferLearningStyle to run on all-zero signals.
+    const responsesChain = adminMock.from('quiz_responses') as { eq: ReturnType<typeof vi.fn> };
+    const eqCalls: Array<unknown[]> = responsesChain.eq.mock.calls;
+    const columnNames = eqCalls.map((c) => (c as [string, unknown])[0]);
+    expect(columnNames).toContain('attempt_id');
+    expect(columnNames).not.toContain('quiz_attempt_id');
   });
 
   // ── Happy path: class_id from quizzes join (C15) + normalized style (C6) ─
