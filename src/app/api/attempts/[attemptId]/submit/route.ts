@@ -24,6 +24,7 @@ import { gradeOpenResponse } from '@/lib/engine/grading';
 import { scoreMCQ, computeFinalScore, computeMasteryBand } from '@/lib/utils/scoring';
 import { checkNumericAnswer } from '@/lib/math/checkNumericAnswer';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
+import { recomputeSkillStatesForStudent } from '@/lib/skills/recomputeSkillStates';
 
 export async function POST(
   _req: NextRequest,
@@ -283,6 +284,22 @@ export async function POST(
         grading_delayed: true,
         message: 'Your answers have been saved. Grading is temporarily delayed — check back shortly.',
       });
+    }
+
+    // ── Skill state recompute (fail-isolated; Plan 3 Task 6) ─────────────────
+    // Fired on the all-clean path only (grading_status:'complete' written above).
+    // A recompute error logs but NEVER fails the submit response — the student's
+    // grade is already committed at this point.
+    // Does NOT fire on pending/failed paths (those return early above).
+    try {
+      void recomputeSkillStatesForStudent(admin, {
+        studentId: attempt.student_id,
+        schoolId: null, // resolved from users.school_id by the recompute lib or passed null
+      }).catch((recomputeErr) => {
+        console.warn('[submit] skill state recompute failed (non-blocking):', recomputeErr);
+      });
+    } catch (recomputeErr) {
+      console.error('[submit] skill state recompute hook threw (non-blocking):', recomputeErr);
     }
 
     return NextResponse.json({

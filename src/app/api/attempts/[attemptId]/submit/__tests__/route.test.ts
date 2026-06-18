@@ -168,11 +168,19 @@ vi.mock('@/lib/engine/grading', () => ({
   gradeOpenResponse: (...a: unknown[]) => mockGradeOpenResponse(...a),
 }));
 
+const mockRecomputeSkillStates = vi.fn();
+vi.mock('@/lib/skills/recomputeSkillStates', () => ({
+  recomputeSkillStatesForStudent: (...a: unknown[]) => mockRecomputeSkillStates(...a),
+}));
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('POST /api/attempts/[attemptId]/submit', () => {
   beforeEach(() => {
     mockGradeOpenResponse.mockReset();
+    mockRecomputeSkillStates.mockReset();
+    // Default: recompute resolves successfully
+    mockRecomputeSkillStates.mockResolvedValue({ ok: true, skillsRecomputed: 1, states: {} });
     vi.resetModules();
   });
 
@@ -369,5 +377,82 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     const calls = mockGradeOpenResponse.mock.calls;
     expect(calls.some((c: unknown[]) => (c[0] as { questionText: string }).questionText === 'Q4 adapted text')).toBe(true);
     expect(calls.some((c: unknown[]) => (c[0] as { questionText: string }).questionText === 'Q5 adapted text')).toBe(true);
+  });
+
+  // ── Recompute hook: fires on all-clean path ───────────────────────────────
+  it('recompute hook: fires recomputeSkillStatesForStudent on the all-clean path', async () => {
+    mockGradeOpenResponse.mockResolvedValue(VALID_GRADE);
+    mockRecomputeSkillStates.mockResolvedValue({ ok: true, skillsRecomputed: 1, states: {} });
+
+    const adminMock = makeAdminMock();
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    // Submit must still succeed
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grading_delayed).toBeFalsy();
+
+    // Recompute was called — allow microtask queue to flush
+    await Promise.resolve();
+    expect(mockRecomputeSkillStates).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ studentId: 'student-1' }),
+    );
+  });
+
+  // ── Recompute hook: a throw does NOT fail submit ──────────────────────────
+  it('recompute hook: a recompute throw does NOT fail submit (fail-isolated)', async () => {
+    mockGradeOpenResponse.mockResolvedValue(VALID_GRADE);
+    mockRecomputeSkillStates.mockRejectedValue(new Error('recompute exploded'));
+
+    const adminMock = makeAdminMock();
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    // Submit must still return 200 with grades — recompute error is non-blocking
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grading_delayed).toBeFalsy();
+    expect(body.grades).toBeDefined();
+  });
+
+  // ── Recompute hook: does NOT fire on pending/failed path ─────────────────
+  it('recompute hook: does NOT fire when grading fails (pending path)', async () => {
+    // First OEQ fails → pending path
+    mockGradeOpenResponse
+      .mockResolvedValueOnce(VALID_GRADE)
+      .mockRejectedValueOnce(new Error('LLM down'));
+    mockRecomputeSkillStates.mockResolvedValue({ ok: true, skillsRecomputed: 0, states: {} });
+
+    const adminMock = makeAdminMock();
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.grading_delayed).toBe(true);
+
+    // Allow microtask queue to flush — recompute must NOT have been called
+    await Promise.resolve();
+    expect(mockRecomputeSkillStates).not.toHaveBeenCalled();
   });
 });
