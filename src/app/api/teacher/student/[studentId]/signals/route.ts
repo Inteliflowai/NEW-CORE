@@ -245,7 +245,11 @@ export async function GET(
     current_band,
     per_skill_cl,
     recurring_misconceptions,
-    divergence,
+    // FIX 1 (a2): include divergence_flagged boolean (floor=20, SCOPE §6) for Plan 4 consumers
+    divergence: {
+      ...divergence,
+      divergence_flagged: divergence.divergence_score >= 20,
+    },
     effort: { dominant_effort_pattern },
     risk: {
       roster: roster_risk,

@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
+import { masteryDisplayLabel } from '@/lib/utils/masteryLabel';
 
 export async function GET(_req: NextRequest): Promise<NextResponse> {
   // ── Auth ────────────────────────────────────────────────────────────────────
@@ -48,11 +49,13 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
       cold_start: true,
       message: "Just getting started — check back after your first few quizzes to see your growth.",
       snapshots: [],
+      next_action: null,
     });
   }
 
   // ── Return snapshot-framed growth view ─────────────────────────────────────
   // Shape is intentionally student-facing: no internal state names exposed.
+  // FIX 2 (B2): mastery_band → soft 'mastery' label via masteryDisplayLabel (SCOPE §15).
   const formattedSnapshots = (snapshots as Array<{
     snapshot_date: string;
     avg_score: number | null;
@@ -66,7 +69,8 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
   }>).map((s) => ({
     snapshot_date: s.snapshot_date,
     avg_score: s.avg_score,
-    mastery_band: s.mastery_band,
+    // FIX 2: soft word, never raw enum (mastery_band never reaches student)
+    mastery: masteryDisplayLabel(s.mastery_band),
     consistency_label: s.consistency_label,
     dominant_effort_pattern: s.dominant_effort_pattern,
     strength_topics: s.strength_topics ?? [],
@@ -74,8 +78,24 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
     improvement_4w: s.improvement_4w,
   }));
 
+  // ── FIX 3 (B1): derive a positive, non-diagnostic next_action ───────────────
+  // DO NOT use diagnose() — that emits teacher-facing diagnostic actions (B6/A2).
+  // Derive from what the student can already see: struggle_topics on latest snapshot.
+  const latestSnap = snapshots[0] as {
+    struggle_topics: string[] | null;
+  };
+  const struggleTopics = latestSnap.struggle_topics ?? [];
+  let next_action: string | null;
+  if (struggleTopics.length > 0) {
+    // Encouraging, concrete prompt naming the first struggle topic
+    next_action = `Keep practicing: ${struggleTopics[0]}`;
+  } else {
+    next_action = "You're on track — keep going.";
+  }
+
   return NextResponse.json({
     cold_start: false,
     snapshots: formattedSnapshots,
+    next_action,
   });
 }

@@ -7,6 +7,8 @@ export const RECURRING_ERROR_THRESHOLD = 3;
 
 // Thresholds (spec §3 / Barb-ratified)
 const DIVERGENCE_THRESHOLD = 25;
+/** Floor for surfacing gap in teacher triage (SCOPE §6 — "show it" at 20). */
+export const SURFACING_THRESHOLD = 20;
 const LOW_HW    = 50;
 const OK_QUIZ   = 60;
 const LOW_QUIZ  = 50;
@@ -50,7 +52,7 @@ export interface DiagnoseInput {
 
 export interface DiagnoseResult {
   /** Suggested teacher action */
-  suggestedAction: 'reteach' | 'practice' | 'verbal_check' | 'profile';
+  suggestedAction: 'reteach' | 'practice' | 'verbal_check' | 'profile' | 'monitor';
   /** 1 (mild) to 3 (urgent) */
   severity: 1 | 2 | 3;
   /** Human-readable one-liner for the teacher */
@@ -66,7 +68,8 @@ export interface DiagnoseResult {
  *   2. divergence >= 25 AND quiz_avg < 50                  -> reteach         sev 3
  *   3. divergence >= 25 (generic)                          -> profile         sev 1
  *   4. recurring error type                                -> practice        sev 2
- *   5. otherwise -> null
+ *   5. divergence >= 20 AND < 25 (watch tier, SCOPE §6)   -> monitor         sev 1
+ *   6. otherwise -> null
  */
 export function diagnose(input: DiagnoseInput): DiagnoseResult | null {
   const { divergence_score, hw_avg, quiz_avg, error_types } = input;
@@ -112,6 +115,15 @@ export function diagnose(input: DiagnoseInput): DiagnoseResult | null {
     };
   }
 
-  // 5. Nothing actionable
+  // 5. Mid-range divergence (SCOPE §6 floor): 20–24 -> low-severity watch tier
+  if (divergence_score >= SURFACING_THRESHOLD) {
+    return {
+      suggestedAction: 'monitor',
+      severity: 1,
+      diagnosis: `HW/quiz gap of ${Math.round(divergence_score)} pts — worth monitoring`,
+    };
+  }
+
+  // 6. Nothing actionable
   return null;
 }
