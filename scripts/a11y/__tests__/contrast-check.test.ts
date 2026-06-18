@@ -167,6 +167,48 @@ describe('checkAllPairs() — regression anchor', () => {
       expect(r.bg).toMatch(/^#[0-9a-f]{6}$/i);
     }
   });
+
+  it('covers all 3 new signal-pair pairs (ok/warn/risk) across all roles', () => {
+    const results = checkAllPairs();
+    const newPairLabels = ['ok-fg/ok-surface', 'warn-fg/warn-surface', 'risk-fg/risk-surface'];
+    for (const label of newPairLabels) {
+      const matching = results.filter((r) => r.pair === label);
+      expect(matching.length, `Expected results for pair ${label}`).toBeGreaterThan(0);
+      for (const r of matching) {
+        expect(r.passes, `${r.role}/${r.intensity} ${r.pair} should pass`).toBe(true);
+        expect(r.ratio).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it('total pair count is 40 (5 roles × 8 pairs each)', () => {
+    const results = checkAllPairs();
+    // 5 roles × 8 pairs = 40 total (was 5 roles × 5 pairs = 25 before new signal pairs)
+    expect(results.length).toBe(40);
+  });
+
+  it('light-role risk-fg resolves to coral-900 (#72261c) and risk-surface to coral-50 (#fff1ee)', () => {
+    const results = checkAllPairs();
+    // student/teacher/parent all inherit the :root light tints
+    const studentRisk = results.find(
+      (r) => r.role === 'student' && r.pair === 'risk-fg/risk-surface'
+    );
+    expect(studentRisk).toBeDefined();
+    expect(studentRisk!.fg.toLowerCase()).toBe('#72261c');  // coral-900
+    expect(studentRisk!.bg.toLowerCase()).toBe('#fff1ee');  // coral-50
+    expect(studentRisk!.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('admin warn-fg resolves to amber-300 (#fcd34d) on amber-950 (#451a03)', () => {
+    const results = checkAllPairs();
+    const adminWarn = results.find(
+      (r) => r.role === 'admin' && r.pair === 'warn-fg/warn-surface'
+    );
+    expect(adminWarn).toBeDefined();
+    expect(adminWarn!.fg.toLowerCase()).toBe('#fcd34d');  // amber-300
+    expect(adminWarn!.bg.toLowerCase()).toBe('#451a03');  // amber-950
+    expect(adminWarn!.ratio).toBeGreaterThanOrEqual(4.5);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -183,6 +225,18 @@ describe('checkAllPairs() — catches a regression via fixture CSS', () => {
         --ink-50: #f8f8f8;
         --ink-600: #525252;
         --emerald-600: #059669;
+        --emerald-50: #ecfdf5;
+        --emerald-800: #065f46;
+        --amber-50: #fffbeb;
+        --amber-900: #78350f;
+        --coral-50: #fff1ee;
+        --coral-900: #72261c;
+        --ok-surface: var(--emerald-50);
+        --ok-fg: var(--emerald-800);
+        --warn-surface: var(--amber-50);
+        --warn-fg: var(--amber-900);
+        --risk-surface: var(--coral-50);
+        --risk-fg: var(--coral-900);
       }
       [data-role="student"] {
         --bg:           var(--white);
@@ -217,6 +271,18 @@ describe('checkAllPairs() — catches a regression via fixture CSS', () => {
         --ink-900: #171717;
         --ink-50: #f8f8f8;
         --cobalt-600: #2563eb;
+        --emerald-50: #ecfdf5;
+        --emerald-800: #065f46;
+        --amber-50: #fffbeb;
+        --amber-900: #78350f;
+        --coral-50: #fff1ee;
+        --coral-900: #72261c;
+        --ok-surface: var(--emerald-50);
+        --ok-fg: var(--emerald-800);
+        --warn-surface: var(--amber-50);
+        --warn-fg: var(--amber-900);
+        --risk-surface: var(--coral-50);
+        --risk-fg: var(--coral-900);
       }
       [data-role="teacher"] {
         --bg:           var(--ink-50);

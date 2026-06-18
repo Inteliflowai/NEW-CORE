@@ -13,13 +13,15 @@ export interface RiskBadgeProps {
   scale?: '0to1' | '0to100';
 }
 
-// Band → Tailwind utility classes using Tier-2 CSS token references only (C3).
-// low → --ok (calm green), medium → --warn (amber), high/critical → --risk (coral).
+// Band → Tailwind utility classes using Tier-2 signal-PAIR CSS token references only (C3).
+// low → --ok-surface / --ok-fg, medium → --warn-surface / --warn-fg,
+// high/critical → --risk-surface / --risk-fg (tinted pairs, WCAG AA ≥ 4.5:1).
+// critical adds a saturated --risk ring for emphasis while keeping readable text/bg.
 const BAND_STYLES: Record<RiskBand, string> = {
-  low:      'bg-ok      text-fg-on-brand',
-  medium:   'bg-warn    text-fg-on-brand',
-  high:     'bg-risk    text-fg-on-brand',
-  critical: 'bg-risk    text-fg-on-brand ring-2 ring-risk',
+  low:      'bg-ok-surface   text-ok-fg',
+  medium:   'bg-warn-surface text-warn-fg',
+  high:     'bg-risk-surface text-risk-fg',
+  critical: 'bg-risk-surface text-risk-fg ring-2 ring-risk',
 };
 
 /**

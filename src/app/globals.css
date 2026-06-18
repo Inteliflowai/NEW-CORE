@@ -110,6 +110,12 @@
   --ok:           var(--emerald-600);
   --warn:         var(--amber-500);
   --risk:         var(--coral-500);
+  --ok-surface:   var(--emerald-50);
+  --ok-fg:        var(--emerald-800);
+  --warn-surface: var(--amber-50);
+  --warn-fg:      var(--amber-900);
+  --risk-surface: var(--coral-50);
+  --risk-fg:      var(--coral-900);
   --radius:       0.5rem;
   --radius-lg:    1rem;
   --shadow:       0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
@@ -191,6 +197,12 @@
   --ok:           var(--emerald-400);
   --warn:         var(--amber-400);
   --risk:         var(--coral-400);
+  --ok-surface:   var(--emerald-950);
+  --ok-fg:        var(--emerald-300);
+  --warn-surface: var(--amber-950);
+  --warn-fg:      var(--amber-300);
+  --risk-surface: var(--coral-950);
+  --risk-fg:      var(--coral-300);
 }
 
 [data-role="admin"][data-intensity="calm"] {
@@ -212,6 +224,12 @@
   --ok:           var(--emerald-400);
   --warn:         var(--amber-400);
   --risk:         var(--coral-400);
+  --ok-surface:   var(--emerald-950);
+  --ok-fg:        var(--emerald-300);
+  --warn-surface: var(--amber-950);
+  --warn-fg:      var(--amber-300);
+  --risk-surface: var(--coral-950);
+  --risk-fg:      var(--coral-300);
 }
 
 [data-role="super-admin"][data-intensity="calm"] {
@@ -237,6 +255,12 @@
   --color-ok:           var(--ok);
   --color-warn:         var(--warn);
   --color-risk:         var(--risk);
+  --color-ok-surface:   var(--ok-surface);
+  --color-ok-fg:        var(--ok-fg);
+  --color-warn-surface: var(--warn-surface);
+  --color-warn-fg:      var(--warn-fg);
+  --color-risk-surface: var(--risk-surface);
+  --color-risk-fg:      var(--risk-fg);
 
   /* Radius — rounded / rounded-lg utilities */
   --radius-DEFAULT: var(--radius);

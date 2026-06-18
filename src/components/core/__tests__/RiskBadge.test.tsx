@@ -68,3 +68,39 @@ describe('RiskBadge — semantic role attribute', () => {
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });
+
+describe('RiskBadge — tinted signal-pair token classes (WCAG AA readable)', () => {
+  it('low band uses bg-ok-surface and text-ok-fg (not saturated bg-ok)', () => {
+    const { container } = render(<RiskBadge score={10} />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain('bg-ok-surface');
+    expect(badge.className).toContain('text-ok-fg');
+    expect(badge.className).not.toContain('text-fg-on-brand');
+  });
+
+  it('medium band uses bg-warn-surface and text-warn-fg', () => {
+    const { container } = render(<RiskBadge score={30} />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain('bg-warn-surface');
+    expect(badge.className).toContain('text-warn-fg');
+    expect(badge.className).not.toContain('text-fg-on-brand');
+  });
+
+  it('high band uses bg-risk-surface and text-risk-fg', () => {
+    const { container } = render(<RiskBadge score={60} />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain('bg-risk-surface');
+    expect(badge.className).toContain('text-risk-fg');
+    expect(badge.className).not.toContain('text-fg-on-brand');
+  });
+
+  it('critical band uses bg-risk-surface / text-risk-fg and adds ring-2 ring-risk for emphasis', () => {
+    const { container } = render(<RiskBadge score={80} />);
+    const badge = container.firstChild as HTMLElement;
+    expect(badge.className).toContain('bg-risk-surface');
+    expect(badge.className).toContain('text-risk-fg');
+    expect(badge.className).toContain('ring-2');
+    expect(badge.className).toContain('ring-risk');
+    expect(badge.className).not.toContain('text-fg-on-brand');
+  });
+});

@@ -85,6 +85,12 @@ interface SlotAssignment {
   fgMuted?: string;
   brand?: string;
   fgOnBrand?: string;
+  okSurface?: string;
+  okFg?: string;
+  warnSurface?: string;
+  warnFg?: string;
+  riskSurface?: string;
+  riskFg?: string;
 }
 
 interface ParsedCss {
@@ -99,12 +105,18 @@ interface ParsedCss {
 }
 
 const SLOT_CSS_PROP: Record<keyof SlotAssignment, string> = {
-  bg:        '--bg',
-  surface:   '--surface',
-  fg:        '--fg',
-  fgMuted:   '--fg-muted',
-  brand:     '--brand',
-  fgOnBrand: '--fg-on-brand',
+  bg:          '--bg',
+  surface:     '--surface',
+  fg:          '--fg',
+  fgMuted:     '--fg-muted',
+  brand:       '--brand',
+  fgOnBrand:   '--fg-on-brand',
+  okSurface:   '--ok-surface',
+  okFg:        '--ok-fg',
+  warnSurface: '--warn-surface',
+  warnFg:      '--warn-fg',
+  riskSurface: '--risk-surface',
+  riskFg:      '--risk-fg',
 };
 
 /**
@@ -288,6 +300,12 @@ interface Palette {
   fgMuted: string;
   brand: string;
   fgOnBrand: string;
+  okSurface: string;
+  okFg: string;
+  warnSurface: string;
+  warnFg: string;
+  riskSurface: string;
+  riskFg: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +321,11 @@ const PAIRS: PairDef[] = [
   // WCAG 3:1 threshold applies for large text (≥18pt or ≥14pt bold) and UI components.
   ['fg-on-brand/brand', 'fgOnBrand', 'brand',   3.0],
   ['brand/surface',     'brand',     'surface', 3.0],
+  // Signal-pair tokens: tinted surface + fg for WCAG AA-readable badge pills (RiskBadge).
+  // Normal text (14px) → 4.5:1 threshold applies.
+  ['ok-fg/ok-surface',     'okFg',   'okSurface',   4.5],
+  ['warn-fg/warn-surface', 'warnFg', 'warnSurface', 4.5],
+  ['risk-fg/risk-surface', 'riskFg', 'riskSurface', 4.5],
 ];
 
 // ---------------------------------------------------------------------------
@@ -374,12 +397,18 @@ function buildPalettes(
       };
 
       const palette: Palette = {
-        bg:        resolveSlot('bg'),
-        surface:   resolveSlot('surface'),
-        fg:        resolveSlot('fg'),
-        fgMuted:   resolveSlot('fgMuted'),
-        brand:     resolveSlot('brand'),
-        fgOnBrand: resolveSlot('fgOnBrand'),
+        bg:          resolveSlot('bg'),
+        surface:     resolveSlot('surface'),
+        fg:          resolveSlot('fg'),
+        fgMuted:     resolveSlot('fgMuted'),
+        brand:       resolveSlot('brand'),
+        fgOnBrand:   resolveSlot('fgOnBrand'),
+        okSurface:   resolveSlot('okSurface'),
+        okFg:        resolveSlot('okFg'),
+        warnSurface: resolveSlot('warnSurface'),
+        warnFg:      resolveSlot('warnFg'),
+        riskSurface: resolveSlot('riskSurface'),
+        riskFg:      resolveSlot('riskFg'),
       };
 
       const intensityKey = intensity === '' ? 'base' : intensity;
