@@ -259,7 +259,7 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
 
     // Verify the attempt update was called with pending status (not complete)
     const fromCalls = (adminMock.from as ReturnType<typeof vi.fn>).mock.calls;
-    const attemptUpdateCalls = fromCalls.filter(([t]: [string]) => t === 'quiz_attempts');
+    const attemptUpdateCalls = fromCalls.filter((c: unknown[]) => c[0] === 'quiz_attempts');
     // The update on quiz_attempts should contain pending, not complete
     expect(attemptUpdateCalls.length).toBeGreaterThan(0);
   });
@@ -337,7 +337,7 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     expect(body.mastery_band).toBeUndefined();
     // The fallback pending write was attempted on quiz_attempts
     const fromCalls = (adminMock.from as ReturnType<typeof vi.fn>).mock.calls;
-    const attemptCalls = fromCalls.filter(([t]: [string]) => t === 'quiz_attempts');
+    const attemptCalls = fromCalls.filter((c: unknown[]) => c[0] === 'quiz_attempts');
     expect(attemptCalls.length).toBeGreaterThan(0);
   });
 
@@ -367,7 +367,7 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
 
     // Check that gradeOpenResponse was called with adapted text
     const calls = mockGradeOpenResponse.mock.calls;
-    expect(calls.some((c: [{ questionText: string }]) => c[0].questionText === 'Q4 adapted text')).toBe(true);
-    expect(calls.some((c: [{ questionText: string }]) => c[0].questionText === 'Q5 adapted text')).toBe(true);
+    expect(calls.some((c: unknown[]) => (c[0] as { questionText: string }).questionText === 'Q4 adapted text')).toBe(true);
+    expect(calls.some((c: unknown[]) => (c[0] as { questionText: string }).questionText === 'Q5 adapted text')).toBe(true);
   });
 });

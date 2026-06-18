@@ -277,7 +277,7 @@ describe('POST /api/teacher/assignments/generate', () => {
 
     // C15: verify assignments.insert received class_id from quizzes join (not from quiz_attempts)
     const fromCalls = (adminMock.from as ReturnType<typeof vi.fn>).mock.calls;
-    const assignmentFromCalls = fromCalls.filter(([t]: [string]) => t === 'assignments');
+    const assignmentFromCalls = fromCalls.filter((c: unknown[]) => c[0] === 'assignments');
     expect(assignmentFromCalls.length).toBeGreaterThan(0);
 
     // The insert was called on the assignments table chain
