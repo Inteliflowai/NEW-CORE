@@ -64,13 +64,19 @@ describe('computeSkillState — insufficient_data (obs < MIN_OBSERVATIONS=3)', (
 });
 
 describe('computeSkillState — engagement guard', () => {
-  it('returns insufficient_data when nonSubmissionShare >= 0.5 AND quiz < 3', () => {
-    // 2 unsubmitted out of 2 = 100% non-submission share; 1 quiz obs < 3
+  it('returns insufficient_data (engagement_gap_not_skill_evidence) when nonSubmissionShare >= 0.5 AND quiz < 3, with observationCount >= MIN_OBSERVATIONS', () => {
+    // observationCount = 2 quiz + 1 graded hw = 3 >= MIN_OBSERVATIONS(3) → passes insufficient_data gate
+    // quiz.length = 2 < MIN_OBSERVATIONS(3) → engagement guard fires
+    // nonSubmissionShare = 2 unsubmitted / 3 homework = 0.67 >= NON_SUBMISSION_SHARE(0.5)
     const result = computeSkillState({
-      quiz: [{ isCorrect: false, occurredAt: '2026-01-01T00:00:00Z' }],
+      quiz: [
+        { isCorrect: true,  occurredAt: '2026-01-01T00:00:00Z' },
+        { isCorrect: false, occurredAt: '2026-01-02T00:00:00Z' },
+      ],
       homework: [
-        { gradePct: null, submitted: false, occurredAt: '2026-01-01T00:00:00Z' },
+        { gradePct: 60, submitted: true,  occurredAt: '2026-01-01T00:00:00Z' },
         { gradePct: null, submitted: false, occurredAt: '2026-01-02T00:00:00Z' },
+        { gradePct: null, submitted: false, occurredAt: '2026-01-03T00:00:00Z' },
       ],
       sessionErrorPatterns: [],
     });
@@ -112,10 +118,18 @@ describe('computeSkillState — ready_to_extend', () => {
 });
 
 describe('computeSkillState — on_track', () => {
-  it('returns on_track when coldAcc >= 0.8 and quiz >= 3', () => {
-    // 4 correct out of 5 = 0.8 exactly
+  it('returns on_track when coldAcc >= 0.8 and trendDelta >= -IMPROVING_DELTA', () => {
+    // 4 correct out of 5 = 0.8 coldAccuracy; ordering: 1 wrong first then 4 correct
+    // older half [obs0,obs1]=[wrong,correct] → acc=0.5; recent half [obs2..4]=[correct×3] → acc=1.0
+    // trendDelta = 1.0 - 0.5 = +0.5 >= -IMPROVING_DELTA(-0.15) ✓
     const result = computeSkillState({
-      quiz: makeQuiz(4, 5),
+      quiz: [
+        { isCorrect: false, occurredAt: '2026-01-01T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-02T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-03T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-04T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-05T00:00:00Z' },
+      ],
       ...NO_HW,
     });
     expect(result.state).toBe('on_track');
@@ -131,6 +145,35 @@ describe('computeSkillState — on_track', () => {
     });
     expect(result.state).not.toBe('on_track');
     expect(result.state).not.toBe('ready_to_extend');
+  });
+
+  it('declining-trend-at-mastery: coldAcc=0.8 but trendDelta=-0.4 → NOT on_track, falls to needs_more_time', () => {
+    // Older half (obs 0-4): all correct → acc=1.0
+    // Recent half (obs 5-9): 3 correct, 2 wrong → acc=0.6
+    // coldAccuracy = 8/10 = 0.8 >= ON_TRACK_COLD_ACCURACY — accuracy gate passes
+    // trendDelta = 0.6 - 1.0 = -0.4 < -IMPROVING_DELTA(-0.15) — trendDelta gate fails
+    // V1 on_track requires (trendDelta === null || trendDelta >= -W.IMPROVING_DELTA):
+    //   -0.4 >= -0.15 is false → on_track does NOT fire (deterioration signal suppressed without this clause)
+    // No NDI drivers (no patterns, no HW divergence); no NMT drivers (trendDelta not improving)
+    // → ambiguous fallback: needs_more_time with mixed_signals_default_mild
+    const result = computeSkillState({
+      quiz: [
+        { isCorrect: true,  occurredAt: '2026-01-01T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-02T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-03T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-04T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-05T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-06T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-07T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-08T00:00:00Z' },
+        { isCorrect: false, occurredAt: '2026-01-09T00:00:00Z' },
+        { isCorrect: false, occurredAt: '2026-01-10T00:00:00Z' },
+      ],
+      ...NO_HW,
+    });
+    expect(result.state).not.toBe('on_track');
+    expect(result.state).toBe('needs_more_time');
+    expect(result.evidence.drivers).toContain('mixed_signals_default_mild');
   });
 });
 
@@ -221,8 +264,15 @@ describe('computeSkillState — ambiguous middle fallback', () => {
 describe('computeSkillState — confidence formula', () => {
   it('confidence = min(min(obs*8,40) + driverCount*15 + reteachBonus, 95)', () => {
     // on_track: 5 obs → min(5*8,40)=40; 1 driver (cold_accuracy_at_mastery) → 15; no reteach → 0; total=55
+    // Quiz ordered [wrong, correct×4]: coldAcc=0.8; trendDelta=+0.5 ≥ -0.15 → on_track fires
     const result = computeSkillState({
-      quiz: makeQuiz(4, 5),
+      quiz: [
+        { isCorrect: false, occurredAt: '2026-01-01T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-02T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-03T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-04T00:00:00Z' },
+        { isCorrect: true,  occurredAt: '2026-01-05T00:00:00Z' },
+      ],
       ...NO_HW,
     });
     expect(result.confidence).toBe(55);

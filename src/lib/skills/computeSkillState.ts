@@ -325,22 +325,6 @@ export function computeSkillState(input: SkillStateInput): SkillStateResult {
   const reteachOutcome = reteachOutcomeFor(input.reteach ?? null, quiz);
   if (reteachOutcome) metrics.last_reteach_outcome = reteachOutcome;
 
-  // ── engagement guard: "didn't do it" is NOT "can't" ───────
-  // Dominant non-submission with thin cold evidence = an engagement
-  // signature. Never let it masquerade as a conceptual gap.
-  // Checked BEFORE the MIN_OBSERVATIONS guard so the correct driver
-  // fires even when observationCount < MIN_OBSERVATIONS.
-  if (nonSubmissionShare >= W.NON_SUBMISSION_SHARE && quiz.length < W.MIN_OBSERVATIONS) {
-    return result(
-      'insufficient_data',
-      20,
-      observationCount,
-      ['engagement_gap_not_skill_evidence'],
-      metrics,
-      reteachOutcome,
-    );
-  }
-
   // ── insufficient_data: anti-noise guard ───────────────────
   if (observationCount < W.MIN_OBSERVATIONS) {
     return result(
@@ -348,6 +332,20 @@ export function computeSkillState(input: SkillStateInput): SkillStateResult {
       Math.min(observationCount * 10, 30),
       observationCount,
       ['below_minimum_observations'],
+      metrics,
+      reteachOutcome,
+    );
+  }
+
+  // ── engagement guard: "didn't do it" is NOT "can't" ───────
+  // Dominant non-submission with thin cold evidence = an engagement
+  // signature. Never let it masquerade as a conceptual gap.
+  if (nonSubmissionShare >= W.NON_SUBMISSION_SHARE && quiz.length < W.MIN_OBSERVATIONS) {
+    return result(
+      'insufficient_data',
+      20,
+      observationCount,
+      ['engagement_gap_not_skill_evidence'],
       metrics,
       reteachOutcome,
     );
@@ -383,7 +381,8 @@ export function computeSkillState(input: SkillStateInput): SkillStateResult {
   // ── on_track ──────────────────────────────────────────────
   if (
     coldAccuracy !== null &&
-    coldAccuracy >= W.ON_TRACK_COLD_ACCURACY
+    coldAccuracy >= W.ON_TRACK_COLD_ACCURACY &&
+    (trendDelta === null || trendDelta >= -W.IMPROVING_DELTA)
   ) {
     const drivers = ['cold_accuracy_at_mastery'];
     if (independentSuccessShare !== null && independentSuccessShare >= 0.5) {
