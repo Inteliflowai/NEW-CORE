@@ -1,1 +1,33 @@
-[]
+[
+  {
+    "id": "interim-quiz-generation-1",
+    "scope": "quiz-generation",
+    "input": {
+      "lesson_plan_summary": "Grade 7 Science: Introduction to photosynthesis — light energy, chlorophyll, glucose, oxygen.",
+      "lesson_objectives": [
+        "Explain the role of sunlight in photosynthesis",
+        "Identify the reactants and products of photosynthesis"
+      ],
+      "grade_band": "7",
+      "subject": "Science",
+      "target_question_count": 3
+    },
+    "expected_output": {
+      "questions": [
+        {
+          "question_text": "What is the primary source of energy for photosynthesis?",
+          "question_type": "mcq",
+          "correct_answer": "Sunlight",
+          "difficulty": 0.3
+        }
+      ],
+      "concept_coverage": ["photosynthesis", "sunlight", "glucose", "oxygen"]
+    },
+    "metadata": {
+      "sampled_from_attempt_id": null,
+      "sampled_at": "2026-06-17T00:00:00Z",
+      "barb_reviewed": false,
+      "notes": "INTERIM GOLDEN FIXTURE — replace with Barb-reviewed tuple before arming the real gate (§11.6)."
+    }
+  }
+]

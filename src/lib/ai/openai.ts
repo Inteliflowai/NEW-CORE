@@ -6,7 +6,8 @@ import OpenAI from 'openai';
 import { usesLegacyTokenParam } from '@/lib/ai/models';
 import { LlmExhaustedError } from '@/lib/ai/errors';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI { return (_openai ??= new OpenAI({ apiKey: process.env.OPENAI_API_KEY })); }
 
 /**
  * Newer OpenAI models (gpt-5 family, o-series) reject `max_tokens` and
@@ -48,7 +49,7 @@ export async function resilientChatCompletion(
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-      const result = await openai.chat.completions.create(
+      const result = await getOpenAI().chat.completions.create(
         { ...normalizeTokenParam(params), stream: false },
         { signal: controller.signal },
       );
@@ -93,7 +94,7 @@ export async function resilientImageGeneration(
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-      const result = await openai.images.generate(params, { signal: controller.signal }) as OpenAI.Images.ImagesResponse;
+      const result = await getOpenAI().images.generate(params, { signal: controller.signal }) as OpenAI.Images.ImagesResponse;
       clearTimeout(timeout);
       return result;
     } catch (error: unknown) {
@@ -117,5 +118,5 @@ export async function resilientImageGeneration(
   throw new LlmExhaustedError('openai', lastErr);
 }
 
-// Re-export the raw client for cases that need it
-export { openai };
+// Lazy accessor for the raw client (no consumers in src/scripts — kept for compat)
+export function getOpenAIClient(): OpenAI { return getOpenAI(); }

@@ -1,1 +1,35 @@
-[]
+[
+  {
+    "id": "interim-homework-generation-1",
+    "scope": "homework-generation",
+    "input": {
+      "lesson_plan_summary": "Grade 7 Science: Introduction to photosynthesis — light energy, chlorophyll, glucose, oxygen.",
+      "student_profile_summary": "grade_level comprehension; visual-spatial learner; no IEP accommodations",
+      "comprehension_band": "grade_level",
+      "learning_style": "visual",
+      "iep_accommodations": []
+    },
+    "expected_output": {
+      "task_count": 2,
+      "tasks": [
+        {
+          "modality": "draw",
+          "concept_tag": "photosynthesis-diagram",
+          "difficulty": 0.4
+        },
+        {
+          "modality": "write",
+          "concept_tag": "reactants-products",
+          "difficulty": 0.5
+        }
+      ],
+      "reading_comprehension_locked": false
+    },
+    "metadata": {
+      "sampled_from_attempt_id": null,
+      "sampled_at": "2026-06-17T00:00:00Z",
+      "barb_reviewed": false,
+      "notes": "INTERIM GOLDEN FIXTURE — replace with Barb-reviewed tuple before arming the real gate (§11.6)."
+    }
+  }
+]

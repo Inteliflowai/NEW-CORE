@@ -1,0 +1,7 @@
+[
+  { "id": "spike-1", "question": "Why does a plant need both light and water for photosynthesis?", "rubric": "A complete answer explains light provides energy and water is a reactant.", "response": "the light gives the plant energy and the water is used to make the food with the co2", "expected_score": 1.0, "note": "messy-but-correct — scores HIGH (thinking not writing)" },
+  { "id": "spike-2", "question": "Explain one cause of the seasons.", "rubric": "Answer attributes seasons to axial tilt, not distance from the sun.", "response": "because the earth gets closer to the sun in summer", "expected_score": 0.0, "note": "common misconception → reasoning_pattern misconception" },
+  { "id": "spike-3", "question": "Describe what a metaphor does.", "rubric": "Answer states a metaphor compares two unlike things without like/as.", "response": "idk", "expected_score": 0.0, "note": "blank/idk → 0.0, error_type blank" },
+  { "id": "spike-4", "question": "What is the theme of the passage and how is it shown?", "rubric": "Names a theme AND cites text evidence.", "response": "The theme is courage. It is shown when the boy stands up to the bully even though he is scared.", "expected_score": 1.0, "note": "full reasoning with evidence" },
+  { "id": "spike-5", "question": "Explain why ice floats on water.", "rubric": "Answer connects lower density of ice to floating.", "response": "ice floats because it is cold", "expected_score": 0.5, "note": "partial — surface, no density link" }
+]

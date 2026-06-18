@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "eval": "tsx scripts/eval/ci.ts"
+    "eval": "tsx scripts/eval/ci.ts",
+    "spike:grader": "tsx scripts/eval/grader-spike.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.2",
@@ -17,10 +18,12 @@
     "@supabase/supabase-js": "2.108.2",
     "@upstash/ratelimit": "2.0.8",
     "@upstash/redis": "1.38.0",
+    "mammoth": "^1.12.0",
     "next": "16.2.9",
     "openai": "6.44.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "unpdf": "^1.6.2",
     "zod": "4.4.3"
   },
   "devDependencies": {

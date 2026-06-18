@@ -1,1 +1,33 @@
-[]
+[
+  {
+    "id": "interim-spark-generation-1",
+    "scope": "spark-generation",
+    "input": {
+      "lesson_plan_summary": "Grade 7 Science: Introduction to photosynthesis — light energy, chlorophyll, glucose, oxygen.",
+      "student_profile_summary": "grade_level comprehension; visual learner; engaged in Science",
+      "comprehension_band": "grade_level",
+      "learning_style": "visual",
+      "grade_band": "7"
+    },
+    "expected_output": {
+      "sections_present": {
+        "scenario": true,
+        "problem": true,
+        "action": true,
+        "reflection": true,
+        "knowledge_transfer": true,
+        "tiered_inputs": true,
+        "strategy_layer": true,
+        "outputs": true,
+        "teli_block": true
+      },
+      "concept_anchors": ["photosynthesis", "chlorophyll", "sunlight", "glucose"]
+    },
+    "metadata": {
+      "sampled_from_attempt_id": null,
+      "sampled_at": "2026-06-17T00:00:00Z",
+      "barb_reviewed": false,
+      "notes": "INTERIM GOLDEN FIXTURE — replace with Barb-reviewed tuple before arming the real gate (§11.6)."
+    }
+  }
+]

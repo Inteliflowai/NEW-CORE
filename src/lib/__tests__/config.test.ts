@@ -68,9 +68,9 @@ describe('Config files', () => {
       const envPath = path.join(process.cwd(), '.env.example');
       const content = fs.readFileSync(envPath, 'utf-8');
 
-      // Split by lines and filter out comments
+      // Split by lines and filter out comments (line-ending robust — CRLF/LF)
       const lines = content
-        .split('\n')
+        .split(/\r?\n/)
         .filter((line) => line.trim() && !line.trim().startsWith('#'));
 
       for (const line of lines) {

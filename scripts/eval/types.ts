@@ -144,7 +144,6 @@ export interface SparkGenerationEvalTuple {
 }
 
 // ── SPARK rubric scoring ─────────────────────────────────────────
-// TODO(Stage B / Barb): reconcile SparkRubric dimension keys with SPARK's 7 canonical dimensions before activating the spark-rubric scope
 export interface SparkRubricEvalTuple {
   id: string;
   scope: 'spark-rubric';
@@ -155,16 +154,15 @@ export interface SparkRubricEvalTuple {
     grade_band: string;
   };
   expected_output: {
-    /** Seven dimension scores on the 1..4 rubric. Drift =
-     *  abs(candidate - expected) per dimension; aggregate = mean. */
+    /** Seven SPARK-canonical dimension scores on the 1..4 rubric. Keys mirror scripts/eval/dimensions.ts (§11.4). */
     dimensions: {
       reasoning_strategy: number;
-      analysis_evidence: number;
+      use_of_evidence: number;
       creativity_application: number;
       communication: number;
-      collaboration: number | null;
-      metacognition: number;
-      growth_mindset: number;
+      collaboration: number | null;   // null = solo / not observed (never 0 — §4 wire rule)
+      reflection_metacognition: number;
+      problem_understanding: number;
     };
     /** content_quality classification — locked enum (Critical Bug
      *  May 2026 #X). Drift on this is binary (correct or not). */
