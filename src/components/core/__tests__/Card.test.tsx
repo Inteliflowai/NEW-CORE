@@ -15,9 +15,19 @@ describe('Card', () => {
     expect(screen.getByText('Hello card')).toBeInTheDocument();
   });
 
-  it('has the core-card class for CSS token targeting', () => {
+  it('has bg-surface utility class for token-driven surface', () => {
     const { container } = render(<Card>content</Card>);
-    expect(container.firstChild).toHaveClass('core-card');
+    expect(container.firstChild).toHaveClass('bg-surface');
+  });
+
+  it('has rounded utility class for token-driven radius', () => {
+    const { container } = render(<Card>content</Card>);
+    expect(container.firstChild).toHaveClass('rounded');
+  });
+
+  it('has shadow utility class for token-driven shadow', () => {
+    const { container } = render(<Card>content</Card>);
+    expect(container.firstChild).toHaveClass('shadow');
   });
 
   it('accepts an additional className', () => {
@@ -47,8 +57,20 @@ describe('StatCard', () => {
     expect(screen.getByTestId('val-node')).toBeInTheDocument();
   });
 
-  it('has the core-card class', () => {
+  it('has bg-surface utility class', () => {
     const { container } = render(<StatCard label="L" value="V" />);
-    expect(container.firstChild).toHaveClass('core-card');
+    expect(container.firstChild).toHaveClass('bg-surface');
+  });
+
+  it('renders label with muted text style', () => {
+    render(<StatCard label="Score" value="94" />);
+    const label = screen.getByText('Score');
+    expect(label).toHaveClass('text-fg-muted');
+  });
+
+  it('renders value with display text style', () => {
+    render(<StatCard label="Score" value="94" />);
+    const value = screen.getByText('94');
+    expect(value).toHaveClass('text-fg');
   });
 });

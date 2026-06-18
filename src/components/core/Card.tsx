@@ -1,34 +1,17 @@
 /**
  * Card / StatCard — shared surface components.
  *
- * Styling is entirely token-driven via CSS classes defined in globals.css.
+ * Styling is entirely token-driven via Tailwind utility classes.
  * No hardcoded hex. Intensity (loud/calm) is inherited from the nearest
- * ancestor with data-intensity="loud"|"calm" set by RoleLayout.
+ * ancestor with data-intensity="loud"|"calm" set by RoleLayout — the
+ * Tier-3 token rebinding in globals.css reassigns --radius and --shadow,
+ * so a loud Card automatically gets chunkier corners (0.75rem) and a
+ * more elevated, brand-tinted shadow without any intensity prop or extra
+ * globals.css rule.
  *
- * CSS contract (defined in globals.css):
- *   .core-card {
- *     background: var(--surface);
- *     border-radius: var(--radius);
- *     box-shadow: var(--shadow);
- *     padding: 1.25rem;
- *   }
- *   [data-intensity="loud"] .core-card {
- *     border-radius: var(--radius-lg);
- *     box-shadow: var(--shadow-pop);
- *   }
- *   .core-stat-label {
- *     color: var(--fg-muted);
- *     font-size: 0.75rem;
- *     font-weight: 500;
- *     letter-spacing: 0.05em;
- *     text-transform: uppercase;
- *   }
- *   .core-stat-value {
- *     color: var(--fg);
- *     font-size: 1.5rem;
- *     font-weight: 700;
- *     line-height: 1.2;
- *   }
+ * Card utility classes: bg-surface rounded shadow p-5
+ * StatCard label:       text-fg-muted text-xs font-medium uppercase tracking-wide
+ * StatCard value:       text-fg text-2xl font-display font-bold leading-tight
  */
 
 import type { ReactNode } from 'react';
@@ -40,7 +23,7 @@ interface CardProps {
 
 export function Card({ children, className }: CardProps) {
   return (
-    <div className={['core-card', className].filter(Boolean).join(' ')}>
+    <div className={['bg-surface rounded shadow p-5', className].filter(Boolean).join(' ')}>
       {children}
     </div>
   );
@@ -54,9 +37,9 @@ interface StatCardProps {
 
 export function StatCard({ label, value, className }: StatCardProps) {
   return (
-    <div className={['core-card', className].filter(Boolean).join(' ')}>
-      <p className="core-stat-label">{label}</p>
-      <div className="core-stat-value">{value}</div>
+    <div className={['bg-surface rounded shadow p-5', className].filter(Boolean).join(' ')}>
+      <p className="text-fg-muted text-xs font-medium uppercase tracking-wide">{label}</p>
+      <div className="text-fg text-2xl font-display font-bold leading-tight">{value}</div>
     </div>
   );
 }

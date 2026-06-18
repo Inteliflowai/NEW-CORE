@@ -44,8 +44,18 @@ describe('EmptyState', () => {
     expect(screen.getByText(/keep going/i)).toBeInTheDocument();
   });
 
-  it('renders the correct role attribute for token targeting', () => {
+  it('has bg-surface utility class for token-driven surface', () => {
     const { container } = render(<EmptyState variant="not-yet-assessed" />);
-    expect(container.firstChild).toHaveClass('core-empty-state');
+    expect(container.firstChild).toHaveClass('bg-surface');
+  });
+
+  it('has rounded utility class for token-driven radius', () => {
+    const { container } = render(<EmptyState variant="not-yet-assessed" />);
+    expect(container.firstChild).toHaveClass('rounded');
+  });
+
+  it('accepts an additional className', () => {
+    const { container } = render(<EmptyState variant="not-yet-assessed" className="extra" />);
+    expect(container.firstChild).toHaveClass('extra');
   });
 });

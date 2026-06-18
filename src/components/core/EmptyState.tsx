@@ -12,35 +12,15 @@
  *   - Growth framed as "you vs your own past," never peer-relative
  *   - Struggle framed as "still building," never "struggle"
  *
- * Styling is token-driven via CSS class core-empty-state (globals.css).
- * No hardcoded hex.
+ * Styling is token-driven via Tailwind utility classes. No hardcoded hex.
+ * Intensity (loud/calm) is inherited from the nearest [data-intensity] ancestor
+ * set by RoleLayout — the Tier-3 rebinding in globals.css adjusts --radius
+ * and --shadow so loud/calm surfaces differ automatically.
  *
- * CSS contract (defined in globals.css):
- *   .core-empty-state {
- *     background: var(--surface);
- *     border-radius: var(--radius);
- *     padding: 2rem 1.5rem;
- *     text-align: center;
- *   }
- *   .core-empty-state-icon {
- *     color: var(--fg-muted);
- *     font-size: 2rem;
- *     margin-bottom: 0.75rem;
- *   }
- *   .core-empty-state-heading {
- *     color: var(--fg);
- *     font-family: var(--font-display);
- *     font-size: 1.125rem;
- *     font-weight: 600;
- *     margin-bottom: 0.5rem;
- *   }
- *   .core-empty-state-body {
- *     color: var(--fg-muted);
- *     font-size: 0.9375rem;
- *     line-height: 1.5;
- *     max-width: 28ch;
- *     margin: 0 auto;
- *   }
+ * Layout utility classes: bg-surface rounded p-8 text-center
+ * Icon:                   text-fg-muted text-3xl mb-3
+ * Heading:                text-fg font-display text-lg font-semibold mb-2
+ * Body:                   text-fg-muted text-base leading-relaxed max-w-[28ch] mx-auto
  */
 
 export type EmptyStateVariant =
@@ -75,12 +55,12 @@ export function EmptyState({ variant, className }: EmptyStateProps) {
   const { icon, heading, body } = COPY[variant];
 
   return (
-    <div className={['core-empty-state', className].filter(Boolean).join(' ')}>
-      <div className="core-empty-state-icon" aria-hidden="true">
+    <div className={['bg-surface rounded p-8 text-center', className].filter(Boolean).join(' ')}>
+      <div className="text-fg-muted text-3xl mb-3" aria-hidden="true">
         {icon}
       </div>
-      <h3 className="core-empty-state-heading">{heading}</h3>
-      <p className="core-empty-state-body">{body}</p>
+      <h3 className="text-fg font-display text-lg font-semibold mb-2">{heading}</h3>
+      <p className="text-fg-muted text-base leading-relaxed max-w-[28ch] mx-auto">{body}</p>
     </div>
   );
 }
