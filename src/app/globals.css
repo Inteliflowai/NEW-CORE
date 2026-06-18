@@ -1,26 +1,261 @@
 @import "tailwindcss";
 
+/* ============================================================
+   TIER 1 — PRIMITIVE RAMPS
+   The ONLY place hex literals live. All other selectors use var().
+   ============================================================ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Emerald ramp (Student brand) */
+  --emerald-50:  #ecfdf5;
+  --emerald-100: #d1fae5;
+  --emerald-200: #a7f3d0;
+  --emerald-300: #6ee7b7;
+  --emerald-400: #34d399;
+  --emerald-500: #10b981;
+  --emerald-600: #059669;
+  --emerald-700: #047857;
+  --emerald-800: #065f46;
+  --emerald-900: #064e3b;
+  --emerald-950: #022c22;
+
+  /* Lime ramp (Student accent) */
+  --lime-50:  #f7fee7;
+  --lime-100: #ecfccb;
+  --lime-200: #d9f99d;
+  --lime-300: #bef264;
+  --lime-400: #a3e635;
+  --lime-500: #84cc16;
+  --lime-600: #65a30d;
+  --lime-700: #4d7c0f;
+  --lime-800: #3f6212;
+  --lime-900: #365314;
+  --lime-950: #1a2e05;
+
+  /* Cobalt ramp (Teacher brand) */
+  --cobalt-50:  #eff6ff;
+  --cobalt-100: #dbeafe;
+  --cobalt-200: #bfdbfe;
+  --cobalt-300: #93c5fd;
+  --cobalt-400: #60a5fa;
+  --cobalt-500: #3b82f6;
+  --cobalt-600: #2563eb;
+  --cobalt-700: #1d4ed8;
+  --cobalt-800: #1e40af;
+  --cobalt-900: #1e3a8a;
+  --cobalt-950: #172554;
+
+  /* Coral ramp (Parent brand) */
+  --coral-50:  #fff1ee;
+  --coral-100: #ffe0d9;
+  --coral-200: #ffc5b8;
+  --coral-300: #ff9d87;
+  --coral-400: #f97055;
+  --coral-500: #e0533f;
+  --coral-600: #c93d29;
+  --coral-700: #a72d1d;
+  --coral-800: #8a271a;
+  --coral-900: #72261c;
+  --coral-950: #3e0f09;
+
+  /* Amber ramp (Super-admin signal) */
+  --amber-50:  #fffbeb;
+  --amber-100: #fef3c7;
+  --amber-200: #fde68a;
+  --amber-300: #fcd34d;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --amber-700: #b45309;
+  --amber-800: #92400e;
+  --amber-900: #78350f;
+  --amber-950: #451a03;
+
+  /* Ink ramp (neutral — readability anchor) */
+  --ink-50:  #f8f8f8;
+  --ink-100: #f0f0f0;
+  --ink-200: #e4e4e4;
+  --ink-300: #d1d1d1;
+  --ink-400: #a8a8a8;
+  --ink-500: #737373;
+  --ink-600: #525252;
+  --ink-700: #3d3d3d;
+  --ink-800: #262626;
+  --ink-900: #171717;
+  --ink-950: #0a0a0a;
+
+  /* Dark canvas tokens (command-center roles) */
+  --canvas-admin:    #14132b;
+  --canvas-platform: #18181b;
+
+  /* White — sole non-ramp hex, referenced via var() everywhere outside :root */
+  --white: #ffffff;
+
+  /* Admin surface dark */
+  --surface-admin: #1e1d3a;
+
+  /* Super-admin surface dark */
+  --surface-platform: #27272a;
+
+  /* ============================================================
+     TIER 2 — SEMANTIC SLOTS (default: light, teacher/calm baseline)
+     Components reference ONLY these — never the Tier-1 ramps directly.
+     ============================================================ */
+  --bg:           var(--ink-50);
+  --surface:      #ffffff;
+  --fg:           var(--ink-900);
+  --fg-muted:     var(--ink-600);
+  --brand:        var(--cobalt-600);
+  --brand-accent: var(--cobalt-400);
+  --fg-on-brand:  var(--white);
+  --ok:           var(--emerald-600);
+  --warn:         var(--amber-500);
+  --risk:         var(--coral-500);
+  --radius:       0.5rem;
+  --radius-lg:    1rem;
+  --shadow:       0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  --shadow-pop:   0 8px 24px -4px rgb(0 0 0 / 0.16), 0 4px 8px -2px rgb(0 0 0 / 0.10);
 }
 
+/* ============================================================
+   TIER 3 — ROLE/INTENSITY BINDING
+   Sets Tier-2 slots from the role's primitive ramp.
+   data-role + data-intensity are set by RoleLayout.
+   ============================================================ */
+
+/* --- Student (loud) --- */
+[data-role="student"] {
+  --brand:        var(--emerald-600);
+  --brand-accent: var(--lime-500);
+  --fg-on-brand:  var(--white);
+  --ok:           var(--emerald-600);
+  --bg:           var(--ink-50);
+  --surface:      var(--white);
+  --fg:           var(--ink-900);
+  --fg-muted:     var(--ink-600);
+}
+
+[data-role="student"][data-intensity="loud"] {
+  --radius:      0.75rem;
+  --radius-lg:   1.25rem;
+  --shadow:      0 2px 6px 0 rgb(5 150 105 / 0.12);
+  --shadow-pop:  0 10px 28px -4px rgb(5 150 105 / 0.22), 0 4px 10px -2px rgb(5 150 105 / 0.14);
+}
+
+/* --- Teacher (calm) --- */
+[data-role="teacher"] {
+  --brand:        var(--cobalt-600);
+  --brand-accent: var(--cobalt-400);
+  --fg-on-brand:  var(--white);
+  --ok:           var(--emerald-600);
+  --bg:           var(--ink-50);
+  --surface:      var(--white);
+  --fg:           var(--ink-900);
+  --fg-muted:     var(--ink-600);
+}
+
+[data-role="teacher"][data-intensity="calm"] {
+  --radius:     0.5rem;
+  --radius-lg:  0.875rem;
+  --shadow:     0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  --shadow-pop: 0 6px 16px -3px rgb(37 99 235 / 0.12), 0 3px 6px -2px rgb(0 0 0 / 0.08);
+}
+
+/* --- Parent (calm) --- */
+[data-role="parent"] {
+  --brand:        var(--coral-500);
+  --brand-accent: var(--coral-300);
+  --fg-on-brand:  var(--white);
+  --ok:           var(--emerald-600);
+  --bg:           var(--ink-50);
+  --surface:      var(--white);
+  --fg:           var(--ink-900);
+  --fg-muted:     var(--ink-600);
+}
+
+[data-role="parent"][data-intensity="calm"] {
+  --radius:     0.5rem;
+  --radius-lg:  0.875rem;
+  --shadow:     0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  --shadow-pop: 0 6px 16px -3px rgb(224 83 63 / 0.12), 0 3px 6px -2px rgb(0 0 0 / 0.08);
+}
+
+/* --- School Admin (calm-on-dark) --- */
+[data-role="admin"] {
+  --bg:           var(--canvas-admin);
+  --surface:      var(--surface-admin);
+  --fg:           var(--ink-100);
+  --fg-muted:     var(--ink-400);
+  --brand:        var(--cobalt-400);
+  --brand-accent: var(--cobalt-300);
+  --fg-on-brand:  var(--ink-950);
+  --ok:           var(--emerald-400);
+  --warn:         var(--amber-400);
+  --risk:         var(--coral-400);
+}
+
+[data-role="admin"][data-intensity="calm"] {
+  --radius:     0.5rem;
+  --radius-lg:  0.75rem;
+  --shadow:     0 1px 4px 0 rgb(0 0 0 / 0.40);
+  --shadow-pop: 0 6px 20px -4px rgb(0 0 0 / 0.50);
+}
+
+/* --- Super-admin (calm-on-dark, charcoal + amber) --- */
+[data-role="super-admin"] {
+  --bg:           var(--canvas-platform);
+  --surface:      var(--surface-platform);
+  --fg:           var(--ink-100);
+  --fg-muted:     var(--ink-400);
+  --brand:        var(--amber-500);
+  --brand-accent: var(--amber-300);
+  --fg-on-brand:  var(--ink-950);
+  --ok:           var(--emerald-400);
+  --warn:         var(--amber-400);
+  --risk:         var(--coral-400);
+}
+
+[data-role="super-admin"][data-intensity="calm"] {
+  --radius:     0.375rem;
+  --radius-lg:  0.625rem;
+  --shadow:     0 1px 4px 0 rgb(0 0 0 / 0.50);
+  --shadow-pop: 0 6px 20px -4px rgb(0 0 0 / 0.60);
+}
+
+/* ============================================================
+   @THEME — Expose Tier-2 slots as Tailwind v4 design tokens.
+   Use bg-brand, text-fg, shadow-pop, rounded, rounded-lg, etc.
+   ============================================================ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Colors */
+  --color-bg:           var(--bg);
+  --color-surface:      var(--surface);
+  --color-fg:           var(--fg);
+  --color-fg-muted:     var(--fg-muted);
+  --color-brand:        var(--brand);
+  --color-brand-accent: var(--brand-accent);
+  --color-fg-on-brand:  var(--fg-on-brand);
+  --color-ok:           var(--ok);
+  --color-warn:         var(--warn);
+  --color-risk:         var(--risk);
+
+  /* Radius — rounded / rounded-lg utilities */
+  --radius-DEFAULT: var(--radius);
+  --radius-lg:      var(--radius-lg);
+
+  /* Shadows */
+  --shadow-DEFAULT: var(--shadow);
+  --shadow-pop:     var(--shadow-pop);
+
+  /* Fonts (set by layout.tsx via next/font/google) */
+  --font-display: var(--font-bricolage);
+  --font-sans:    var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
