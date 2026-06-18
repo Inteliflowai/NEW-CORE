@@ -2,7 +2,7 @@
 // Engine call #4 — OEQ grading (HIGHEST stakes). Import-safe: no next/server, no
 // module-load SDK construction. LIFT V1 submit/route.ts grading call (temp 0.2, 600 tok).
 //
-// Claude primary (CLAUDE_GRADING_MODEL, temp 0.2) → GPT fallback (OPENAI_GEN_MODEL).
+// Claude primary (temp 0.2) → GPT fallback (OPENAI_GEN_MODEL).
 // C1: BOTH legs wrapped in try/catch — the wrappers THROW LlmExhaustedError on exhaustion,
 //     NOT return null. An unwrapped Claude 429 would propagate and kill the GPT fallback.
 // C2: uses OPENAI_GEN_MODEL (gpt-4o) — NOT the phantom OPENAI_GRADING_FALLBACK.
@@ -13,12 +13,10 @@
 // SHAPE in the @/lib/ai wrappers — this fn calls them unchanged.
 import { claudeChat } from '@/lib/ai/claude';
 import { resilientChatCompletion } from '@/lib/ai/openai';
-import { CLAUDE_GRADING_MODEL, OPENAI_GEN_MODEL } from '@/lib/ai/models';
+import { OPENAI_GEN_MODEL } from '@/lib/ai/models';
 import { GRADING_SYSTEM, gradingPrompt } from '@/lib/openai/prompts';
 import { GradingResultSchema, type GradingResult } from '@/lib/engine/types';
 import { LlmExhaustedError } from '@/lib/ai/errors';
-
-void CLAUDE_GRADING_MODEL; // imported to keep the calibration comment accurate; claudeChat uses it internally
 
 export interface GradeInput {
   questionText: string;

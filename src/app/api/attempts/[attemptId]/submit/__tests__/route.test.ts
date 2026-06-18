@@ -7,6 +7,8 @@
 //   3. Per-response update error (C22 persistence path) → pending+failed, band NOT written.
 //   4. Ownership rejection → 404 (different student's attempt).
 //   5. Auth failure → 401.
+//   6. MCQ/numeric is_correct write error → grading_status:'pending' + grading_failed:true (C22).
+//   7. Final quiz_attempts update error → fallback pending write, grading_delayed:true (Critical-1).
 //
 // Supabase mock idiom follows adapt route test (makeChain + makeAdminMock pattern).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -70,17 +72,26 @@ function makeChain(data: unknown, error: unknown = null) {
   return chain;
 }
 
-// Build Supabase admin mock with configurable per-table behavior
+// Build Supabase admin mock.
+//
+// quiz_responses.update() is dispatched to different chains based on what field
+// is being written:
+//   - MCQ/numeric writes include 'is_correct' → mcqUpdateError applies
+//   - OEQ writes include 'ai_score'           → responseUpdateError applies
+//
+// quiz_attempts.update() always goes through one chain whose error can be
+// configured independently via finalUpdateError (applies to ALL attempts updates,
+// including any best-effort pending fallback write).
 function makeAdminMock(opts: {
   attempt?: unknown;
   attemptError?: unknown;
   responses?: unknown;
   responsesError?: unknown;
-  // Per-response update results: indexed by position
+  // OEQ grading_output write error
   responseUpdateError?: unknown;
-  // Final attempt update result
+  // Final + fallback quiz_attempts update error
   finalUpdateError?: unknown;
-  // MCQ/numeric response update error
+  // MCQ/numeric is_correct write error
   mcqUpdateError?: unknown;
 } = {}) {
   const {
@@ -99,49 +110,45 @@ function makeAdminMock(opts: {
   // Responses chain — supports .select().eq().then()
   const responsesChain = makeChain(responses, responsesError);
 
-  // Response update chain (for per-question updates)
-  const responseUpdateChain: Record<string, unknown> = {};
-  responseUpdateChain['eq'] = vi.fn().mockReturnValue(responseUpdateChain);
-  responseUpdateChain['then'] = (resolve: (v: unknown) => unknown) =>
-    Promise.resolve({ data: null, error: responseUpdateError }).then(resolve);
-
-  // MCQ/numeric update chain
+  // MCQ/numeric is_correct update chain
   const mcqUpdateChain: Record<string, unknown> = {};
   mcqUpdateChain['eq'] = vi.fn().mockReturnValue(mcqUpdateChain);
   mcqUpdateChain['then'] = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data: null, error: mcqUpdateError }).then(resolve);
 
-  // Final attempt update chain
-  const finalUpdateChain: Record<string, unknown> = {};
-  finalUpdateChain['eq'] = vi.fn().mockReturnValue(finalUpdateChain);
-  finalUpdateChain['then'] = (resolve: (v: unknown) => unknown) =>
-    Promise.resolve({ data: null, error: finalUpdateError }).then(resolve);
+  // OEQ grading_output update chain
+  const oeqUpdateChain: Record<string, unknown> = {};
+  oeqUpdateChain['eq'] = vi.fn().mockReturnValue(oeqUpdateChain);
+  oeqUpdateChain['then'] = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve({ data: null, error: responseUpdateError }).then(resolve);
 
-  let updateCallCount = 0;
+  // quiz_attempts update chain (covers both pending fallback and final complete write)
+  const attemptsUpdateChain: Record<string, unknown> = {};
+  attemptsUpdateChain['eq'] = vi.fn().mockReturnValue(attemptsUpdateChain);
+  attemptsUpdateChain['then'] = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve({ data: null, error: finalUpdateError }).then(resolve);
 
   return {
     from: vi.fn((table: string) => {
       if (table === 'quiz_attempts') {
-        // Distinguish the initial select from subsequent updates
         const chain = { ...attemptChain };
-        // update is called twice: pending path once, complete path twice (per-response + final)
-        chain['update'] = vi.fn().mockImplementation(() => {
-          updateCallCount++;
-          // The LAST update call on quiz_attempts is the final status update
-          // Earlier calls are the pending/failed path
-          return finalUpdateChain;
-        });
+        // All quiz_attempts.update() calls go through the same chain.
+        // This covers: the initial select (no update), pending fallback writes, and final complete write.
+        chain['update'] = vi.fn().mockReturnValue(attemptsUpdateChain);
         return chain;
       }
       if (table === 'quiz_responses') {
-        // For select, return responses; for update, return per-response update chain
         const chain = { ...responsesChain };
-        chain['update'] = vi.fn().mockReturnValue(responseUpdateChain);
+        // Route updates by inspecting the payload:
+        //   MCQ/numeric writes contain 'is_correct'; OEQ writes contain 'ai_score'.
+        chain['update'] = vi.fn().mockImplementation((payload: Record<string, unknown>) => {
+          if ('is_correct' in payload) return mcqUpdateChain;
+          return oeqUpdateChain;
+        });
         return chain;
       }
       return makeChain(null);
     }),
-    updateCallCount: { get: () => updateCallCount },
   };
 }
 
@@ -257,8 +264,8 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     expect(attemptUpdateCalls.length).toBeGreaterThan(0);
   });
 
-  // ── C22 persistence path: per-response update error → pending + failed ────
-  it('per-response update error → grading_status:pending + grading_failed:true (C22)', async () => {
+  // ── C22 persistence path: OEQ per-response update error → pending + failed ──
+  it('OEQ per-response update error → grading_status:pending + grading_failed:true (C22)', async () => {
     // Both OEQs grade successfully, but the response write fails
     mockGradeOpenResponse.mockResolvedValue(VALID_GRADE);
 
@@ -278,6 +285,60 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     const body = await res.json();
     // C22: any write error → pending, band withheld
     expect(body.grading_delayed).toBe(true);
+  });
+
+  // ── C22: MCQ/numeric is_correct write error → pending + failed ────────────
+  it('MCQ is_correct write error → grading_status:pending + grading_failed:true, band NOT written (C22)', async () => {
+    // OEQ grader never fires because MCQ write fails first
+    mockGradeOpenResponse.mockResolvedValue(VALID_GRADE);
+
+    const adminMock = makeAdminMock({
+      mcqUpdateError: { message: 'write timeout', code: 'PGRST503' },
+    });
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // C22: MCQ write error → pending path, band NOT written
+    expect(body.grading_delayed).toBe(true);
+    expect(body.mastery_band).toBeUndefined();
+    // OEQ grader must NOT have been called (pending taken before OEQ stage)
+    expect(mockGradeOpenResponse).not.toHaveBeenCalled();
+  });
+
+  // ── Critical-1: final quiz_attempts update error → pending fallback + grading_delayed ──
+  it('final quiz_attempts update error → fallback pending write + grading_delayed:true, band NOT persisted (Critical-1)', async () => {
+    mockGradeOpenResponse.mockResolvedValue(VALID_GRADE);
+
+    const adminMock = makeAdminMock({
+      finalUpdateError: { message: 'constraint violation', code: '23505' },
+    });
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'student-1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
+    const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Must return grading_delayed (not a 500 error envelope)
+    expect(body.grading_delayed).toBe(true);
+    // Band must NOT appear in the response
+    expect(body.mastery_band).toBeUndefined();
+    // The fallback pending write was attempted on quiz_attempts
+    const fromCalls = (adminMock.from as ReturnType<typeof vi.fn>).mock.calls;
+    const attemptCalls = fromCalls.filter(([t]: [string]) => t === 'quiz_attempts');
+    expect(attemptCalls.length).toBeGreaterThan(0);
   });
 
   // ── Adapted question text is used when present ────────────────────────────

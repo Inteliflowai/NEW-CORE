@@ -93,8 +93,19 @@ export async function POST(
         isCorrect = result.correct;
         mcqScores.push(result.correct ? 1 : 0);
       } else {
-        // Unknown front-question type — treat as incorrect
-        mcqScores.push(0);
+        // Unknown front-question type — fail loud (defense-in-depth; C24 enforces mcq/numeric)
+        console.error('[submit] Unknown question_type at position', q.position, ':', q.question_type);
+        await admin.from('quiz_attempts').update({
+          submitted_at: new Date().toISOString(),
+          is_complete: true,
+          grading_failed: true,
+          grading_status: 'pending',
+        }).eq('id', attemptId);
+        return NextResponse.json({
+          attempt_id: attemptId,
+          grading_delayed: true,
+          message: 'Your answers have been saved. Grading is temporarily delayed — check back shortly.',
+        });
       }
 
       // Persist is_correct for positions 1–3
@@ -211,7 +222,6 @@ export async function POST(
           grader_source: grade.grader_source,
           question_type_scored: 'open',
           rubric_version: 'v1',
-          cognitive_notes: grade.cognitive_notes,
           grading_output: gradingOutput,
         })
         .eq('attempt_id', attemptId)
@@ -257,11 +267,22 @@ export async function POST(
       })
       .eq('id', attemptId);
 
-    // C22: even the final update error → pending path
+    // C22: even the final update error → best-effort pending write, then grading_delayed
     if (finalUpdateError) {
       console.error('[submit] Final attempt update error:', finalUpdateError);
-      // Cannot easily downgrade to pending here since we just tried to write — log and return error envelope
-      return respondEngineError(new Error(`Failed to persist final grading result: ${finalUpdateError.message}`));
+      // Best-effort: mark attempt re-queueable so Task 8 / re-grade can pick it up.
+      // Band is withheld (the write was unreliable).
+      await admin.from('quiz_attempts').update({
+        submitted_at: new Date().toISOString(),
+        is_complete: true,
+        grading_failed: true,
+        grading_status: 'pending',
+      }).eq('id', attemptId);
+      return NextResponse.json({
+        attempt_id: attemptId,
+        grading_delayed: true,
+        message: 'Your answers have been saved. Grading is temporarily delayed — check back shortly.',
+      });
     }
 
     return NextResponse.json({
