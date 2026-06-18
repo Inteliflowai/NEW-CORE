@@ -14,6 +14,7 @@ describe('globals.css token contract', () => {
       '--ok-surface', '--ok-fg',
       '--warn-surface', '--warn-fg',
       '--risk-surface', '--risk-fg',
+      '--brand-surface', '--brand-fg',
       '--radius', '--radius-lg', '--shadow', '--shadow-pop',
     ];
     for (const slot of required) {
@@ -69,6 +70,17 @@ describe('globals.css token contract', () => {
       '--color-warn-fg:',
       '--color-risk-surface:',
       '--color-risk-fg:',
+    ];
+    for (const token of required) {
+      expect(css, `missing @theme mapping for ${token}`).toContain(token);
+    }
+  });
+
+  // Brand-pill @theme mappings
+  it('has @theme mappings for the 2 new brand-pill tokens', () => {
+    const required = [
+      '--color-brand-surface:',
+      '--color-brand-fg:',
     ];
     for (const token of required) {
       expect(css, `missing @theme mapping for ${token}`).toContain(token);

@@ -91,6 +91,8 @@ interface SlotAssignment {
   warnFg?: string;
   riskSurface?: string;
   riskFg?: string;
+  brandSurface?: string;
+  brandFg?: string;
 }
 
 interface ParsedCss {
@@ -105,18 +107,20 @@ interface ParsedCss {
 }
 
 const SLOT_CSS_PROP: Record<keyof SlotAssignment, string> = {
-  bg:          '--bg',
-  surface:     '--surface',
-  fg:          '--fg',
-  fgMuted:     '--fg-muted',
-  brand:       '--brand',
-  fgOnBrand:   '--fg-on-brand',
-  okSurface:   '--ok-surface',
-  okFg:        '--ok-fg',
-  warnSurface: '--warn-surface',
-  warnFg:      '--warn-fg',
-  riskSurface: '--risk-surface',
-  riskFg:      '--risk-fg',
+  bg:           '--bg',
+  surface:      '--surface',
+  fg:           '--fg',
+  fgMuted:      '--fg-muted',
+  brand:        '--brand',
+  fgOnBrand:    '--fg-on-brand',
+  okSurface:    '--ok-surface',
+  okFg:         '--ok-fg',
+  warnSurface:  '--warn-surface',
+  warnFg:       '--warn-fg',
+  riskSurface:  '--risk-surface',
+  riskFg:       '--risk-fg',
+  brandSurface: '--brand-surface',
+  brandFg:      '--brand-fg',
 };
 
 /**
@@ -306,6 +310,8 @@ interface Palette {
   warnFg: string;
   riskSurface: string;
   riskFg: string;
+  brandSurface: string;
+  brandFg: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -323,9 +329,12 @@ const PAIRS: PairDef[] = [
   ['brand/surface',     'brand',     'surface', 3.0],
   // Signal-pair tokens: tinted surface + fg for WCAG AA-readable badge pills (RiskBadge).
   // Normal text (14px) → 4.5:1 threshold applies.
-  ['ok-fg/ok-surface',     'okFg',   'okSurface',   4.5],
-  ['warn-fg/warn-surface', 'warnFg', 'warnSurface', 4.5],
-  ['risk-fg/risk-surface', 'riskFg', 'riskSurface', 4.5],
+  ['ok-fg/ok-surface',     'okFg',        'okSurface',   4.5],
+  ['warn-fg/warn-surface', 'warnFg',      'warnSurface', 4.5],
+  ['risk-fg/risk-surface', 'riskFg',      'riskSurface', 4.5],
+  // Brand-pill pair: tinted brand surface + dark brand fg for CLBadge "Enrich" pill.
+  // Normal text (14px, text-sm) → 4.5:1 threshold applies (WCAG AA).
+  ['brand-fg/brand-surface', 'brandFg', 'brandSurface', 4.5],
 ];
 
 // ---------------------------------------------------------------------------
@@ -397,18 +406,20 @@ function buildPalettes(
       };
 
       const palette: Palette = {
-        bg:          resolveSlot('bg'),
-        surface:     resolveSlot('surface'),
-        fg:          resolveSlot('fg'),
-        fgMuted:     resolveSlot('fgMuted'),
-        brand:       resolveSlot('brand'),
-        fgOnBrand:   resolveSlot('fgOnBrand'),
-        okSurface:   resolveSlot('okSurface'),
-        okFg:        resolveSlot('okFg'),
-        warnSurface: resolveSlot('warnSurface'),
-        warnFg:      resolveSlot('warnFg'),
-        riskSurface: resolveSlot('riskSurface'),
-        riskFg:      resolveSlot('riskFg'),
+        bg:           resolveSlot('bg'),
+        surface:      resolveSlot('surface'),
+        fg:           resolveSlot('fg'),
+        fgMuted:      resolveSlot('fgMuted'),
+        brand:        resolveSlot('brand'),
+        fgOnBrand:    resolveSlot('fgOnBrand'),
+        okSurface:    resolveSlot('okSurface'),
+        okFg:         resolveSlot('okFg'),
+        warnSurface:  resolveSlot('warnSurface'),
+        warnFg:       resolveSlot('warnFg'),
+        riskSurface:  resolveSlot('riskSurface'),
+        riskFg:       resolveSlot('riskFg'),
+        brandSurface: resolveSlot('brandSurface'),
+        brandFg:      resolveSlot('brandFg'),
       };
 
       const intensityKey = intensity === '' ? 'base' : intensity;

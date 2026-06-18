@@ -37,16 +37,16 @@ function toConfidenceWord(confidence: number): ConfidenceWord {
   return 'emerging';
 }
 
-// Verb → Tailwind utility classes using Tier-2 signal-pair token references only (C3).
-// Reinforce → warn-surface / warn-fg (amber tinted pair, AA ≥ 4.5:1)
-// On Track  → ok-surface / ok-fg (emerald tinted pair, AA ≥ 4.5:1)
-// Enrich    → brand/fg-on-brand (cobalt, AA ≥ 4.5:1 per contrast gate)
+// Verb → Tailwind utility classes using Tier-2 token references only (C3).
+// Reinforce        → warn-surface / warn-fg    (amber tinted pair, gate-enforced AA ≥ 4.5:1)
+// On Track         → ok-surface / ok-fg        (emerald tinted pair, gate-enforced AA ≥ 4.5:1)
+// Enrich           → brand-surface / brand-fg  (brand tinted pair, gate-enforced AA ≥ 4.5:1)
 // Not yet assessed → neutral surface / fg-muted with token border
 const VERB_STYLES: Record<string, string> = {
-  Reinforce:          'bg-warn-surface text-warn-fg',
-  'On Track':         'bg-ok-surface   text-ok-fg',
-  Enrich:             'bg-brand        text-fg-on-brand',
-  'Not yet assessed': 'bg-surface      text-fg-muted ring-1 ring-inset ring-fg-muted',
+  Reinforce:          'bg-warn-surface  text-warn-fg',
+  'On Track':         'bg-ok-surface    text-ok-fg',
+  Enrich:             'bg-brand-surface text-brand-fg',
+  'Not yet assessed': 'bg-surface       text-fg-muted ring-1 ring-inset ring-fg-muted',
 };
 
 /**

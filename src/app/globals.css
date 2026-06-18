@@ -111,13 +111,15 @@
   --ok:           var(--emerald-600);
   --warn:         var(--amber-500);
   --risk:         var(--coral-500);
-  --ok-surface:   var(--emerald-50);
-  --ok-fg:        var(--emerald-800);
-  --warn-surface: var(--amber-50);
-  --warn-fg:      var(--amber-900);
-  --risk-surface: var(--coral-50);
-  --risk-fg:      var(--coral-900);
-  --radius:       0.5rem;
+  --ok-surface:     var(--emerald-50);
+  --ok-fg:          var(--emerald-800);
+  --warn-surface:   var(--amber-50);
+  --warn-fg:        var(--amber-900);
+  --risk-surface:   var(--coral-50);
+  --risk-fg:        var(--coral-900);
+  --brand-surface:  var(--cobalt-50);
+  --brand-fg:       var(--cobalt-800);
+  --radius:         0.5rem;
   --radius-lg:    1rem;
   --shadow:       0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
   --shadow-pop:   0 8px 24px -4px rgb(0 0 0 / 0.16), 0 4px 8px -2px rgb(0 0 0 / 0.10);
@@ -131,14 +133,16 @@
 
 /* --- Student (loud) --- */
 [data-role="student"] {
-  --brand:        var(--emerald-600);
-  --brand-accent: var(--lime-500);
-  --fg-on-brand:  var(--white);
-  --ok:           var(--emerald-600);
-  --bg:           var(--ink-50);
-  --surface:      var(--white);
-  --fg:           var(--ink-900);
-  --fg-muted:     var(--ink-600);
+  --brand:         var(--emerald-600);
+  --brand-accent:  var(--lime-500);
+  --fg-on-brand:   var(--white);
+  --ok:            var(--emerald-600);
+  --bg:            var(--ink-50);
+  --surface:       var(--white);
+  --fg:            var(--ink-900);
+  --fg-muted:      var(--ink-600);
+  --brand-surface: var(--emerald-50);
+  --brand-fg:      var(--emerald-800);
 }
 
 [data-role="student"][data-intensity="loud"] {
@@ -150,14 +154,16 @@
 
 /* --- Teacher (calm) --- */
 [data-role="teacher"] {
-  --brand:        var(--cobalt-600);
-  --brand-accent: var(--cobalt-400);
-  --fg-on-brand:  var(--white);
-  --ok:           var(--emerald-600);
-  --bg:           var(--ink-50);
-  --surface:      var(--white);
-  --fg:           var(--ink-900);
-  --fg-muted:     var(--ink-600);
+  --brand:         var(--cobalt-600);
+  --brand-accent:  var(--cobalt-400);
+  --fg-on-brand:   var(--white);
+  --ok:            var(--emerald-600);
+  --bg:            var(--ink-50);
+  --surface:       var(--white);
+  --fg:            var(--ink-900);
+  --fg-muted:      var(--ink-600);
+  --brand-surface: var(--cobalt-50);
+  --brand-fg:      var(--cobalt-800);
 }
 
 [data-role="teacher"][data-intensity="calm"] {
@@ -169,14 +175,16 @@
 
 /* --- Parent (calm) --- */
 [data-role="parent"] {
-  --brand:        var(--coral-500);
-  --brand-accent: var(--coral-300);
-  --fg-on-brand:  var(--white);
-  --ok:           var(--emerald-600);
-  --bg:           var(--ink-50);
-  --surface:      var(--white);
-  --fg:           var(--ink-900);
-  --fg-muted:     var(--ink-600);
+  --brand:         var(--coral-500);
+  --brand-accent:  var(--coral-300);
+  --fg-on-brand:   var(--white);
+  --ok:            var(--emerald-600);
+  --bg:            var(--ink-50);
+  --surface:       var(--white);
+  --fg:            var(--ink-900);
+  --fg-muted:      var(--ink-600);
+  --brand-surface: var(--coral-50);
+  --brand-fg:      var(--coral-900);
 }
 
 [data-role="parent"][data-intensity="calm"] {
@@ -188,22 +196,24 @@
 
 /* --- School Admin (calm-on-dark) --- */
 [data-role="admin"] {
-  --bg:           var(--canvas-admin);
-  --surface:      var(--surface-admin);
-  --fg:           var(--ink-100);
-  --fg-muted:     var(--ink-400);
-  --brand:        var(--cobalt-400);
-  --brand-accent: var(--cobalt-300);
-  --fg-on-brand:  var(--ink-950);
-  --ok:           var(--emerald-400);
-  --warn:         var(--amber-400);
-  --risk:         var(--coral-400);
-  --ok-surface:   var(--emerald-950);
-  --ok-fg:        var(--emerald-300);
-  --warn-surface: var(--amber-950);
-  --warn-fg:      var(--amber-300);
-  --risk-surface: var(--coral-950);
-  --risk-fg:      var(--coral-300);
+  --bg:            var(--canvas-admin);
+  --surface:       var(--surface-admin);
+  --fg:            var(--ink-100);
+  --fg-muted:      var(--ink-400);
+  --brand:         var(--cobalt-400);
+  --brand-accent:  var(--cobalt-300);
+  --fg-on-brand:   var(--ink-950);
+  --ok:            var(--emerald-400);
+  --warn:          var(--amber-400);
+  --risk:          var(--coral-400);
+  --ok-surface:    var(--emerald-950);
+  --ok-fg:         var(--emerald-300);
+  --warn-surface:  var(--amber-950);
+  --warn-fg:       var(--amber-300);
+  --risk-surface:  var(--coral-950);
+  --risk-fg:       var(--coral-300);
+  --brand-surface: var(--cobalt-950);
+  --brand-fg:      var(--cobalt-300);
 }
 
 [data-role="admin"][data-intensity="calm"] {
@@ -215,22 +225,24 @@
 
 /* --- Super-admin (calm-on-dark, charcoal + amber) --- */
 [data-role="super-admin"] {
-  --bg:           var(--canvas-platform);
-  --surface:      var(--surface-platform);
-  --fg:           var(--ink-100);
-  --fg-muted:     var(--ink-400);
-  --brand:        var(--amber-500);
-  --brand-accent: var(--amber-300);
-  --fg-on-brand:  var(--ink-950);
-  --ok:           var(--emerald-400);
-  --warn:         var(--amber-400);
-  --risk:         var(--coral-400);
-  --ok-surface:   var(--emerald-950);
-  --ok-fg:        var(--emerald-300);
-  --warn-surface: var(--amber-950);
-  --warn-fg:      var(--amber-300);
-  --risk-surface: var(--coral-950);
-  --risk-fg:      var(--coral-300);
+  --bg:            var(--canvas-platform);
+  --surface:       var(--surface-platform);
+  --fg:            var(--ink-100);
+  --fg-muted:      var(--ink-400);
+  --brand:         var(--amber-500);
+  --brand-accent:  var(--amber-300);
+  --fg-on-brand:   var(--ink-950);
+  --ok:            var(--emerald-400);
+  --warn:          var(--amber-400);
+  --risk:          var(--coral-400);
+  --ok-surface:    var(--emerald-950);
+  --ok-fg:         var(--emerald-300);
+  --warn-surface:  var(--amber-950);
+  --warn-fg:       var(--amber-300);
+  --risk-surface:  var(--coral-950);
+  --risk-fg:       var(--coral-300);
+  --brand-surface: var(--amber-950);
+  --brand-fg:      var(--amber-300);
 }
 
 [data-role="super-admin"][data-intensity="calm"] {
@@ -250,9 +262,11 @@
   --color-surface:      var(--surface);
   --color-fg:           var(--fg);
   --color-fg-muted:     var(--fg-muted);
-  --color-brand:        var(--brand);
-  --color-brand-accent: var(--brand-accent);
-  --color-fg-on-brand:  var(--fg-on-brand);
+  --color-brand:         var(--brand);
+  --color-brand-accent:  var(--brand-accent);
+  --color-fg-on-brand:   var(--fg-on-brand);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-fg:      var(--brand-fg);
   --color-ok:           var(--ok);
   --color-warn:         var(--warn);
   --color-risk:         var(--risk);

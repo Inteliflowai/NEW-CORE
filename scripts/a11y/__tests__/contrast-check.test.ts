@@ -181,10 +181,31 @@ describe('checkAllPairs() — regression anchor', () => {
     }
   });
 
-  it('total pair count is 40 (5 roles × 8 pairs each)', () => {
+  it('total pair count is 45 (5 roles × 9 pairs each)', () => {
     const results = checkAllPairs();
-    // 5 roles × 8 pairs = 40 total (was 5 roles × 5 pairs = 25 before new signal pairs)
-    expect(results.length).toBe(40);
+    // 5 roles × 9 pairs = 45 total (was 5 roles × 8 pairs = 40 before brand-pill pair)
+    expect(results.length).toBe(45);
+  });
+
+  it('covers the new brand-fg/brand-surface pair across all roles', () => {
+    const results = checkAllPairs();
+    const brandPairs = results.filter((r) => r.pair === 'brand-fg/brand-surface');
+    expect(brandPairs.length, 'Expected 5 brand-fg/brand-surface results (one per role)').toBe(5);
+    for (const r of brandPairs) {
+      expect(r.passes, `${r.role}/${r.intensity} brand-fg/brand-surface should pass ≥4.5`).toBe(true);
+      expect(r.ratio).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it('teacher brand-fg resolves to cobalt-800 (#1e40af) on brand-surface cobalt-50 (#eff6ff)', () => {
+    const results = checkAllPairs();
+    const teacherBrand = results.find(
+      (r) => r.role === 'teacher' && r.pair === 'brand-fg/brand-surface'
+    );
+    expect(teacherBrand).toBeDefined();
+    expect(teacherBrand!.fg.toLowerCase()).toBe('#1e40af');  // cobalt-800
+    expect(teacherBrand!.bg.toLowerCase()).toBe('#eff6ff');  // cobalt-50
+    expect(teacherBrand!.ratio).toBeGreaterThanOrEqual(4.5);
   });
 
   it('light-role risk-fg resolves to coral-900 (#72261c) and risk-surface to coral-50 (#fff1ee)', () => {
@@ -237,6 +258,8 @@ describe('checkAllPairs() — catches a regression via fixture CSS', () => {
         --warn-fg: var(--amber-900);
         --risk-surface: var(--coral-50);
         --risk-fg: var(--coral-900);
+        --brand-surface: var(--emerald-50);
+        --brand-fg: var(--emerald-800);
       }
       [data-role="student"] {
         --bg:           var(--white);
@@ -271,6 +294,8 @@ describe('checkAllPairs() — catches a regression via fixture CSS', () => {
         --ink-900: #171717;
         --ink-50: #f8f8f8;
         --cobalt-600: #2563eb;
+        --cobalt-50: #eff6ff;
+        --cobalt-800: #1e40af;
         --emerald-50: #ecfdf5;
         --emerald-800: #065f46;
         --amber-50: #fffbeb;
@@ -283,6 +308,8 @@ describe('checkAllPairs() — catches a regression via fixture CSS', () => {
         --warn-fg: var(--amber-900);
         --risk-surface: var(--coral-50);
         --risk-fg: var(--coral-900);
+        --brand-surface: var(--cobalt-50);
+        --brand-fg: var(--cobalt-800);
       }
       [data-role="teacher"] {
         --bg:           var(--ink-50);
