@@ -302,6 +302,61 @@ export async function POST(
       console.error('[submit] skill state recompute hook threw (non-blocking):', recomputeErr);
     }
 
+    // ── Misconception observations hook (fail-isolated; Plan 3 Task 13) ──────
+    // Fires on the all-clean path only. Errors are swallowed — a taxonomy write
+    // failure can never degrade the student's quiz result.
+    // C2: uses REAL quiz_responses.id (uuid), not a composite key.
+    // C2: school_id sourced from users.school_id, NOT quizzes (quizzes has no school_id).
+    try {
+      const { recordMisconceptions } = await import('@/lib/misconceptions/recordMisconceptions');
+
+      // Fetch school_id from the student's users row (C2 — not from quizzes)
+      const { data: userRow } = await admin
+        .from('users')
+        .select('school_id')
+        .eq('id', attempt.student_id)
+        .single();
+      const schoolId: string | null = (userRow as { school_id?: string | null } | null)?.school_id ?? null;
+
+      if (schoolId) {
+        // Query back the REAL quiz_responses.id for each OEQ position (C2).
+        // Also fetch skill_id via the question's concept linkage.
+        const oeqPositions = (oeqResults as Array<{ task: OeqTask; grade: NonNullable<OeqResult['grade']> }>)
+          .map(r => r.task.position);
+
+        const { data: oeqResponseRows } = await admin
+          .from('quiz_responses')
+          .select('id, position')
+          .eq('attempt_id', attemptId)
+          .in('position', oeqPositions);
+
+        const responseIdByPosition = new Map<number, string>(
+          (oeqResponseRows ?? []).map((row: { id: string; position: number }) => [row.position, row.id]),
+        );
+
+        const perResponse = (oeqResults as Array<{ task: OeqTask; grade: NonNullable<OeqResult['grade']> }>)
+          .map((r) => {
+            const realResponseId = responseIdByPosition.get(r.task.position) ?? null;
+            if (!realResponseId) return null; // skip if we couldn't resolve the real id
+            const q = allQuestions.find(qq => qq.position === r.task.position);
+            const skillId = (q as { skill_id?: string | null } | undefined)?.skill_id ?? null;
+            return {
+              responseId: realResponseId, // REAL quiz_responses.id uuid (C2)
+              studentId: attempt.student_id,
+              skillId,
+              error_type: r.grade.error_type,
+              reasoning_pattern: r.grade.reasoning_pattern,
+              questionTypeScored: 'open' as const,
+            };
+          })
+          .filter((r): r is NonNullable<typeof r> => r !== null);
+
+        await recordMisconceptions(admin, { schoolId, perResponse });
+      }
+    } catch (hookErr) {
+      console.error('[submit] recordMisconceptions hook error (non-fatal):', hookErr);
+    }
+
     return NextResponse.json({
       attempt_id: attemptId,
       raw_score: rawScore,
