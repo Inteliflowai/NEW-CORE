@@ -354,6 +354,62 @@ describe('0007 licensing', () => {
   });
 });
 
+describe('0009 security_hardening', () => {
+  const s = () => sql('0009_security_hardening.sql');
+
+  it('recreates enforce_enrollment_limit with SET search_path = public', () => {
+    expect(s()).toMatch(/FUNCTION public\.enforce_enrollment_limit\(\)[\s\S]*SET search_path = public/);
+  });
+
+  it('recreates handle_license_updated_at with SET search_path = public', () => {
+    expect(s()).toMatch(/FUNCTION public\.handle_license_updated_at\(\)[\s\S]*SET search_path = public/);
+  });
+
+  it('revokes EXECUTE on is_platform_admin from anon', () => {
+    expect(s()).toMatch(/REVOKE EXECUTE ON FUNCTION public\.is_platform_admin\(\)\s+FROM[\s\S]*anon/);
+  });
+
+  it('revokes EXECUTE on get_my_school_id from anon', () => {
+    expect(s()).toMatch(/REVOKE EXECUTE ON FUNCTION public\.get_my_school_id\(\)\s+FROM[\s\S]*anon/);
+  });
+
+  it('revokes EXECUTE on get_my_role from anon', () => {
+    expect(s()).toMatch(/REVOKE EXECUTE ON FUNCTION public\.get_my_role\(\)\s+FROM[\s\S]*anon/);
+  });
+
+  it('revokes EXECUTE on get_teacher_class_ids from anon', () => {
+    expect(s()).toMatch(/REVOKE EXECUTE ON FUNCTION public\.get_teacher_class_ids\(uuid\)\s+FROM[\s\S]*anon/);
+  });
+
+  it('revokes EXECUTE on get_teacher_student_ids from anon', () => {
+    expect(s()).toMatch(/REVOKE EXECUTE ON FUNCTION public\.get_teacher_student_ids\(uuid\)\s+FROM[\s\S]*anon/);
+  });
+
+  it('revokes EXECUTE on get_student_class_ids from anon', () => {
+    expect(s()).toMatch(/REVOKE EXECUTE ON FUNCTION public\.get_student_class_ids\(uuid\)\s+FROM[\s\S]*anon/);
+  });
+
+  it('retains EXECUTE grant for authenticated + service_role on all 6 helpers', () => {
+    for (const fn of [
+      'is_platform_admin()',
+      'get_my_school_id()',
+      'get_my_role()',
+      'get_teacher_class_ids(uuid)',
+      'get_teacher_student_ids(uuid)',
+      'get_student_class_ids(uuid)',
+    ]) {
+      expect(s(), `missing GRANT EXECUTE for ${fn}`).toMatch(
+        new RegExp(`GRANT EXECUTE ON FUNCTION public\\.${fn.replace('(', '\\(').replace(')', '\\)')}\\s+TO authenticated, service_role`)
+      );
+    }
+  });
+
+  it('both recreated functions keep SECURITY DEFINER', () => {
+    expect(s()).toMatch(/enforce_enrollment_limit[\s\S]*SECURITY DEFINER/);
+    expect(s()).toMatch(/handle_license_updated_at[\s\S]*SECURITY DEFINER/);
+  });
+});
+
 describe('0008 platform', () => {
   const s = () => sql('0008_platform.sql');
 
