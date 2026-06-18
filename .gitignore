@@ -42,3 +42,6 @@ next-env.d.ts
 
 # Claude Code — keep shared settings, ignore local/machine-specific ones
 .claude/settings.local.json
+
+# Brainstorm visual-companion scratch
+.superpowers/
