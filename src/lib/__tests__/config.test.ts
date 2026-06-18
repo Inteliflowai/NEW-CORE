@@ -23,6 +23,7 @@ describe('Config files', () => {
         // AI models
         'ANTHROPIC_API_KEY',
         'ANTHROPIC_GRADING_MODEL',
+        'ANTHROPIC_GEN_MODEL',
         'OPENAI_API_KEY',
         'OPENAI_GEN_MODEL',
         'OPENAI_GRADING_FALLBACK',

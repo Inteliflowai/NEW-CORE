@@ -13,7 +13,7 @@
 // SHAPE in the @/lib/ai wrappers — this fn calls them unchanged.
 import { claudeChat } from '@/lib/ai/claude';
 import { resilientChatCompletion } from '@/lib/ai/openai';
-import { OPENAI_GEN_MODEL } from '@/lib/ai/models';
+import { OPENAI_GEN_MODEL, CLAUDE_GRADING_MODEL } from '@/lib/ai/models';
 import { GRADING_SYSTEM, gradingPrompt } from '@/lib/openai/prompts';
 import { GradingResultSchema, type GradingResult } from '@/lib/engine/types';
 import { LlmExhaustedError } from '@/lib/ai/errors';
@@ -46,7 +46,7 @@ export async function gradeOpenResponse(input: GradeInput): Promise<GradingResul
   // ── Primary: Claude (calibration-locked, temp 0.2, 600 tok) ─────────────
   let claudeRaw: string | null = null;
   try {
-    claudeRaw = await claudeChat(SYSTEM, userPrompt, { temperature: 0.2, maxTokens: 600 });
+    claudeRaw = await claudeChat(SYSTEM, userPrompt, { temperature: 0.2, maxTokens: 600, model: CLAUDE_GRADING_MODEL });
   } catch {
     // swallow — LlmExhaustedError or any other throw — fall through to GPT
   }

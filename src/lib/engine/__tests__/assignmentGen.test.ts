@@ -5,8 +5,10 @@
 //   C1 throw-paths: Claude throws → GPT fallback; both throw → LlmExhaustedError
 //   C1 inferLearningStyle: throws → emerging (degrade, never rethrow)
 //   Null-path cases kept alongside throw-paths per spec.
+//   Model routing: claudeChat is called with CLAUDE_GEN_MODEL in options.model.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { LlmExhaustedError } from '@/lib/ai/errors';
+import { CLAUDE_GEN_MODEL } from '@/lib/ai/models';
 
 // ── module-level mocks (hoisted, so modules resolve before any import) ──────
 const mockClaude = vi.fn();
@@ -125,6 +127,20 @@ describe('generateAssignment', () => {
     await expect(
       generateAssignment({ lessonSummary: 'x', band: 'reteach', style: 'visual', studentName: 'Sam' }),
     ).rejects.toMatchObject({ name: 'LlmExhaustedError' });
+  });
+
+  it('claudeChat is called with CLAUDE_GEN_MODEL in options.model (routing assertion)', async () => {
+    mockClaude.mockResolvedValue(ASSIGNMENT);
+    const { generateAssignment } = await import('@/lib/engine/assignmentGen');
+    await generateAssignment({
+      lessonSummary: 'Fractions intro',
+      band: 'reteach',
+      style: 'visual',
+      studentName: 'Sam',
+    });
+    // 3rd arg (options) must contain model === CLAUDE_GEN_MODEL
+    const options = mockClaude.mock.calls[0][2] as { model?: string };
+    expect(options?.model).toBe(CLAUDE_GEN_MODEL);
   });
 
   it('both legs throw LlmExhaustedError → throws LlmExhaustedError (C1 throw-path)', async () => {

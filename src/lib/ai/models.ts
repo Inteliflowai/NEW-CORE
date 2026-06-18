@@ -18,6 +18,15 @@ export const CLAUDE_GRADING_MODEL =
   process.env.ANTHROPIC_GRADING_MODEL || 'claude-sonnet-4-6';
 
 /**
+ * Anthropic model for GENERATION (assignment gen) — separate from the
+ * calibration-locked grader. A pilot lever, env-overridable, defaults to
+ * sonnet so an unset var changes nothing. Isolates assignment-gen from a
+ * future grader Opus flip.
+ */
+export const CLAUDE_GEN_MODEL =
+  process.env.ANTHROPIC_GEN_MODEL || 'claude-sonnet-4-6';
+
+/**
  * OpenAI model for generation + diagnostic paths (lesson gen, quiz gen, etc.).
  * CALIBRATION-SENSITIVE — frozen to gpt-4o; do not move without an eval pass.
  */
@@ -32,6 +41,7 @@ export const OPENAI_VOICE_MODEL = process.env.OPENAI_VOICE_MODEL || 'gpt-4o';
 /** Single object the eval rig + Spark cache fingerprint read. */
 export const MODELS = {
   grading: CLAUDE_GRADING_MODEL,
+  claude_generation: CLAUDE_GEN_MODEL,
   generation: OPENAI_GEN_MODEL,
   voice: OPENAI_VOICE_MODEL,
 } as const;

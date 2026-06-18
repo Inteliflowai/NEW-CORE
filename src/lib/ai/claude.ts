@@ -26,6 +26,7 @@ interface ClaudeChatParams {
   messages: ClaudeMessage[];
   temperature?: number;
   max_tokens?: number;
+  model?: string;
 }
 
 interface ClaudeChatResult {
@@ -55,7 +56,7 @@ export async function resilientClaudeChat(
       }, timeoutMs);
 
       const response = await getAnthropic().messages.create({
-        model: CLAUDE_GRADING_MODEL,
+        model: params.model || CLAUDE_GRADING_MODEL,
         max_tokens: params.max_tokens || 1024,
         temperature: params.temperature ?? 0.3,
         system: params.system,
@@ -115,13 +116,14 @@ export async function resilientClaudeChat(
 export async function claudeChat(
   systemPrompt: string,
   userPrompt: string,
-  options?: { temperature?: number; maxTokens?: number; timeoutMs?: number },
+  options?: { temperature?: number; maxTokens?: number; timeoutMs?: number; model?: string },
 ): Promise<string | null> {
   const result = await resilientClaudeChat({
     system: systemPrompt,
     messages: [{ role: 'user', content: userPrompt }],
     temperature: options?.temperature ?? 0.3,
     max_tokens: options?.maxTokens || 1024,
+    model: options?.model,
   }, { timeoutMs: options?.timeoutMs || 30000 });
   return result?.content || null;
 }
