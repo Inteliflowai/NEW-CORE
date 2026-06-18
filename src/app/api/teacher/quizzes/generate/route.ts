@@ -72,7 +72,6 @@ export async function POST(req: NextRequest) {
         title: result.title || `Quiz: ${lesson.title}`,
         status: 'draft',
         generation_model: OPENAI_GEN_MODEL,
-        rubric_version: 'v1',
         ...(isMath ? { is_math: true } : {}),
       })
       .select()
@@ -91,6 +90,7 @@ export async function POST(req: NextRequest) {
       choices: q.choices ?? null,
       correct_answer: q.correct_answer ?? null,
       rubric: q.rubric ?? null,
+      rubric_version: 'v1',
       numeric_spec: q.numeric_spec ?? null,
       concept_tag: q.concept_tag ?? null,
     }));
