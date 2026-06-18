@@ -57,10 +57,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ at
     });
 
     // Persist to adapted_questions (migration 0010 column); also persists fallback on failure.
-    await admin
+    // Capture error: Supabase does NOT throw on write failure — a discarded error would
+    // return HTTP 200 while nothing was persisted (silent data loss). adapt never blocks,
+    // so we log the failure and still return the adapted result to the caller.
+    const { error: updateError } = await admin
       .from('quiz_attempts')
       .update({ adapted_questions: adapted })
       .eq('id', attemptId);
+
+    if (updateError) {
+      console.error('[adapt] persist failed:', updateError);
+    }
 
     return NextResponse.json({ adapted });
   } catch (err) {

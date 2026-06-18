@@ -52,13 +52,14 @@ describe('adaptQuestions', () => {
   });
 
   it('LlmExhaustedError throw → falls back to original Q4/Q5 (never blocks the attempt)', async () => {
-    // Vitest v4 / Node 24: errors thrown inside vi.fn() spy are detected and associated
-    // with the test even when caught by the SUT. Work around: replace the module mock with
-    // a plain non-spy function (no vi.fn), reset modules to force re-import, and restore
-    // the vi.mock factory afterward. Tests the exact throw path: resilientChatCompletion
-    // throws LlmExhaustedError, adaptQuestions catches it in try/catch, returns fallback.
+    // Vitest v4 / Node 24: vi.fn() spy errors (both sync throws and rejected values) are
+    // tracked and associated with the active test even when caught by the SUT. To avoid
+    // the false unhandled-rejection detection, replace the module mock with a plain
+    // non-spy async function for this test only, using vi.doMock + vi.resetModules().
+    // The plain async function returns a resolved Promise that rejects naturally when
+    // awaited — since the SUT awaits it inside try/catch, it is always a handled rejection.
     vi.doMock('@/lib/ai/openai', () => ({
-      resilientChatCompletion: () => { throw new LlmExhaustedError('openai'); },
+      resilientChatCompletion: async () => { throw new LlmExhaustedError('openai'); },
     }));
     vi.resetModules();
     const { adaptQuestions } = await import('@/lib/engine/adapt');
