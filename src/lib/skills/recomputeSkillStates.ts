@@ -64,8 +64,6 @@ interface AssignmentRow {
   id: string;
   skill_ids: string[] | null;           // uuid[] added in 0005
   reteach_needed: boolean | null;       // 0004
-  allow_redo: boolean | null;           // NOT on assignments — only on homework_attempts (0011)
-  is_redo: boolean | null;              // NOT on assignments — only on homework_attempts (0011)
   created_at: string;
 }
 
@@ -95,9 +93,22 @@ export async function recomputeSkillStatesForStudent(
     skillIds?: string[];
   },
 ): Promise<SkillStateRecomputeSummary> {
-  const { studentId, schoolId } = args;
+  const { studentId } = args;
 
   try {
+    // ── 0. Resolve school_id — never write null (RLS: school_id = get_my_school_id()) ──
+    // When caller passes null (e.g. submit hook), resolve from users.school_id so
+    // skill_learning_state rows remain visible to teacher RLS (migration 0011).
+    let schoolId = args.schoolId;
+    if (schoolId == null) {
+      const { data: userData } = await admin
+        .from('users')
+        .select('school_id')
+        .eq('id', studentId)
+        .single();
+      schoolId = userData?.school_id ?? null;
+    }
+
     // ── 1. Quiz responses: both MCQ (is_correct) and OEQ (ai_score) ──────────
     // C20: do NOT filter .not('is_correct','is',null) — that drops OEQ rows.
     // We gather ALL graded responses; correctness is derived per-row below.
@@ -218,10 +229,11 @@ export async function recomputeSkillStatesForStudent(
     for (const a of assignments) {
       const attempts = attemptsByAssignment.get(a.id) ?? [];
 
-      // Graded attempt: has teacher_score or score_pct
+      // Graded attempt: status must be 'graded' — submitted/in_progress attempts
+      // do not yet have a usable grade; they are only used for the submitted flag.
       const graded = attempts.find(
         (h) =>
-          (h.status === 'graded' || (h.submitted_at != null)) &&
+          h.status === 'graded' &&
           (typeof h.teacher_score === 'number' || typeof h.score_pct === 'number'),
       );
 

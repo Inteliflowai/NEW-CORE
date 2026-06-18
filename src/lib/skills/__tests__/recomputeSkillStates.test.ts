@@ -33,8 +33,31 @@ function makeAdmin({
     return proxy;
   }
 
-  // For users table (school_id lookup)
-  const usersChain = makeChain(studentSchoolId ? [{ school_id: studentSchoolId }] : []);
+  // For users table (school_id lookup): .single() must resolve to { data: object, error: null }
+  // (not an array) so userData?.school_id works correctly.
+  function makeUsersChain(schoolId: string | null): unknown {
+    const singleResult = { data: schoolId ? { school_id: schoolId } : null, error: null };
+    const methods: Record<string, unknown> = {};
+    const proxyHandler: ProxyHandler<typeof methods> = {
+      get(_target, prop) {
+        if (prop === 'then') {
+          // If awaited directly (not via .single()), return array form
+          return (resolve: (v: unknown) => void) =>
+            Promise.resolve({ data: schoolId ? [{ school_id: schoolId }] : [], error: null }).then(resolve);
+        }
+        if (prop === 'single') {
+          // .single() returns a promise resolving to { data: {school_id}, error }
+          return () => Promise.resolve(singleResult);
+        }
+        // All other chain calls (.select, .eq, etc.) return the same proxy
+        return (..._args: unknown[]) => proxy;
+      },
+    };
+    const proxy = new Proxy(methods, proxyHandler);
+    return proxy;
+  }
+
+  const usersChain = makeUsersChain(studentSchoolId);
 
   return {
     from: vi.fn((tableName: string) => {
@@ -478,6 +501,90 @@ describe('recomputeSkillStatesForStudent', () => {
     expect(upsertArg.school_id).toBe('school-42');
     expect(upsertArg.student_id).toBe('stu-1');
     expect(upsertArg.skill_id).toBe('skill-upsert');
+  });
+
+  // ── IMPORTANT-1: school_id resolved from users when caller passes null ───────
+  it('IMPORTANT-1: when schoolId is null, resolves school_id from users.school_id (RLS-visible rows)', async () => {
+    const admin = makeAdmin({
+      studentSchoolId: 'school-from-db',
+      quizResponses: [
+        {
+          is_correct: true,
+          ai_score: null,
+          question_type_scored: 'mcq',
+          grading_output: null,
+          quiz_questions: { skill_id: 'skill-rls' },
+          quiz_attempts: { student_id: 'stu-1', is_complete: true, submitted_at: '2026-01-10T00:00:00Z' },
+        },
+        {
+          is_correct: true,
+          ai_score: null,
+          question_type_scored: 'mcq',
+          grading_output: null,
+          quiz_questions: { skill_id: 'skill-rls' },
+          quiz_attempts: { student_id: 'stu-1', is_complete: true, submitted_at: '2026-01-11T00:00:00Z' },
+        },
+        {
+          is_correct: false,
+          ai_score: null,
+          question_type_scored: 'mcq',
+          grading_output: null,
+          quiz_questions: { skill_id: 'skill-rls' },
+          quiz_attempts: { student_id: 'stu-1', is_complete: true, submitted_at: '2026-01-12T00:00:00Z' },
+        },
+      ],
+    });
+    const result = await recomputeSkillStatesForStudent(admin as never, {
+      studentId: 'stu-1',
+      schoolId: null, // caller passes null — must be resolved from users
+    });
+    expect(result.ok).toBe(true);
+    expect(result.skillsRecomputed).toBe(1);
+    // users table must have been queried for school_id
+    expect(admin.from).toHaveBeenCalledWith('users');
+    // upserted row carries the real school_id (not null)
+    const upsertArg = admin._upsert.mock.calls[0][0];
+    expect(upsertArg.school_id).toBe('school-from-db');
+  });
+
+  it('IMPORTANT-1: when schoolId is null and users has no school_id, upserts with null (graceful fallback)', async () => {
+    const admin = makeAdmin({
+      studentSchoolId: null, // no school in DB either
+      quizResponses: [
+        {
+          is_correct: true,
+          ai_score: null,
+          question_type_scored: 'mcq',
+          grading_output: null,
+          quiz_questions: { skill_id: 'skill-noschool' },
+          quiz_attempts: { student_id: 'stu-1', is_complete: true, submitted_at: '2026-01-10T00:00:00Z' },
+        },
+        {
+          is_correct: true,
+          ai_score: null,
+          question_type_scored: 'mcq',
+          grading_output: null,
+          quiz_questions: { skill_id: 'skill-noschool' },
+          quiz_attempts: { student_id: 'stu-1', is_complete: true, submitted_at: '2026-01-11T00:00:00Z' },
+        },
+        {
+          is_correct: false,
+          ai_score: null,
+          question_type_scored: 'mcq',
+          grading_output: null,
+          quiz_questions: { skill_id: 'skill-noschool' },
+          quiz_attempts: { student_id: 'stu-1', is_complete: true, submitted_at: '2026-01-12T00:00:00Z' },
+        },
+      ],
+    });
+    const result = await recomputeSkillStatesForStudent(admin as never, {
+      studentId: 'stu-1',
+      schoolId: null,
+    });
+    expect(result.ok).toBe(true);
+    // upserted row carries null (graceful — no school on user record)
+    const upsertArg = admin._upsert.mock.calls[0][0];
+    expect(upsertArg.school_id).toBeNull();
   });
 
   // ── skillIds filter ────────────────────────────────────────────────────────

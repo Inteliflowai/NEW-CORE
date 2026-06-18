@@ -294,7 +294,7 @@ export async function POST(
     try {
       void recomputeSkillStatesForStudent(admin, {
         studentId: attempt.student_id,
-        schoolId: null, // resolved from users.school_id by the recompute lib or passed null
+        schoolId: null, // recomputeSkillStatesForStudent resolves school_id from users.school_id internally when null
       }).catch((recomputeErr) => {
         console.warn('[submit] skill state recompute failed (non-blocking):', recomputeErr);
       });
