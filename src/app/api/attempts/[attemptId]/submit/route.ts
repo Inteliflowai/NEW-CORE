@@ -303,22 +303,27 @@ export async function POST(
     }
 
     // ── Misconception observations hook (fail-isolated; Plan 3 Task 13) ──────
-    // Fires on the all-clean path only. Errors are swallowed — a taxonomy write
-    // failure can never degrade the student's quiz result.
+    // Fires on the all-clean path only. Fire-and-forget — does NOT block the
+    // submit response (consistent with the recompute hook above).
     // C2: uses REAL quiz_responses.id (uuid), not a composite key.
     // C2: school_id sourced from users.school_id, NOT quizzes (quizzes has no school_id).
-    try {
-      const { recordMisconceptions } = await import('@/lib/misconceptions/recordMisconceptions');
+    void (async () => {
+      try {
+        const { recordMisconceptions } = await import('@/lib/misconceptions/recordMisconceptions');
 
-      // Fetch school_id from the student's users row (C2 — not from quizzes)
-      const { data: userRow } = await admin
-        .from('users')
-        .select('school_id')
-        .eq('id', attempt.student_id)
-        .single();
-      const schoolId: string | null = (userRow as { school_id?: string | null } | null)?.school_id ?? null;
+        // Fetch school_id from the student's users row (C2 — not from quizzes)
+        const { data: userRow } = await admin
+          .from('users')
+          .select('school_id')
+          .eq('id', attempt.student_id)
+          .single();
+        const schoolId: string | null = (userRow as { school_id?: string | null } | null)?.school_id ?? null;
 
-      if (schoolId) {
+        if (!schoolId) {
+          console.warn('[submit] recordMisconceptions skipped: student has no school_id', { studentId: attempt.student_id, attemptId });
+          return;
+        }
+
         // Query back the REAL quiz_responses.id for each OEQ position (C2).
         // Also fetch skill_id via the question's concept linkage.
         const oeqPositions = (oeqResults as Array<{ task: OeqTask; grade: NonNullable<OeqResult['grade']> }>)
@@ -352,10 +357,10 @@ export async function POST(
           .filter((r): r is NonNullable<typeof r> => r !== null);
 
         await recordMisconceptions(admin, { schoolId, perResponse });
+      } catch (err) {
+        console.warn('[submit] recordMisconceptions hook failed (non-fatal):', err);
       }
-    } catch (hookErr) {
-      console.error('[submit] recordMisconceptions hook error (non-fatal):', hookErr);
-    }
+    })();
 
     return NextResponse.json({
       attempt_id: attemptId,

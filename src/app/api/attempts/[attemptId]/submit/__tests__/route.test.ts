@@ -531,9 +531,11 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     const body = await res.json();
     expect(body.grading_delayed).toBeFalsy();
 
-    // Allow microtask queue to flush
-    await Promise.resolve();
-    await Promise.resolve();
+    // Hook is fire-and-forget (void IIFE) — wait for it to complete by polling
+    // until the mock is called (covers dynamic import + DB query latency).
+    await vi.waitFor(() => {
+      expect(mockRecordMisconceptions).toHaveBeenCalled();
+    });
 
     // recordMisconceptions was called with schoolId from users.school_id (not quizzes)
     expect(mockRecordMisconceptions).toHaveBeenCalledWith(
@@ -569,11 +571,16 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     const { POST } = await import('@/app/api/attempts/[attemptId]/submit/route');
     const res = await POST(makeRequest(), { params: Promise.resolve({ attemptId: 'attempt-1' }) });
 
-    // Submit must still return 200 — hook throw is non-blocking
+    // Submit must still return 200 — hook throw is non-blocking (fire-and-forget)
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.grading_delayed).toBeFalsy();
     expect(body.grades).toBeDefined();
+
+    // Wait for the fire-and-forget IIFE to settle (the rejection is swallowed by the catch)
+    await vi.waitFor(() => {
+      expect(mockRecordMisconceptions).toHaveBeenCalled();
+    });
   });
 
   // ── Misconceptions hook: does NOT fire on pending/failed path ────────────────
@@ -597,9 +604,9 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     const body = await res.json();
     expect(body.grading_delayed).toBe(true);
 
-    // Allow microtask queue to flush — hook must NOT have been called
-    await Promise.resolve();
-    await Promise.resolve();
+    // Allow microtask queue to flush — the hook must NOT fire on the pending path
+    // (it only runs on the all-clean path; early returns happen before the void IIFE).
+    await new Promise(r => setImmediate(r));
     expect(mockRecordMisconceptions).not.toHaveBeenCalled();
   });
 });
