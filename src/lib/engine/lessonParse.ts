@@ -6,6 +6,7 @@ import { OPENAI_GEN_MODEL } from '@/lib/ai/models';
 import { LESSON_PARSE_SYSTEM, lessonParsePrompt } from '@/lib/openai/prompts';
 import { ParsedLessonSchema, type ParsedLesson } from '@/lib/engine/types';
 import { LlmExhaustedError } from '@/lib/ai/errors';
+import { ZodError } from 'zod';
 
 export async function parseLesson(lessonText: string): Promise<ParsedLesson> {
   if (!lessonText.trim()) throw new Error('parseLesson: empty lesson text');
@@ -23,7 +24,13 @@ export async function parseLesson(lessonText: string): Promise<ParsedLesson> {
   // Guard for null covers the test-mock path and any future null-returning adapters.
   if (!completion) throw new LlmExhaustedError('openai');
   const raw = completion.choices[0]?.message?.content || '{}';
-  // Parse failure on a structured-output call is terminal (no silent default on a persisted artifact).
-  const parsed = ParsedLessonSchema.parse(JSON.parse(raw));
-  return parsed;
+  // ZodError on LLM-generated output is a transient model quality failure — re-throw
+  // as LlmExhaustedError so the route catch maps it to 503 retryable (§3.5), not 500.
+  try {
+    const parsed = ParsedLessonSchema.parse(JSON.parse(raw));
+    return parsed;
+  } catch (err) {
+    if (err instanceof ZodError) throw new LlmExhaustedError('openai', err);
+    throw err;
+  }
 }
