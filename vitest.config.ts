@@ -14,5 +14,6 @@ export default defineConfig({
       'supabase/**/*.test.ts',
     ],
     testTimeout: 15000,
+    css: true,
   },
 });
