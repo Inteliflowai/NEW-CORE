@@ -69,9 +69,10 @@ export async function POST(req: NextRequest) {
       const conceptTags = result.questions
         .map((q: { concept_tag?: string | null }) => q.concept_tag)
         .filter((t): t is string => typeof t === 'string' && t.length > 0);
-      if (conceptTags.length > 0) {
+      // Skip when the teacher has no school_id — never create skills under school_id='' (orphan rows).
+      if (conceptTags.length > 0 && schoolId) {
         skillIdByTag = await resolveSkillIds(admin, {
-          schoolId: schoolId ?? '',
+          schoolId,
           subject,
           tags: conceptTags,
           createdBy: 'ai',
