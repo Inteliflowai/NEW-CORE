@@ -63,6 +63,7 @@ import {
   createAdminSupabaseClient,
   createServerSupabaseClient,
 } from '@/lib/supabase/server';
+import { computeHwQuizDivergence } from '@/lib/signals/computeHwQuizDivergence';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -269,5 +270,54 @@ describe('GET /api/teacher/student/[studentId]/signals', () => {
     const body = await res.json();
     expect(body.risk).toHaveProperty('roster');
     expect(body.risk).toHaveProperty('session');
+  });
+
+  // ── FIX 1 (a2): divergence block must include divergence_flagged boolean ──
+
+  it('FIX1: divergence block includes divergence_flagged=true when divergence_score >= 20', async () => {
+    vi.mocked(computeHwQuizDivergence).mockReturnValueOnce({
+      divergence_score: 20,
+      divergence_direction: 'hw_higher',
+      divergence_trend: null,
+      hw_avg: 80,
+      quiz_avg: 60,
+    });
+
+    const req = new NextRequest('http://localhost/api/teacher/student/s1/signals');
+    const res = await GET(req, makeParams('s1'));
+    const body = await res.json();
+    expect(body.divergence).toHaveProperty('divergence_flagged');
+    expect(body.divergence.divergence_flagged).toBe(true);
+  });
+
+  it('FIX1: divergence block includes divergence_flagged=false when divergence_score < 20', async () => {
+    vi.mocked(computeHwQuizDivergence).mockReturnValueOnce({
+      divergence_score: 19,
+      divergence_direction: 'hw_higher',
+      divergence_trend: null,
+      hw_avg: 79,
+      quiz_avg: 60,
+    });
+
+    const req = new NextRequest('http://localhost/api/teacher/student/s1/signals');
+    const res = await GET(req, makeParams('s1'));
+    const body = await res.json();
+    expect(body.divergence).toHaveProperty('divergence_flagged');
+    expect(body.divergence.divergence_flagged).toBe(false);
+  });
+
+  it('FIX1: divergence_flagged=true at exactly score=20 (floor is inclusive)', async () => {
+    vi.mocked(computeHwQuizDivergence).mockReturnValueOnce({
+      divergence_score: 20,
+      divergence_direction: 'hw_higher',
+      divergence_trend: null,
+      hw_avg: 80,
+      quiz_avg: 60,
+    });
+
+    const req = new NextRequest('http://localhost/api/teacher/student/s1/signals');
+    const res = await GET(req, makeParams('s1'));
+    const body = await res.json();
+    expect(body.divergence.divergence_flagged).toBe(true);
   });
 });

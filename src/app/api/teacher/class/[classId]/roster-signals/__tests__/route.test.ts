@@ -52,6 +52,7 @@ import {
   createServerSupabaseClient,
 } from '@/lib/supabase/server';
 import { diagnose } from '@/lib/signals/diagnosis';
+import { computeHwQuizDivergence } from '@/lib/signals/computeHwQuizDivergence';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,93 @@ function makeMockAdmin() {
         in: () => ({ data: [], error: null }),
       }),
     })),
+  };
+}
+
+/** Admin mock that returns one enrolled student with given quiz/hw scores. */
+function makeMockAdminWithStudent(
+  studentId: string,
+  quizScores: number[],
+  hwScores: number[],
+) {
+  return {
+    from: vi.fn((table: string) => {
+      if (table === 'enrollments') {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                data: [{ student_id: studentId, users: { id: studentId, full_name: 'Test Student' } }],
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'quiz_attempts') {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  data: quizScores.map((s) => ({
+                    id: `qa-${s}`,
+                    mastery_band: 'grade_level',
+                    submitted_at: '2026-06-15T10:00:00Z',
+                    created_at: '2026-06-15T10:00:00Z',
+                    is_complete: true,
+                    score_pct: s,
+                  })),
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'homework_attempts') {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: () => ({
+                  data: hwScores.map((s) => ({
+                    id: `hw-${s}`,
+                    score_pct: s,
+                    teli_hint_count: 0,
+                    submitted_at: '2026-06-15T10:00:00Z',
+                    allow_redo: false,
+                    is_redo: false,
+                  })),
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'misconception_observations') {
+        return {
+          select: () => ({
+            in: () => ({ data: [], error: null }),
+          }),
+        };
+      }
+      // Fallback
+      const chainBase = (): object => ({
+        data: [],
+        error: null,
+        order: () => ({ limit: () => ({ data: [], error: null }) }),
+        in: () => ({ data: [], error: null }),
+        eq: () => chainBase(),
+      });
+      return {
+        select: () => ({
+          eq: () => chainBase(),
+          in: () => ({ data: [], error: null }),
+        }),
+      };
+    }),
   };
 }
 
@@ -219,5 +307,88 @@ describe('GET /api/teacher/class/[classId]/roster-signals', () => {
     expect(callArg).not.toHaveProperty('divergencePts');
     expect(callArg).not.toHaveProperty('hwAvg');
     expect(callArg).not.toHaveProperty('avgHints');
+  });
+
+  // ── FIX 1 (a2): gap-22 student appears in focus_group as low-severity monitor ──
+
+  it('FIX1: gap-22 student surfaces in focus_group at low severity (monitor tier)', async () => {
+    // Mock computeHwQuizDivergence to return score=22
+    vi.mocked(computeHwQuizDivergence).mockReturnValueOnce({
+      divergence_score: 22,
+      divergence_direction: 'hw_higher',
+      divergence_trend: null,
+      hw_avg: 82,
+      quiz_avg: 60,
+    });
+    // Mock diagnose to return a monitor-tier result (as if the real diagnose() with gap 20-24 fires)
+    vi.mocked(diagnose).mockReturnValueOnce({
+      suggestedAction: 'monitor',
+      severity: 1,
+      diagnosis: 'HW/quiz gap of 22 pts — worth monitoring',
+    });
+
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      makeMockAdminWithStudent('stu-gap22', [60], [82]) as unknown as ReturnType<typeof createAdminSupabaseClient>,
+    );
+
+    const req = new NextRequest('http://localhost/api/teacher/class/c1/roster-signals');
+    const res = await GET(req, makeParams('c1'));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Student must appear in focus_group
+    const inFocus = body.focus_group.some((f: { student_id: string }) => f.student_id === 'stu-gap22');
+    expect(inFocus).toBe(true);
+    // Must be low severity
+    const focusEntry = body.focus_group.find((f: { student_id: string }) => f.student_id === 'stu-gap22');
+    expect(focusEntry.diagnosis.severity).toBe(1);
+    expect(focusEntry.diagnosis.suggestedAction).toBe('monitor');
+  });
+
+  it('FIX1: gap-27 student gets escalation (existing sev-1+ profile path), not monitor', async () => {
+    vi.mocked(computeHwQuizDivergence).mockReturnValueOnce({
+      divergence_score: 27,
+      divergence_direction: 'hw_higher',
+      divergence_trend: null,
+      hw_avg: 87,
+      quiz_avg: 60,
+    });
+    vi.mocked(diagnose).mockReturnValueOnce({
+      suggestedAction: 'profile',
+      severity: 1,
+      diagnosis: 'Divergence score 27 — check student profile for context.',
+    });
+
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      makeMockAdminWithStudent('stu-gap27', [60], [87]) as unknown as ReturnType<typeof createAdminSupabaseClient>,
+    );
+
+    const req = new NextRequest('http://localhost/api/teacher/class/c1/roster-signals');
+    const res = await GET(req, makeParams('c1'));
+    const body = await res.json();
+    const focusEntry = body.focus_group.find((f: { student_id: string }) => f.student_id === 'stu-gap27');
+    expect(focusEntry).toBeDefined();
+    expect(focusEntry.diagnosis.suggestedAction).toBe('profile');
+    expect(focusEntry.diagnosis.suggestedAction).not.toBe('monitor');
+  });
+
+  it('FIX1: gap-10 student does NOT appear in focus_group', async () => {
+    vi.mocked(computeHwQuizDivergence).mockReturnValueOnce({
+      divergence_score: 10,
+      divergence_direction: 'aligned',
+      divergence_trend: null,
+      hw_avg: 75,
+      quiz_avg: 65,
+    });
+    vi.mocked(diagnose).mockReturnValueOnce(null);
+
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      makeMockAdminWithStudent('stu-gap10', [65], [75]) as unknown as ReturnType<typeof createAdminSupabaseClient>,
+    );
+
+    const req = new NextRequest('http://localhost/api/teacher/class/c1/roster-signals');
+    const res = await GET(req, makeParams('c1'));
+    const body = await res.json();
+    const inFocus = body.focus_group.some((f: { student_id: string }) => f.student_id === 'stu-gap10');
+    expect(inFocus).toBe(false);
   });
 });
