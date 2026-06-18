@@ -157,7 +157,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // for both currentMasteryBand (C23) and consistency computations
       const { data: quizRows } = await admin
         .from('quiz_attempts')
-        .select('score_pct, mastery_band, submitted_at, is_complete, created_at')
+        .select('score_pct, mastery_band, learning_style, submitted_at, is_complete, created_at')
         .eq('student_id', student_id)
         .order('submitted_at', { ascending: false })
         .limit(20);
