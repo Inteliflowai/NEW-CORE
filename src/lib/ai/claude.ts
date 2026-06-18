@@ -6,7 +6,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import { CLAUDE_GRADING_MODEL } from '@/lib/ai/models';
 import { LlmExhaustedError } from '@/lib/ai/errors';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+let _anthropic: Anthropic | null = null;
+function getAnthropic(): Anthropic { return (_anthropic ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })); }
 
 interface RetryOptions {
   maxRetries?: number;
@@ -53,7 +54,7 @@ export async function resilientClaudeChat(
         controller.abort();
       }, timeoutMs);
 
-      const response = await anthropic.messages.create({
+      const response = await getAnthropic().messages.create({
         model: CLAUDE_GRADING_MODEL,
         max_tokens: params.max_tokens || 1024,
         temperature: params.temperature ?? 0.3,

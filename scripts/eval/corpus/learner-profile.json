@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "id": "interim-learner-profile-1",
+    "scope": "learner-profile",
+    "input": {
+      "rubric_dimensions": {
+        "reasoning_strategy": 3,
+        "use_of_evidence": 3,
+        "creativity_application": 3,
+        "communication": 3,
+        "collaboration": null,
+        "reflection_metacognition": 2,
+        "problem_understanding": 3
+      },
+      "student_profile_summary": "Grade 7, Science; visual learner; grade_level comprehension; strong in analytical tasks",
+      "grade_band": "7"
+    },
+    "expected_output": {
+      "short_narrative": {
+        "student": "You showed strong reasoning and communicated your ideas clearly. You're good at working through problems step by step.",
+        "parent": "Your child demonstrated solid analytical thinking and communicated ideas well during this activity.",
+        "teacher": "Student exhibits consistent grade-level reasoning with strong problem-understanding and communication across dimensions."
+      },
+      "strongest_signals": {
+        "student": "Your best strengths are reasoning through problems and understanding what's being asked.",
+        "parent": "Your child's strongest areas are analytical reasoning and clear communication.",
+        "teacher": "Top signals: reasoning_strategy (3), problem_understanding (3), communication (3) — all at grade-level proficiency."
+      },
+      "growth_areas": {
+        "student": "One area to grow: checking in on your own thinking as you work — what worked, what didn't.",
+        "parent": "An area to develop: reflection and metacognition — pausing to think about how they learned.",
+        "teacher": "Primary growth target: reflection_metacognition (2 — below other dimensions). Consider scaffolded self-assessment prompts."
+      },
+      "teacher_prompt": "Scaffold metacognitive check-ins (e.g. 'what strategy did you use and why?') at key SPARK transitions to build reflection habit.",
+      "teacher_takeaway": "Strong analytical baseline; single growth lever is reflection_metacognition — targeted prompting should close the gap quickly."
+    },
+    "metadata": {
+      "sampled_from_attempt_id": null,
+      "sampled_at": "2026-06-17T00:00:00Z",
+      "barb_reviewed": false,
+      "notes": "INTERIM GOLDEN FIXTURE — replace with Barb-reviewed tuple before arming the real gate (§11.6). Shape conforms to C19 (3 audience objects + teacher_prompt + teacher_takeaway)."
+    }
+  }
+]

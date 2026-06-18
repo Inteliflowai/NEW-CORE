@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ALL_SCOPES } from '../types';
 import { MIN_TUPLES_FOR_GATE, loadCorpus, runScope, runAll } from '../runner';
 
@@ -28,5 +28,22 @@ describe('eval harness', () => {
     const reports = runAll();
     expect(reports).toHaveLength(ALL_SCOPES.length);
     expect(reports.every(r => r.gate === 'pass')).toBe(true);
+  });
+});
+
+describe('C12 — below-50 warning', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('fires console.warn for a below-50 scope so interim PASS is never mistaken for real coverage', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // The interim corpus has 1 tuple — well below MIN_TUPLES_FOR_GATE=50
+    const report = runScope('grading');
+    expect(report.gate).toBe('pass');
+    expect(warnSpy).toHaveBeenCalledOnce();
+    const msg: string = warnSpy.mock.calls[0][0] as string;
+    expect(msg).toMatch(/\[eval\]/);
+    expect(msg).toMatch(/grading/);
+    expect(msg).toMatch(/short-circuit PASS/);
+    expect(msg).toMatch(/NOT real coverage/);
   });
 });

@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "id": "interim-grading-1",
+    "scope": "grading",
+    "input": {
+      "question": "Why does a plant need both light and water for photosynthesis?",
+      "rubric": "A complete answer explains light provides energy and water is a reactant.",
+      "student_response": "the light gives the plant energy and the water is used to make the food",
+      "grade_band": "7",
+      "student_profile_summary": "on track in Science; read_write leaning"
+    },
+    "expected_output": {
+      "score": 1.0,
+      "cognitive_notes": "Connects light-as-energy and water-as-reactant.",
+      "reasoning_pattern": "full_reasoning"
+    },
+    "metadata": {
+      "sampled_from_attempt_id": null,
+      "sampled_at": "2026-06-17T00:00:00Z",
+      "barb_reviewed": false,
+      "notes": "INTERIM GOLDEN FIXTURE — replace with Barb-reviewed tuple before arming the real gate (§11.6)."
+    }
+  }
+]

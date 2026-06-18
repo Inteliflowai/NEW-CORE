@@ -1,1 +1,37 @@
-[]
+[
+  {
+    "id": "interim-spark-rubric-1",
+    "scope": "spark-rubric",
+    "input": {
+      "student_response": "I figured out that the plant needs sunlight by trying to block the light and watching what happened. I think if we could store the energy from plants we could help feed people in places that don't have much sun.",
+      "rubric_definitions": {
+        "reasoning_strategy": "Uses systematic thinking or a clear method to approach the problem.",
+        "use_of_evidence": "Draws on observations or data to support conclusions.",
+        "creativity_application": "Applies ideas in novel or imaginative ways.",
+        "communication": "Expresses ideas clearly and coherently.",
+        "collaboration": "Works productively with others (solo tasks: not observed).",
+        "reflection_metacognition": "Shows awareness of own thinking or learning process.",
+        "problem_understanding": "Accurately grasps the scope and nature of the problem."
+      },
+      "grade_band": "7"
+    },
+    "expected_output": {
+      "dimensions": {
+        "reasoning_strategy": 3,
+        "use_of_evidence": 3,
+        "creativity_application": 3,
+        "communication": 3,
+        "collaboration": null,
+        "reflection_metacognition": 2,
+        "problem_understanding": 3
+      },
+      "content_quality": "engaged"
+    },
+    "metadata": {
+      "sampled_from_attempt_id": null,
+      "sampled_at": "2026-06-17T00:00:00Z",
+      "barb_reviewed": false,
+      "notes": "INTERIM GOLDEN FIXTURE — replace with Barb-reviewed tuple before arming the real gate (§11.6)."
+    }
+  }
+]
