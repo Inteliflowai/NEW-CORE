@@ -21,7 +21,7 @@ V2 has the full **server** auth chain (`createServerSupabaseClient` → `getUser
 - `/auth/auth-code-error` — friendly failure page (the existing callback already redirects here).
 - `/auth/callback` — **extend** the existing handler with a `token_hash` + `type` branch (recovery / magic-link / email-confirm) alongside the current `code` branch.
 - `/` (root) — replace the "coming soon" splash with a redirect: authenticated → role home, else → `/login`.
-- `middleware.ts` — session-cookie refresh + coarse auth gate + login/home redirects.
+- `proxy.ts` (repo root — Next 16 renamed `middleware.ts` → `proxy.ts`/`export function proxy`) — session-cookie refresh + coarse auth gate + login/home redirects.
 - **Server-layout auth guards** — each route-group layout enforces session + role server-side.
 - Placeholder landing pages for `student` / `parent` / `school_admin` so login never dead-ends (their full surfaces are unbuilt).
 
@@ -47,8 +47,9 @@ V2 has the full **server** auth chain (`createServerSupabaseClient` → `getUser
 
 **Key constraint:** V2 uses **route groups** (`(teacher)`, `(student)`, `(parent)`, `(school-admin)`, `(super-admin)`) which **do not put the role in the URL** — teacher pages are `/today`, `/roster`, `/gradebook`…; super-admin is `/provision`. V1's proxy enforced role boundaries via URL prefixes (`/teacher/*`); V2 has no such prefix. So responsibilities split:
 
-### 4.1 `middleware.ts` (repo root) — authentication + session
-- New helper `src/lib/supabase/middleware.ts` exporting `updateSession(request)` per the `@supabase/ssr` Next.js pattern (creates a server client bound to request/response cookies, calls `getUser()`, returns the response with refreshed cookies). **Must not run code between client creation and `getUser()`** (Supabase guidance).
+### 4.1 `proxy.ts` (repo root) — authentication + session
+- **Next 16:** the root file is `proxy.ts` exporting `export function proxy(request: NextRequest)` (NOT `middleware.ts`/`middleware` — deprecated + renamed in Next 16; runtime is Node).
+- New helper `src/lib/supabase/middleware.ts` (internal module name kept; the conventional Supabase-SSR helper) exporting `updateSession(request)` per the `@supabase/ssr` Next.js pattern (creates a server client bound to request/response cookies, calls `getUser()`, returns the response with refreshed cookies). **Must not run code between client creation and `getUser()`** (Supabase guidance).
 - `PUBLIC_ROUTES` allowlist (exact + prefix): `/login`, `/set-password`, `/logout`, `/auth/...` (callback + error), `/trial-expired`, and Next static (`_next`, favicon, `/images`, etc.). Matcher excludes static assets.
 - Logic per request:
   1. Refresh session via `updateSession`.
@@ -67,13 +68,14 @@ V2 has the full **server** auth chain (`createServerSupabaseClient` → `getUser
 ### 4.3 `ROLE_HOME` (V2 paths)
 Add to `src/lib/auth/roles.ts` (or a new `src/lib/auth/roleHome.ts`):
 ```
-teacher        → /today          (built)
-platform_admin → /provision      (built, super-admin group)
-school_admin   → /admin-home     (placeholder, see §5.7)
-school_sysadmin→ /admin-home     (placeholder; school-tier role, NOT super-admin)
-student        → /student-home   (placeholder)
-parent         → /parent-home    (placeholder)
+teacher        → /today            (built)
+platform_admin → /provision        (built, super-admin group)
+school_admin   → /admin/dashboard  (placeholder at the nav's Dashboard target, see §5.7)
+school_sysadmin→ /admin/dashboard  (placeholder; school-tier role, NOT super-admin)
+student        → /student/dashboard(placeholder)
+parent         → /parent/dashboard (placeholder)
 ```
+(These match each route-group nav's existing "Dashboard" link, so the primary nav item resolves — no orphan routes.)
 Placeholder home paths are finalized in the plan; the contract is "every role resolves to a real, guarded page."
 
 ## 5. Page specs
@@ -151,7 +153,7 @@ Vitest 4.x. React pages use `// @vitest-environment jsdom` + `import '@/test/set
 
 ## 8. Build order (for the plan)
 1. `ROLE_HOME` + `requireRole` helper (+ tests).
-2. `src/lib/supabase/middleware.ts` `updateSession` + `middleware.ts` (+ tests).
+2. `src/lib/supabase/middleware.ts` `updateSession` helper + root `proxy.ts` (Next 16) (+ tests).
 3. Callback `token_hash` extension (+ tests).
 4. `BackgroundRotator` + port image assets.
 5. `/login` page (+ tests).
