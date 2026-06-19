@@ -440,7 +440,10 @@ export async function proxy(request: NextRequest) {
   if (user && (pathname === '/' || pathname === '/login')) {
     const { data: profile } = await supabase
       .from('users').select('role').eq('id', user.id).single();
-    return redirectTo(homeForRole(profile?.role ?? null));
+    const home = homeForRole(profile?.role ?? null);
+    // Guard against a redirect loop: a role-less authed user resolves to /login;
+    // if home equals the path we're already on, fall through and render it.
+    if (home !== pathname) return redirectTo(home);
   }
   if (!user && pathname === '/') return redirectTo('/login');
   if (!user && !isPublic(pathname)) return redirectTo('/login', '?expired=true');
