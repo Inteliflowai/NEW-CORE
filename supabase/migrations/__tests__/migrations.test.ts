@@ -78,6 +78,15 @@ describe('0001 identity_roles', () => {
     expect(s()).toMatch(/lift_candidate_id\s+text/);
     expect(s()).toMatch(/lift_data\s+jsonb/);
   });
+
+  it('users.school_id has ON DELETE CASCADE (cleanup must not leave orphaned users)', () => {
+    // The users table school_id FK line must carry ON DELETE CASCADE
+    expect(s()).toMatch(/school_id\s+uuid\s+REFERENCES public\.schools\(id\) ON DELETE CASCADE/);
+  });
+
+  it('users.trial_school_id has ON DELETE SET NULL (trial ref — not a primary ownership FK)', () => {
+    expect(s()).toMatch(/trial_school_id\s+uuid\s+REFERENCES public\.schools\(id\) ON DELETE SET NULL/);
+  });
 });
 
 describe('0002 classes_enrollments', () => {
@@ -131,6 +140,10 @@ describe('0002 classes_enrollments', () => {
     expect(s()).toMatch(/google_grade_sync_enabled\s+boolean/);
     expect(s()).toMatch(/google_feed_enabled\s+boolean/);
     expect(s()).toMatch(/enrollment_count\s+int/);
+  });
+
+  it('classes.school_id has ON DELETE CASCADE (school delete cascades to classes)', () => {
+    expect(s()).toMatch(/school_id\s+uuid\s+NOT NULL REFERENCES public\.schools\(id\) ON DELETE CASCADE/);
   });
 });
 
@@ -271,7 +284,7 @@ describe('0007 licensing', () => {
   });
 
   it('school_licenses is one-per-school with the status gating enum', () => {
-    expect(s()).toMatch(/school_id\s+uuid\s+NOT NULL REFERENCES public\.schools\(id\) UNIQUE/);
+    expect(s()).toMatch(/school_id\s+uuid\s+NOT NULL REFERENCES public\.schools\(id\) ON DELETE CASCADE UNIQUE/);
     expect(s()).toMatch(/status\s+text\s+NOT NULL CHECK \(status IN \('trialing','active','past_due','suspended','cancelled'\)\)/);
   });
 
@@ -351,6 +364,18 @@ describe('0007 licensing', () => {
     expect(s()).toMatch(/GRANT ALL ON public\.license_usage\s+TO authenticated, anon, service_role/);
     expect(s()).toMatch(/GRANT ALL ON public\.license_events\s+TO authenticated, anon, service_role/);
     expect(s()).toMatch(/GRANT ALL ON public\.trial_events\s+TO authenticated, anon, service_role/);
+  });
+
+  it('school_licenses.school_id has ON DELETE CASCADE (license must vanish with school)', () => {
+    expect(s()).toMatch(/school_id\s+uuid\s+NOT NULL REFERENCES public\.schools\(id\) ON DELETE CASCADE UNIQUE/);
+  });
+
+  it('license_usage.school_id has ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/license_usage[\s\S]*?school_id\s+uuid\s+NOT NULL REFERENCES public\.schools\(id\) ON DELETE CASCADE/);
+  });
+
+  it('license_events.school_id has ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/license_events[\s\S]*?school_id\s+uuid\s+NOT NULL REFERENCES public\.schools\(id\) ON DELETE CASCADE/);
   });
 });
 

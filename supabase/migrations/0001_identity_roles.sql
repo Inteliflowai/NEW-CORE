@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS public.schools (
 -- ── Users (canonical identity; role discriminates teacher/student/parent/admin) ──
 CREATE TABLE IF NOT EXISTS public.users (
   id              uuid        PRIMARY KEY REFERENCES auth.users(id),
-  school_id       uuid        REFERENCES public.schools(id),
+  school_id       uuid        REFERENCES public.schools(id) ON DELETE CASCADE,
   role            text        NOT NULL CHECK (role IN ('teacher','student','parent','school_admin','school_sysadmin','platform_admin')),
   full_name       text        NOT NULL,
   email           text        NOT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   lift_data       jsonb,
   -- Trial columns (LIFT 035)
   is_trial_user   boolean     DEFAULT false,
-  trial_school_id uuid        REFERENCES public.schools(id),
+  trial_school_id uuid        REFERENCES public.schools(id) ON DELETE SET NULL,
   created_at      timestamptz DEFAULT now()
 );
 

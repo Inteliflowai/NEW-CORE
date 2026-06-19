@@ -14,7 +14,7 @@
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.school_licenses (
   id                      uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  school_id               uuid        NOT NULL REFERENCES public.schools(id) UNIQUE,
+  school_id               uuid        NOT NULL REFERENCES public.schools(id) ON DELETE CASCADE UNIQUE,
   tier                    text        NOT NULL CHECK (tier IN ('essentials','professional','enterprise')),
   status                  text        NOT NULL CHECK (status IN ('trialing','active','past_due','suspended','cancelled')),
   student_limit           int         NOT NULL DEFAULT 300,
@@ -75,7 +75,7 @@ ALTER TABLE public.school_licenses
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.license_usage (
   id                  uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  school_id           uuid        NOT NULL REFERENCES public.schools(id),
+  school_id           uuid        NOT NULL REFERENCES public.schools(id) ON DELETE CASCADE,
   month               date        NOT NULL,
   students_enrolled   int         DEFAULT 0,
   active_students     int         DEFAULT 0,
@@ -94,7 +94,7 @@ CREATE INDEX IF NOT EXISTS idx_license_usage_school_month
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.license_events (
   id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  school_id     uuid        NOT NULL REFERENCES public.schools(id),
+  school_id     uuid        NOT NULL REFERENCES public.schools(id) ON DELETE CASCADE,
   event_type    text        NOT NULL,
   old_tier      text,
   new_tier      text,

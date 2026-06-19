@@ -10,7 +10,7 @@
 -- ── Classes ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.classes (
   id                        uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  school_id                 uuid        NOT NULL REFERENCES public.schools(id),
+  school_id                 uuid        NOT NULL REFERENCES public.schools(id) ON DELETE CASCADE,
   teacher_id                uuid        REFERENCES public.users(id),
   name                      text        NOT NULL,
   subject                   text,
