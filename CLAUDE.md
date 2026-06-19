@@ -22,7 +22,7 @@ npm run lint     # ESLint (flat config: next/core-web-vitals + next/typescript)
 ```
 
 - **Type-checking:** there is no standalone `typecheck` script; `npm run build` runs the TypeScript pass. For a faster check without emitting, use `npx tsc --noEmit`.
-- **Tests:** no test runner is configured yet. If you add one, wire it into `package.json` `scripts` and document the single-test invocation here.
+- **Tests:** Vitest 4.x (+ `@testing-library/react`, `jsdom`). `npm test` (run-once) · `npm run test:watch` · single file: `npx vitest run <path>`. Default env is `node`; **React component tests must start with `// @vitest-environment jsdom` then `import '@/test/setup-dom';`** (the established pattern — follow each existing file's header). `npm run prebuild` runs the **un-bypassable WCAG-AA contrast gate** (`npm run a11y` → `scripts/a11y/contrast-check.ts`).
 
 ## Architecture
 
@@ -33,6 +33,24 @@ Standard Next.js App Router scaffold; the structure is conventional, so only the
 - **Styling:** Tailwind CSS **v4**, configured via `@tailwindcss/postcss` in `postcss.config.mjs` — there is no `tailwind.config.js`. Global styles and Tailwind layers are in `src/app/globals.css`.
 - **`next.config.ts`** is currently empty; add framework config there (TypeScript, not JSON).
 - **`AGENTS.md`** holds the cross-tool agent rules and is the source of the Next.js-version warning above.
+
+## CORE v2 — status, disciplines & roadmap (read before building features)
+
+**Product framing.** V2 is a **Beta, not an MVP** — a re-build of the proven V1 product (`C:/users/inteliflow/core`, the UX/feature reference) to contract scope. Pilots are the feedback engine before a fully-tested GA. Aim for **V1-parity** on the pilot-relevant surface; don't trim to a bare MVP, don't gold-plate beyond V1.
+
+**Decision trail is in memory.** `MEMORY.md` (auto-loaded) indexes the project decisions — **read it first.** Designs live under `docs/superpowers/specs/`, plans under `docs/superpowers/plans/` (each plan has a `grounding/` folder of verbatim current-code facts + a review log).
+
+**Built & merged (Plan 4b Foundation, on `main`):** demo seed (`scripts/seedDemo.ts`/`resetDemo.ts`, `src/lib/demo/`), the `provisionTrial` engine + trial libs (`src/lib/trial/`), `GET /api/teacher/classes` + `STAFF_ROLES`, shared component-kit tweaks (`src/components/core/`), 6 copy helpers (`src/lib/copy/`), the `(teacher)` nav shell + placeholder route slots, and the super-admin `POST /api/admin/provision-trial` + `(super-admin)/provision` UI. The 8 teacher **screens** are designed (see the IA memory) but not yet built. Live-DB seed/provision runs are deferred (need `.env.local` + a real Supabase).
+
+**Binding disciplines (non-negotiable on every surface):**
+- **Four-audience discipline:** student/parent surfaces never show the mastery-band enum or a raw risk number (band label only); CL verbs / diagnoses / divergence / misconceptions are **teacher-only**; growth is "you vs your own past" (never peer-relative, never fabricated — cold-start instead); observational, not diagnostic. Enforced at the string boundary in `src/lib/copy/` (pure helpers + `leakGuard`).
+- **"Assignments", never "Homework"** in any UI/copy (legacy term survives only in DB identifiers like `homework_attempts`).
+- **WCAG-AA + deep-ink:** no hardcoded hex / arbitrary `[var(--..)]` in components — Tier-2 token classes only; content text is deep-ink (`text-fg`), not `text-fg-muted`.
+- **Auth chain (every protected route):** `await createServerSupabaseClient()` → `auth.getUser()` → STAFF_ROLES gate → object-level IDOR guard (`src/lib/auth/guards.ts`) → `createAdminSupabaseClient()` (synchronous; reads `SUPABASE_SECRET_KEY`; **bypasses RLS — RLS is NOT the IDOR backstop**).
+
+**Dev workflow.** Brainstorm → spec → `writing-plans` → **subagent-driven-development** (fresh implementer per task + task review + final whole-branch review). Ledger at `.git/sdd/progress.md`. **The in-house adversarial Workflow is the primary review** — Codex has been unreliable/hung; don't block on it.
+
+**Next up (not yet built):** a **universal auth-entry UI** — `/login` (Trial/Pilot/Clients all sign in here; port V1's slide-image login design), `/set-password`, `/logout`, `/auth/auth-code-error`, `/trial-expired`. V2 currently has **no login UI** (only the server auth chain + `src/app/auth/callback/route.ts`), so nothing is reachable until this lands. Then self-serve **trial onboarding** (`docs/superpowers/specs/2026-06-19-trial-onboarding-design.md`). Pilots = demo-seeded real clients now, real roster on convert. Printable reports = future.
 
 ## Deployment
 
