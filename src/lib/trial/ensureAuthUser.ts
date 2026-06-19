@@ -17,6 +17,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logTrialEvent } from '@/lib/trial/logTrialEvent';
 
 /** Paginate listUsers to resolve an auth id by email (getUserByEmail does NOT exist — C13). */
 export async function findAuthIdByEmail(
@@ -56,14 +57,17 @@ export async function ensureAuthUser({
   role,
   school_id,
 }: EnsureAuthUserParams): Promise<string> {
-  // 1. Resolve auth identity (the only source of truth — email is NOT unique).
+  // 1. Resolve auth identity
   const { data: created, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
     user_metadata: { full_name },
   });
+
   let id = created?.user?.id ?? null;
+  const isNewAuthUser = id !== null; // track: true = genuinely created by this call
+
   if (!id) {
     if (error && /already|exist|registered/i.test(error.message)) {
       id = await findAuthIdByEmail(admin, email);
@@ -71,25 +75,56 @@ export async function ensureAuthUser({
     if (!id) throw error ?? new Error(`Could not ensure auth user ${email}`);
   }
 
-  // 2. Reconcile the public.users row by ID. NEVER overwrite role/school_id on a row we didn't create.
+  // 2. Reconcile public.users row — only by ID. NEVER overwrite role/school_id.
   const { data: existing, error: selErr } = await admin
     .from('users')
     .select('id, role, school_id')
     .eq('id', id)
     .maybeSingle();
   if (selErr) throw selErr;
+
   if (existing) {
-    if (existing.role !== role || (existing.school_id && existing.school_id !== school_id)) {
+    // Strict match: school_id must equal the requested school_id (null is NOT a match)
+    const schoolMatches = existing.school_id === school_id;
+    const roleMatches = existing.role === role;
+
+    if (!roleMatches || !schoolMatches) {
+      // Audit the refused rebind attempt before throwing
+      await logTrialEvent({
+        admin,
+        schoolId: school_id,
+        eventType: 'trial_signup',
+        metadata: {
+          audit_action: 'rebind_refused',
+          email,
+          requested_role: role,
+          requested_school_id: school_id,
+          existing_role: existing.role,
+          existing_school_id: existing.school_id,
+        },
+      });
       throw new Error(
         `Refusing to rebind existing user ${email} (role/school mismatch) — not seed-owned`
       );
     }
-    await admin.from('users').update({ full_name }).eq('id', id);  // only non-identity fields
-  } else {
+    // Update only non-identity fields
+    await admin.from('users').update({ full_name }).eq('id', id);
+  } else if (isNewAuthUser) {
+    // Only INSERT the public.users row when createUser actually created a new auth user
     const { error: insErr } = await admin
       .from('users')
       .insert({ id, email, full_name, role, school_id });
     if (insErr) throw insErr;
   }
+  // If !isNewAuthUser and !existing: the auth user exists but has no public row
+  // (orphaned auth user). Don't insert — the mismatch check above covers this
+  // scenario when there IS an existing row; if there's no row at all for a
+  // found-existing auth user, that's an inconsistency we should surface:
+  else {
+    throw new Error(
+      `Auth user ${email} exists in auth.users but has no public.users row — manual remediation required`
+    );
+  }
+
   return id;
 }
