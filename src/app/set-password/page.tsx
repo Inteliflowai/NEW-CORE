@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, act } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
@@ -19,12 +19,12 @@ export default function SetPasswordPage() {
     let settled = false;
     const markReady = () => {
       settled = true;
-      act(() => setReady(true));
+      setReady(true);
     };
     // Stop spinning after a few seconds if no recovery/sign-in session arrives,
     // and show an actionable fallback instead of hanging forever (spec §5.2).
     const timer = setTimeout(() => {
-      if (!settled) act(() => setNoLink(true));
+      if (!settled) setNoLink(true);
     }, 3000);
 
     supabase.auth.getSession().then(({ data }) => {
