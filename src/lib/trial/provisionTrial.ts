@@ -46,7 +46,7 @@ export interface ProvisionTrialInput {
 
 export interface TrialCredential {
   email: string;
-  password: string;
+  // password intentionally omitted from storage — travels only in ProvisionTrialResult.password
 }
 
 export interface ProvisionTrialResult {
@@ -98,10 +98,11 @@ export async function provisionTrial(input: ProvisionTrialInput): Promise<Provis
 
   // Cleanup helper for the hard-fail path.
   const cleanupAndThrow = async (message: string): Promise<never> => {
-    try {
-      await admin.from('schools').delete().eq('id', schoolId);
-    } catch (e) {
-      console.error('[trial] cleanup of school row failed:', (e as Error).message);
+    const { error: cleanupErr } = await admin.from('schools').delete().eq('id', schoolId);
+    if (cleanupErr) {
+      throw new Error(
+        `provisionTrial: cleanup failed (${cleanupErr.message}) while handling: ${message}`
+      );
     }
     throw new Error(message);
   };
@@ -175,16 +176,20 @@ export async function provisionTrial(input: ProvisionTrialInput): Promise<Provis
     console.error('[trial] first-student provisioning failed (soft):', (e as Error).message);
   }
 
-  // ── Step 5: UPDATE schools.trial_credentials (shared password per role) ──────
+  // ── Step 5: UPDATE schools.trial_credentials (email-only per role) ──────────
   const credentials: Record<string, TrialCredential> = {
-    teacher: { email: teacherEmail, password },
-    parent: { email: parentEmail, password },
-    student: { email: firstStudentEmail, password },
+    teacher: { email: teacherEmail },
+    parent:  { email: parentEmail },
+    student: { email: firstStudentEmail },
   };
-  try {
-    await admin.from('schools').update({ trial_credentials: credentials }).eq('id', schoolId);
-  } catch (e) {
-    console.error('[trial] trial_credentials update failed (soft):', (e as Error).message);
+  {
+    const { error } = await admin
+      .from('schools')
+      .update({ trial_credentials: credentials })
+      .eq('id', schoolId);
+    if (error) {
+      console.error('[trial] trial_credentials update failed (soft):', error.message);
+    }
   }
 
   // ── Step 6: Seed the demo dataset (soft-fail per step internally) ────────────
