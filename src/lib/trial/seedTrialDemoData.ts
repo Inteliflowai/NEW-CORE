@@ -108,10 +108,11 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
       const sid = studentIds[enr.student_key];
       if (!sid) continue;
       try {
-        await admin.from('enrollments').upsert(
+        const { error } = await admin.from('enrollments').upsert(
           { class_id: classId, student_id: sid, is_active: true },
           { onConflict: 'class_id,student_id' }
         );
+        if (error) throw error;
       } catch (e) {
         enrollFailCount++;
         if (!enrollFirstError) enrollFirstError = (e as Error).message;
@@ -130,11 +131,13 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
   const alexId = firstKey ? studentIds[firstKey] : undefined;
   if (parentId && alexId) {
     try {
-      await admin.from('users').update({ parent_id: parentId }).eq('id', alexId);
-      await admin.from('guardians').upsert(
+      const { error: upErr } = await admin.from('users').update({ parent_id: parentId }).eq('id', alexId);
+      if (upErr) throw upErr;
+      const { error: gErr } = await admin.from('guardians').upsert(
         { parent_id: parentId, student_id: alexId },
         { onConflict: 'parent_id,student_id' }
       );
+      if (gErr) throw gErr;
       recordOk('guardian_link');
     } catch (e) {
       recordSkip('guardian_link', (e as Error).message);
@@ -182,6 +185,8 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
       });
       if (error) throw error;
 
+      let qqFailCount = 0;
+      let qqFirstError = '';
       for (const q of rows.quiz_questions) {
         const { error: qErr } = await admin.from('quiz_questions').insert({
           quiz_id: quizId,
@@ -191,9 +196,15 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
         });
         if (qErr) {
           console.error(`[trial-seed] quiz_question ${q.position} failed (soft):`, qErr.message);
+          qqFailCount++;
+          if (!qqFirstError) qqFirstError = qErr.message;
         }
       }
-      recordOk('quiz');
+      if (qqFailCount > 0) {
+        recordSkip('quiz', `${qqFailCount}/${rows.quiz_questions.length} quiz_questions failed: ${qqFirstError}`);
+      } else {
+        recordOk('quiz');
+      }
     } catch (e) {
       quizId = null;
       recordSkip('quiz', (e as Error).message);
@@ -210,7 +221,7 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
       const sid = studentIds[qa.student_key];
       if (!sid) continue;
       try {
-        await admin.from('quiz_attempts').insert({
+        const { error } = await admin.from('quiz_attempts').insert({
           quiz_id: quizId,
           student_id: sid,
           score_pct: qa.score_pct,
@@ -219,6 +230,7 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
           is_complete: true,
           grading_status: 'complete',
         });
+        if (error) throw error;
       } catch (e) {
         qaFailCount++;
         if (!qaFirstError) qaFirstError = (e as Error).message;
@@ -372,9 +384,10 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
         };
         if (sls.last_reteach_outcome) row.last_reteach_outcome = sls.last_reteach_outcome;
 
-        await admin.from('skill_learning_state').upsert(row, {
+        const { error } = await admin.from('skill_learning_state').upsert(row, {
           onConflict: 'student_id,skill_id',
         });
+        if (error) throw error;
       } catch (e) {
         slsFailCount++;
         if (!slsFirstError) slsFirstError = (e as Error).message;
@@ -397,7 +410,7 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
       const sid = studentIds[m.student_key];
       if (!sid) continue;
       try {
-        await admin.from('misconception_observations').insert({
+        const { error } = await admin.from('misconception_observations').insert({
           student_id: sid,
           skill_id: skillId,
           school_id: schoolId,
@@ -405,6 +418,7 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
           reasoning_pattern: m.reasoning_pattern,
           observed_at: m.observed_at,
         });
+        if (error) throw error;
       } catch (e) {
         miscFailCount++;
         if (!miscFirstError) miscFirstError = (e as Error).message;
@@ -426,7 +440,7 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
     const sid = studentIds[snap.student_key];
     if (!sid) continue;
     try {
-      await admin.from('student_model_snapshots').upsert(
+      const { error } = await admin.from('student_model_snapshots').upsert(
         {
           student_id: sid,
           school_id: schoolId,
@@ -444,6 +458,7 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
         },
         { onConflict: 'student_id,snapshot_date' }
       );
+      if (error) throw error;
     } catch (e) {
       snapFailCount++;
       if (!snapFirstError) snapFirstError = (e as Error).message;

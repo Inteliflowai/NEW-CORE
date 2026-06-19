@@ -1,6 +1,69 @@
 import { describe, it, expect, vi } from 'vitest';
 import { seedTrialDemoData, type SeedReport } from '../seedTrialDemoData';
 
+// Returns an admin mock whose insert/upsert/update on `errorTable` resolves { error } (no throw).
+function makeReturnedErrorAdmin(errorTable: string, errMsg = 'returned error') {
+  const op = (table: string) => async () => ({ error: table === errorTable ? { message: errMsg } : null });
+  return {
+    from: vi.fn((table: string) => ({
+      insert: vi.fn(op(table)),
+      upsert: vi.fn(op(table)),
+      update: vi.fn(() => ({ eq: vi.fn(op(table)) })),
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          eq: vi.fn(() => ({ is: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: null })) })), maybeSingle: vi.fn(async () => ({ data: null, error: null })) })),
+          is: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: null })) })),
+          maybeSingle: vi.fn(async () => ({ data: null, error: null })),
+        })),
+      })),
+    })),
+    auth: { admin: {
+      createUser: vi.fn(async () => ({ data: { user: { id: 'stu-' + Math.random() } }, error: null })),
+      listUsers: vi.fn(async () => ({ data: { users: [] }, error: null })),
+      deleteUser: vi.fn(async () => ({ error: null })),
+    } },
+  } as unknown as import('@supabase/supabase-js').SupabaseClient;
+}
+
+const seedInput = (admin: import('@supabase/supabase-js').SupabaseClient) => ({
+  admin, schoolId: 'school-1', schoolIdShort: 'school-1'.slice(0, 8),
+  teacherId: 'teacher-1', firstStudentId: 'student-1', parentId: 'parent-1', password: 'TestPass#1234',
+});
+
+describe('seedTrialDemoData — returned {error} is observable (C1)', () => {
+  it.each([
+    ['enrollments', 'enrollments'],
+    ['quiz_attempts', 'quiz_attempts'],
+    ['skill_learning_state', 'skill_learning_state'],
+    ['misconception_observations', 'misconceptions'],
+    ['student_model_snapshots', 'snapshots'],
+  ])('a returned {error} on %s lands the %s step in skipped (not seeded)', async (table, step) => {
+    const admin = makeReturnedErrorAdmin(table);
+    const report = await seedTrialDemoData(seedInput(admin));
+    expect(report.skipped.some((s) => s.step === step), `${step} should be skipped`).toBe(true);
+    expect(report.seeded).not.toContain(step);
+  });
+
+  it('a returned {error} on guardians lands guardian_link in skipped', async () => {
+    const admin = makeReturnedErrorAdmin('guardians');
+    const report = await seedTrialDemoData(seedInput(admin));
+    expect(report.skipped.some((s) => s.step === 'guardian_link')).toBe(true);
+    expect(report.seeded).not.toContain('guardian_link');
+  });
+
+  it('a returned {error} on quiz_questions lands the quiz step in skipped', async () => {
+    const admin = makeReturnedErrorAdmin('quiz_questions');
+    const report = await seedTrialDemoData(seedInput(admin));
+    expect(report.skipped.some((s) => s.step === 'quiz')).toBe(true);
+    expect(report.seeded).not.toContain('quiz');
+  });
+
+  it('still never throws even when a step returns {error}', async () => {
+    const admin = makeReturnedErrorAdmin('snapshots');
+    await expect(seedTrialDemoData(seedInput(admin))).resolves.toBeDefined();
+  });
+});
+
 // Minimal admin stub that always fails the class insert.
 // The mock's select().eq() chain is made fully chainable so Step 9a's
 // pre-query (.select().eq().eq().is().maybeSingle()) resolves correctly
