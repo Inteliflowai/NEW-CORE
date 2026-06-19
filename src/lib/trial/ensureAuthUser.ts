@@ -108,18 +108,22 @@ export async function ensureAuthUser({
       );
     }
     // Update only non-identity fields
-    await admin.from('users').update({ full_name }).eq('id', id);
+    const { error: updErr } = await admin.from('users').update({ full_name }).eq('id', id);
+    if (updErr) console.error(`[ensureAuthUser] full_name reconcile failed for ${id} (non-fatal):`, updErr.message);
   } else if (isNewAuthUser) {
     // Only INSERT the public.users row when createUser actually created a new auth user
     const { error: insErr } = await admin
       .from('users')
       .insert({ id, email, full_name, role, school_id });
     if (insErr) {
-      // Roll back the auth user we just created so we don't strand an orphaned
-      // auth.users entry (not cascade-covered) that would wedge retries via the
-      // orphan guard below. Best-effort: still throw the original insert error.
-      const { error: delErr } = await admin.auth.admin.deleteUser(id);
-      if (delErr) console.error(`[ensureAuthUser] rollback deleteUser(${id}) failed:`, delErr.message);
+      // Best-effort rollback of the auth user we just created. Never let a rollback
+      // failure (returned OR thrown) mask the original insert error.
+      try {
+        const { error: delErr } = await admin.auth.admin.deleteUser(id);
+        if (delErr) console.error(`[ensureAuthUser] rollback deleteUser(${id}) failed:`, delErr.message);
+      } catch (delEx) {
+        console.error(`[ensureAuthUser] rollback deleteUser(${id}) threw:`, (delEx as Error).message);
+      }
       throw insErr;
     }
   }

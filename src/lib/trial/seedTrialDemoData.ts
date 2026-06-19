@@ -172,42 +172,32 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
   // ── Step 6: Quiz + 5 quiz_questions (soft fail) ──────────────────────────────
   let quizId: string | null = null;
   if (classId && lessonId) {
+    let qqFailCount = 0;
+    let qqFirstError = '';
+    let quizFailReason: string | null = null;
     try {
       quizId = randomUUID();
       const { error } = await admin.from('quizzes').insert({
-        id: quizId,
-        lesson_id: lessonId,
-        class_id: classId,
-        teacher_id: teacherId,
-        title: rows.quiz.title,
-        status: rows.quiz.status,
-        published_at: now.toISOString(),
+        id: quizId, lesson_id: lessonId, class_id: classId, teacher_id: teacherId,
+        title: rows.quiz.title, status: rows.quiz.status, published_at: now.toISOString(),
       });
       if (error) throw error;
-
-      let qqFailCount = 0;
-      let qqFirstError = '';
       for (const q of rows.quiz_questions) {
         const { error: qErr } = await admin.from('quiz_questions').insert({
-          quiz_id: quizId,
-          position: q.position,
-          question_type: q.question_type,
-          question_text: q.question_text,
+          quiz_id: quizId, position: q.position, question_type: q.question_type, question_text: q.question_text,
         });
-        if (qErr) {
-          console.error(`[trial-seed] quiz_question ${q.position} failed (soft):`, qErr.message);
-          qqFailCount++;
-          if (!qqFirstError) qqFirstError = qErr.message;
-        }
-      }
-      if (qqFailCount > 0) {
-        recordSkip('quiz', `${qqFailCount}/${rows.quiz_questions.length} quiz_questions failed: ${qqFirstError}`);
-      } else {
-        recordOk('quiz');
+        if (qErr) { qqFailCount++; if (!qqFirstError) qqFirstError = qErr.message; }
       }
     } catch (e) {
       quizId = null;
-      recordSkip('quiz', (e as Error).message);
+      quizFailReason = (e as Error).message;
+    }
+    if (quizFailReason) {
+      recordSkip('quiz', quizFailReason);
+    } else if (qqFailCount > 0) {
+      recordSkip('quiz', `${qqFailCount}/${rows.quiz_questions.length} quiz_questions failed: ${qqFirstError}`);
+    } else {
+      recordOk('quiz');
     }
   } else {
     recordSkip('quiz', `prerequisite ${!classId ? 'class' : 'lesson'} missing`);

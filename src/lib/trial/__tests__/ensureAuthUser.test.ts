@@ -283,4 +283,34 @@ describe('ensureAuthUser', () => {
     expect(call.schoolId).toBeNull();                          // durable: not tied to the soon-deleted school
     expect(call.metadata).toMatchObject({ audit_action: 'rebind_refused', requested_school_id: 'school-1' });
   });
+
+  it('rollback that THROWS does not mask the original insert error (C2 hardening)', async () => {
+    const deleteUser = vi.fn(async () => { throw new Error('network down'); }); // rejects
+    const fromMock = vi.fn(() => ({
+      select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: null })) })) })),
+      insert: vi.fn(async () => ({ error: { message: 'insert boom' } })),
+      update: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })),
+    }));
+    const admin = {
+      auth: { admin: { createUser: vi.fn(async () => ({ data: { user: { id: 'new-1' } }, error: null })), listUsers: vi.fn(async () => ({ data: { users: [] }, error: null })), deleteUser } },
+      from: fromMock,
+    } as unknown as import('@supabase/supabase-js').SupabaseClient;
+    await expect(ensureAuthUser({ admin, email: 'n@s.com', password: 'pw', full_name: 'N', role: 'teacher', school_id: 'school-1' }))
+      .rejects.toThrow(/insert boom/i); // NOT "network down"
+    expect(deleteUser).toHaveBeenCalledWith('new-1');
+  });
+
+  it('existing-row full_name reconcile failure is non-fatal (returns the id, does not throw) (Fix C)', async () => {
+    const fromMock = vi.fn(() => ({
+      select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: { id: 'existing-auth-id', role: 'teacher', school_id: 'school-1' }, error: null })) })) })),
+      update: vi.fn(() => ({ eq: vi.fn(async () => ({ error: { message: 'update boom' } })) })), // returns {error}
+      insert: vi.fn(async () => ({ error: null })),
+    }));
+    const admin = {
+      auth: { admin: { createUser: vi.fn(async () => ({ data: null, error: { message: 'User already registered' } })), listUsers: vi.fn(async () => ({ data: { users: [{ id: 'existing-auth-id', email: 'taken@school.com' }] }, error: null })), deleteUser: vi.fn(async () => ({ error: null })) } },
+      from: fromMock,
+    } as unknown as import('@supabase/supabase-js').SupabaseClient;
+    const id = await ensureAuthUser({ admin, email: 'taken@school.com', password: 'pw', full_name: 'Taken', role: 'teacher', school_id: 'school-1' });
+    expect(id).toBe('existing-auth-id'); // resolves; the failed full_name update did not throw
+  });
 });
