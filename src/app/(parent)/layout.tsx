@@ -3,12 +3,14 @@
 // The root layout (src/app/layout.tsx) owns <html>/<body> — this nests inside it.
 
 import { RoleLayout } from '@/components/core/RoleLayout';
+import { requireRole } from '@/lib/auth/requireRole';
 
-export default function ParentLayout({
+export default async function ParentLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireRole(['parent']);
   const nav = (
     <>
       <a href="/parent/dashboard" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
