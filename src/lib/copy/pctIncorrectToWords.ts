@@ -8,6 +8,11 @@ import { assertNoLeak } from './leakGuard';
 /**
  * Maps a proportion-incorrect value to soft words with no digits.
  *
+ * Input contract: pass 0–100 for a percentage (e.g. 75 for 75% incorrect, NOT 0.75);
+ * values ≥ 1 are treated as a 0–100 percentage and divided by 100 internally.
+ * Values in [0, 1) are treated as an already-normalised 0–1 proportion.
+ * Passing 1.0 means "1% incorrect" (proportion path), NOT "100%".
+ *
  * Accepts 0–1 (proportion) or 0–100 (percentage) — values ≥ 1 are normalised by /100.
  *
  * Buckets (after normalisation to 0–1):
