@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - **Next.js 16 + React 19.** `cookies()`/`headers()` are async; `params`/`searchParams` are async. Verify framework APIs against `node_modules/next/dist/docs/01-app/` before writing — do not assume.
-- **🔴 `proxy.ts`, NOT `middleware.ts` (Next 16).** Next 16 deprecated the `middleware` filename + named export and renamed them to **`proxy`** (`node_modules/next/dist/docs/01-app/02-guides/upgrading/version-16.md:625-648`, `03-api-reference/03-file-conventions/proxy.md`). The root file is **`proxy.ts`** exporting **`export function proxy(request: NextRequest)`** (may be `async`) + `export const config = { matcher }`. The `proxy` runtime is **Node.js** (not edge) and is not configurable — fine for `@supabase/ssr`. Do **not** create `middleware.ts`.
+- **🔴 `src/proxy.ts` ALREADY EXISTS — extend it; never create `middleware.ts` (Next 16).** Next 16 deprecated `middleware`→`proxy` (`node_modules/next/dist/docs/01-app/02-guides/upgrading/version-16.md:625-648`). P1 already shipped `src/proxy.ts` with the correct `export function proxy(request: NextRequest)` + `config.matcher` and the `@supabase/ssr` session-refresh block — but it does NOT gate/redirect. Task 3 extends that file; it does not create a new root file or a helper. The `proxy` runtime is Node.js (fine for `@supabase/ssr`).
 - **Supabase clients (exact names):** browser = `createBrowserSupabaseClient()` from `@/lib/supabase/client` (reads `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`); server = `await createServerSupabaseClient()` from `@/lib/supabase/server`; admin = `createAdminSupabaseClient()` (server-only, bypasses RLS). **Never** use `getSession()` for auth decisions — use `getUser()`.
 - **Tokens-only styling (review-enforced).** Use Tier-2 token utility classes: `bg-bg`, `bg-surface`, `text-fg`, `text-fg-muted`, `bg-brand`, `text-brand`, `text-fg-on-brand`, `bg-brand-surface`, `text-brand-fg`, `border-fg-muted`, `rounded`, `rounded-lg`, `shadow`, `shadow-pop`, fonts `font-sans`/`font-display`. Content text is `text-fg` (deep-ink), never `text-fg-muted`. The slideshow scrim/captions are the only sanctioned exception (spec G3): hard-set Tier-1 primitives `var(--ink-950)` / `var(--white)` via inline `style` on the slideshow element. No other hardcoded hex.
 - **a11y gate:** `npm run a11y` (runs in `prebuild`) parses `globals.css` token pairs only. This plan does not modify `globals.css`, so the gate stays green — but run it to confirm.
@@ -289,30 +289,28 @@ git commit -m "feat(auth): requireRole server-layout guard (role + trial-expiry 
 
 ---
 
-### Task 3: Supabase session helper + root `proxy.ts` (Next 16)
+### Task 3: Extend the existing `src/proxy.ts` with the auth gate + redirects
 
 **Files:**
-- Create: `src/lib/supabase/middleware.ts` (the `updateSession` helper — internal module name kept; it's the conventional Supabase-SSR helper)
-- Create: `proxy.ts` (repo root) — **NOT `middleware.ts`** (Next 16 rename; see Global Constraints)
-- Test: `src/lib/supabase/__tests__/middleware.test.ts`
+- Modify: `src/proxy.ts` — **it already exists** (P1; already correctly named `proxy` / `export function proxy` per Next 16, already refreshes the session via `getUser()` but does NOT gate or redirect). Add the auth gate + login/home redirects. Do **not** rewrite the cookie/refresh block, do **not** create a new root file or a helper, do **not** create `middleware.ts`.
+- Test: `src/__tests__/proxy.test.ts` (new — there is no proxy test yet)
 
 **Interfaces:**
-- Consumes: `createServerClient` (`@supabase/ssr`), `NextResponse`/`NextRequest` (`next/server`), `homeForRole` (Task 1).
-- Produces: `async function updateSession(request: NextRequest): Promise<NextResponse>`. Behavior: refreshes the session cookie; authed on `/` or `/login` → redirect to `homeForRole(role)`; unauthed on `/` or a non-public route → redirect to `/login?expired=true`; otherwise pass through with refreshed cookies. Public prefixes: `/login`, `/set-password`, `/logout`, `/auth`, `/trial-expired`.
+- Consumes: the existing `createServerClient` cookie/refresh block in `src/proxy.ts`; `homeForRole` (Task 1).
+- Produces: `proxy(request)` now, after `getUser()`: authed on `/` or `/login` → redirect `homeForRole(role)`; unauthed on `/` → `/login`; unauthed on a non-public route → `/login?expired=true`; otherwise return the existing refreshed `supabaseResponse`. `PUBLIC_PREFIXES = ['/login','/set-password','/logout','/auth','/trial-expired']`. **Keep the existing `config.matcher` unchanged.**
 
-> **Verify first:** read `node_modules/next/dist/docs/01-app/` middleware docs and the `@supabase/ssr` cookie pattern (mirrors `src/lib/supabase/server.ts`'s `getAll`/`setAll`). The "no code between `createServerClient` and `getUser()`" rule is load-bearing.
+> The session-refresh + cookie plumbing in `src/proxy.ts` is already correct (P1) — capture the `getUser()` result (currently discarded) and layer the redirects on top. For redirects, copy `supabaseResponse`'s cookies onto the redirect so the refreshed session survives. "No code between `createServerClient` and `getUser()`" still holds.
 
 - [ ] **Step 1: Write the failing test**
 
 ```ts
-// src/lib/supabase/__tests__/middleware.test.ts
+// src/__tests__/proxy.test.ts
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const getUser = vi.fn();
 // Table-aware: the impl reads ONLY from('users').select('role').eq('id', user.id).
-// Throwing on any other table catches an impl that queries the wrong table.
 const from = vi.fn((table: string) => {
-  if (table !== 'users') throw new Error(`Unexpected table in proxy session: ${table}`);
+  if (table !== 'users') throw new Error(`Unexpected table in proxy: ${table}`);
   return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: async () => ({ data: { role: 'teacher' } }) };
 });
 // Capture the cookie adapter so a test can simulate Supabase's session refresh.
@@ -325,7 +323,7 @@ vi.mock('@supabase/ssr', () => ({
 }));
 
 import { NextRequest } from 'next/server';
-import { updateSession } from '../middleware';
+import { proxy } from '../proxy';
 
 function req(path: string): NextRequest {
   return new NextRequest(new URL(`https://app.test${path}`));
@@ -337,47 +335,47 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'pk';
 });
 
-describe('updateSession (Next 16 proxy session)', () => {
+describe('proxy (auth gate + session refresh)', () => {
   it('passes through a public route when unauthenticated', async () => {
     getUser.mockResolvedValue({ data: { user: null } });
-    const res = await updateSession(req('/login'));
+    const res = await proxy(req('/login'));
     expect(res.headers.get('location')).toBeNull();
   });
 
   it('redirects unauthenticated user on a protected route to /login?expired=true', async () => {
     getUser.mockResolvedValue({ data: { user: null } });
-    const res = await updateSession(req('/today'));
+    const res = await proxy(req('/today'));
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('https://app.test/login?expired=true');
   });
 
   it('redirects unauthenticated user on / to /login', async () => {
     getUser.mockResolvedValue({ data: { user: null } });
-    const res = await updateSession(req('/'));
+    const res = await proxy(req('/'));
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('https://app.test/login');
   });
 
   it('redirects authenticated user away from /login to role home', async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
-    const res = await updateSession(req('/login'));
+    const res = await proxy(req('/login'));
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('https://app.test/today');
   });
 
   it('passes through a protected route when authenticated', async () => {
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
-    const res = await updateSession(req('/today'));
+    const res = await proxy(req('/today'));
     expect(res.headers.get('location')).toBeNull();
   });
 
-  it('propagates a cookie written via setAll onto the response (session refresh)', async () => {
+  it('preserves a cookie written via setAll on a pass-through (session refresh)', async () => {
     getUser.mockImplementation(async () => {
       // Simulate Supabase refreshing the session cookie during getUser().
       capturedCookies.setAll([{ name: 'sb-access-token', value: 'refreshed', options: {} }]);
-      return { data: { user: { id: 'u1' } } };
+      return { data: { user: null } }; // /login is public → pass-through returns supabaseResponse
     });
-    const res = await updateSession(req('/today'));
+    const res = await proxy(req('/login'));
     expect(res.cookies.get('sb-access-token')?.value).toBe('refreshed');
   });
 });
@@ -385,58 +383,57 @@ describe('updateSession (Next 16 proxy session)', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `npx vitest run src/lib/supabase/__tests__/middleware.test.ts`
-Expected: FAIL — cannot resolve `../middleware`.
+Run: `npx vitest run src/__tests__/proxy.test.ts`
+Expected: FAIL — the existing `proxy` never redirects (returns `supabaseResponse` for every path), so the redirect-location assertions fail. (The import resolves; this is a behavior RED, not an import error.)
 
-- [ ] **Step 3: Write minimal implementation**
+- [ ] **Step 3: Modify `src/proxy.ts` (keep the existing refresh block; add the gate)**
 
 ```ts
-// src/lib/supabase/middleware.ts
+import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { NextResponse, type NextRequest } from 'next/server';
 import { homeForRole } from '@/lib/auth/roleHome';
 
 // Public at the proxy level (request proceeds). NOTE: /set-password is "public"
-// here but the PAGE guards itself via getSession (Task 7) — proxy refreshes cookies
-// + does coarse routing; pages/layouts enforce real access. /logout signs out
-// (no-op if already signed out). Keep this list in sync with the page set.
+// here but the PAGE guards itself via getSession (Task 7). /logout signs out.
 const PUBLIC_PREFIXES = ['/login', '/set-password', '/logout', '/auth', '/trial-expired'];
-
 function isPublic(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'));
 }
 
-/** Refresh the Supabase session cookie and apply coarse login/home redirects. */
-export async function updateSession(request: NextRequest): Promise<NextResponse> {
-  let response = NextResponse.next({ request });
+export async function proxy(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
       cookies: {
-        getAll() { return request.cookies.getAll(); },
+        getAll() {
+          return request.cookies.getAll();
+        },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options));
+            supabaseResponse.cookies.set(name, value, options),
+          );
         },
       },
     },
   );
 
-  // IMPORTANT: do not run code between createServerClient and getUser().
+  // IMPORTANT: use getUser() not getSession() — and do not run code between
+  // createServerClient and getUser().
   const { data: { user } } = await supabase.auth.getUser();
   const { pathname } = request.nextUrl;
 
-  // Helper: build a redirect that carries the refreshed cookies.
+  // Build a redirect that carries the refreshed cookies (so the session survives).
   const redirectTo = (path: string, search = '') => {
     const url = request.nextUrl.clone();
     url.pathname = path;
     url.search = search;
     const redirect = NextResponse.redirect(url);
-    response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    supabaseResponse.cookies.getAll().forEach((c) => redirect.cookies.set(c));
     return redirect;
   };
 
@@ -445,40 +442,29 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
       .from('users').select('role').eq('id', user.id).single();
     return redirectTo(homeForRole(profile?.role ?? null));
   }
-
   if (!user && pathname === '/') return redirectTo('/login');
   if (!user && !isPublic(pathname)) return redirectTo('/login', '?expired=true');
 
-  return response;
-}
-```
-
-```ts
-// proxy.ts  (repo root) — Next 16 renamed the `middleware` file + export to `proxy`.
-import { type NextRequest } from 'next/server';
-import { updateSession } from '@/lib/supabase/middleware';
-
-export async function proxy(request: NextRequest) {
-  return await updateSession(request);
+  return supabaseResponse;
 }
 
 export const config = {
-  // Run on everything except Next internals and static image assets.
-  // (Without a matcher, proxy runs on _next/static and public/ too.)
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|images/).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 };
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `npx vitest run src/lib/supabase/__tests__/middleware.test.ts`
+Run: `npx vitest run src/__tests__/proxy.test.ts`
 Expected: PASS (6 tests).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lib/supabase/middleware.ts proxy.ts src/lib/supabase/__tests__/middleware.test.ts
-git commit -m "feat(auth): proxy.ts session refresh + login/home redirects (Next 16)"
+git add src/proxy.ts src/__tests__/proxy.test.ts
+git commit -m "feat(auth): proxy auth gate + login/home redirects (extends P1 session refresh)"
 ```
 
 ---
