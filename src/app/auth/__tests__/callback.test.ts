@@ -133,4 +133,48 @@ describe('auth/callback/route.ts', () => {
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toBe('https://localhost:3000/dashboard/settings');
   });
+
+  // Token hash / OTP verification tests (recovery, magic-link, email-confirm)
+  function mockVerifySuccess() {
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { verifyOtp: vi.fn().mockResolvedValue({ error: null }) },
+    } as never);
+  }
+  function mockVerifyError() {
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { verifyOtp: vi.fn().mockResolvedValue({ error: new Error('expired') }) },
+    } as never);
+  }
+  function makeOtpRequest(base: string, tokenHash: string, type: string, next?: string): Request {
+    const url = new URL(base);
+    url.searchParams.set('token_hash', tokenHash);
+    url.searchParams.set('type', type);
+    if (next) url.searchParams.set('next', next);
+    return new Request(url);
+  }
+
+  it('verifyOtp success with next=/set-password redirects there', async () => {
+    mockVerifySuccess();
+    const res = await GET(makeOtpRequest('https://localhost:3000/auth/callback', 'th', 'recovery', '/set-password'));
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe('https://localhost:3000/set-password');
+  });
+
+  it('verifyOtp success without next redirects to /', async () => {
+    mockVerifySuccess();
+    const res = await GET(makeOtpRequest('https://localhost:3000/auth/callback', 'th', 'magiclink'));
+    expect(res.headers.get('location')).toBe('https://localhost:3000/');
+  });
+
+  it('verifyOtp failure redirects to /login?error=reset_expired', async () => {
+    mockVerifyError();
+    const res = await GET(makeOtpRequest('https://localhost:3000/auth/callback', 'bad', 'recovery', '/set-password'));
+    expect(res.headers.get('location')).toBe('https://localhost:3000/login?error=reset_expired');
+  });
+
+  it('defaults an unsafe next to / in the token_hash branch (proxy then resolves role home)', async () => {
+    mockVerifySuccess();
+    const res = await GET(makeOtpRequest('https://localhost:3000/auth/callback', 'th', 'recovery', '//evil.com'));
+    expect(res.headers.get('location')).toBe('https://localhost:3000/');
+  });
 });
