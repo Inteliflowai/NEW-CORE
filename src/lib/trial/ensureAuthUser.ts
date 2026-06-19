@@ -116,10 +116,10 @@ export async function ensureAuthUser({
       .insert({ id, email, full_name, role, school_id });
     if (insErr) throw insErr;
   }
-  // If !isNewAuthUser and !existing: the auth user exists but has no public row
-  // (orphaned auth user). Don't insert — the mismatch check above covers this
-  // scenario when there IS an existing row; if there's no row at all for a
-  // found-existing auth user, that's an inconsistency we should surface:
+  // If !isNewAuthUser and !existing: the auth user already existed in auth.users
+  // (we found it via listUsers) but has NO matching public.users row — an orphaned
+  // auth user. We must NOT silently insert a row here; this inconsistent state
+  // requires manual remediation to avoid silently rebinding a dangling identity.
   else {
     throw new Error(
       `Auth user ${email} exists in auth.users but has no public.users row — manual remediation required`

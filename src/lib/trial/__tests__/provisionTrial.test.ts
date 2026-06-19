@@ -82,7 +82,9 @@ function makeAdmin(overrides: {
         listUsers: vi.fn(async () => ({ data: { users: [] }, error: null })),
       },
     },
-  } as unknown as import('@supabase/supabase-js').SupabaseClient;
+  } as unknown as import('@supabase/supabase-js').SupabaseClient & {
+    _storedCredentials: () => unknown;
+  };
 
   return admin;
 }

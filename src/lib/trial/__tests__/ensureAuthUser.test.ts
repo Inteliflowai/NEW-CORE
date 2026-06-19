@@ -88,13 +88,8 @@ describe('ensureAuthUser', () => {
     });
 
     expect(id).toBe('new-uuid-1');
-    // insert was called once (new user path)
-    const fromCalls = (fromMock as ReturnType<typeof makeFromAdmin>).mock.calls;
-    const insertCalled = fromCalls.some((_) => {
-      const tbl = _[0] as string;
-      return tbl === 'users';
-    });
-    expect(insertCalled).toBe(true);
+    // insert was called on the users table (new user path)
+    expect(fromMock.insertedTables).toContain('users');
   });
 
   it('does NOT insert public.users row for an already-existing auth user', async () => {
@@ -216,5 +211,37 @@ describe('ensureAuthUser', () => {
         school_id: 'school-1',
       })
     ).rejects.toThrow(/rebind|mismatch/i);
+  });
+
+  it('throws and refuses to INSERT when createUser errors "already exists" but no public.users row exists (orphaned auth user)', async () => {
+    // Setup: createUser returns "already registered" → findAuthIdByEmail resolves a
+    // FOREIGN auth id. No public.users row exists for that id (makeFromAdmin(null)).
+    // This is the orphaned-auth-user path: !isNewAuthUser && !existing → must throw,
+    // must NOT insert a public.users row.
+    const fromMock = makeFromAdmin(null); // no existing public row
+    const admin = {
+      auth: {
+        admin: makeCreateUserAdmin({
+          createdId: null,
+          errorMsg: 'User already registered',
+        }),
+      },
+      from: fromMock,
+    } as unknown as import('@supabase/supabase-js').SupabaseClient;
+
+    // Must throw with a message about manual remediation / no public row
+    await expect(
+      ensureAuthUser({
+        admin,
+        email: 'taken@school.com',
+        password: 'pw',
+        full_name: 'Orphaned User',
+        role: 'teacher',
+        school_id: 'school-1',
+      })
+    ).rejects.toThrow(/manual remediation|no public|remediation/i);
+
+    // Must NEVER have called insert on the users table
+    expect(fromMock.insertedTables).not.toContain('users');
   });
 });
