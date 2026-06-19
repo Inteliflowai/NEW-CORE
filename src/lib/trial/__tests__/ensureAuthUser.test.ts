@@ -244,4 +244,43 @@ describe('ensureAuthUser', () => {
     // Must NEVER have called insert on the users table
     expect(fromMock.insertedTables).not.toContain('users');
   });
+
+  it('rolls back the created auth user when the public.users insert fails (C2)', async () => {
+    const deleteUser = vi.fn(async () => ({ error: null }));
+    const fromMock = vi.fn(() => ({
+      select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(async () => ({ data: null, error: null })) })) })),
+      insert: vi.fn(async () => ({ error: { message: 'insert boom' } })), // returns {error}
+      update: vi.fn(() => ({ eq: vi.fn(async () => ({ error: null })) })),
+    }));
+    const admin = {
+      auth: { admin: {
+        createUser: vi.fn(async () => ({ data: { user: { id: 'new-auth-1' } }, error: null })),
+        listUsers: vi.fn(async () => ({ data: { users: [] }, error: null })),
+        deleteUser,
+      } },
+      from: fromMock,
+    } as unknown as import('@supabase/supabase-js').SupabaseClient;
+
+    await expect(ensureAuthUser({
+      admin, email: 'new@school.com', password: 'pw', full_name: 'New', role: 'teacher', school_id: 'school-1',
+    })).rejects.toThrow(/insert boom/i);
+    expect(deleteUser).toHaveBeenCalledWith('new-auth-1'); // orphan rolled back
+  });
+
+  it('rebind_refused audit is logged with a null schoolId so it survives school-delete cascade (C3)', async () => {
+    vi.mocked(logTrialEvent).mockClear();
+    const fromMock = makeFromAdmin({ id: 'existing-auth-id', role: 'student', school_id: 'school-1' });
+    const admin = {
+      auth: { admin: makeCreateUserAdmin({ createdId: null, errorMsg: 'User already registered' }) },
+      from: fromMock,
+    } as unknown as import('@supabase/supabase-js').SupabaseClient;
+
+    await expect(ensureAuthUser({
+      admin, email: 'taken@school.com', password: 'pw', full_name: 'X', role: 'teacher', school_id: 'school-1',
+    })).rejects.toThrow();
+
+    const call = vi.mocked(logTrialEvent).mock.calls[0][0];
+    expect(call.schoolId).toBeNull();                          // durable: not tied to the soon-deleted school
+    expect(call.metadata).toMatchObject({ audit_action: 'rebind_refused', requested_school_id: 'school-1' });
+  });
 });

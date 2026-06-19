@@ -92,7 +92,7 @@ export async function ensureAuthUser({
       // Audit the refused rebind attempt before throwing
       await logTrialEvent({
         admin,
-        schoolId: school_id,
+        schoolId: null,   // durable: a refused rebind must outlive the trial school's cleanup cascade
         eventType: 'trial_signup',
         metadata: {
           audit_action: 'rebind_refused',
@@ -114,7 +114,14 @@ export async function ensureAuthUser({
     const { error: insErr } = await admin
       .from('users')
       .insert({ id, email, full_name, role, school_id });
-    if (insErr) throw insErr;
+    if (insErr) {
+      // Roll back the auth user we just created so we don't strand an orphaned
+      // auth.users entry (not cascade-covered) that would wedge retries via the
+      // orphan guard below. Best-effort: still throw the original insert error.
+      const { error: delErr } = await admin.auth.admin.deleteUser(id);
+      if (delErr) console.error(`[ensureAuthUser] rollback deleteUser(${id}) failed:`, delErr.message);
+      throw insErr;
+    }
   }
   // If !isNewAuthUser and !existing: the auth user already existed in auth.users
   // (we found it via listUsers) but has NO matching public.users row — an orphaned

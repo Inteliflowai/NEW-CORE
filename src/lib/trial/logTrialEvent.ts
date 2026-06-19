@@ -12,7 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export interface LogTrialEventParams {
   admin: SupabaseClient;
-  schoolId: string;
+  schoolId: string | null;
   userId?: string | null;
   eventType: string; // e.g. 'trial_signup' — must be a valid trial_events.event_type
   metadata?: Record<string, unknown>;
