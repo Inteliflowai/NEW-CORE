@@ -160,7 +160,7 @@ describe('0002 classes_enrollments', () => {
 
   // C4 cascade tests
   it('classes.teacher_id ON DELETE CASCADE', () => {
-    expect(s()).toMatch(/teacher_id\s+uuid\s+REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+    expect(s()).toMatch(/classes[\s\S]*?teacher_id\s+uuid\s+REFERENCES public\.users\(id\) ON DELETE CASCADE/);
   });
   it('enrollments.class_id ON DELETE CASCADE', () => {
     expect(s()).toMatch(/enrollments[\s\S]*?class_id\s+uuid\s+NOT NULL REFERENCES public\.classes\(id\) ON DELETE CASCADE/);
