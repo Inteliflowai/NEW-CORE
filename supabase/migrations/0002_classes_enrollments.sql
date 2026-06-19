@@ -11,7 +11,7 @@
 CREATE TABLE IF NOT EXISTS public.classes (
   id                        uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   school_id                 uuid        NOT NULL REFERENCES public.schools(id) ON DELETE CASCADE,
-  teacher_id                uuid        REFERENCES public.users(id),
+  teacher_id                uuid        REFERENCES public.users(id) ON DELETE CASCADE,
   name                      text        NOT NULL,
   subject                   text,
   grade_level               text,
@@ -27,8 +27,8 @@ CREATE TABLE IF NOT EXISTS public.classes (
 -- ── Enrollments ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.enrollments (
   id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  class_id    uuid        NOT NULL REFERENCES public.classes(id),
-  student_id  uuid        NOT NULL REFERENCES public.users(id),
+  class_id    uuid        NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  student_id  uuid        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   enrolled_at timestamptz DEFAULT now(),
   is_active   boolean     DEFAULT true,
   UNIQUE(class_id, student_id)

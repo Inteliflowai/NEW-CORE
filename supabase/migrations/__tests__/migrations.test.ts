@@ -87,6 +87,18 @@ describe('0001 identity_roles', () => {
   it('users.trial_school_id has ON DELETE SET NULL (trial ref — not a primary ownership FK)', () => {
     expect(s()).toMatch(/trial_school_id\s+uuid\s+REFERENCES public\.schools\(id\) ON DELETE SET NULL/);
   });
+
+  // C4 cascade tests
+  it('guardians.parent_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/guardians[\s\S]*?parent_id\s+uuid NOT NULL REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+  });
+  it('guardians.student_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/guardians[\s\S]*?student_id\s+uuid NOT NULL REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+  });
+  it('users.parent_id remains WITHOUT cascade (not a guardians FK)', () => {
+    // regression guard: the users.parent_id self-FK must NOT be cascaded
+    expect(s()).toMatch(/parent_id\s+uuid\s+REFERENCES public\.users\(id\),/);
+  });
 });
 
 describe('0002 classes_enrollments', () => {
@@ -145,6 +157,17 @@ describe('0002 classes_enrollments', () => {
   it('classes.school_id has ON DELETE CASCADE (school delete cascades to classes)', () => {
     expect(s()).toMatch(/school_id\s+uuid\s+NOT NULL REFERENCES public\.schools\(id\) ON DELETE CASCADE/);
   });
+
+  // C4 cascade tests
+  it('classes.teacher_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/teacher_id\s+uuid\s+REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+  });
+  it('enrollments.class_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/enrollments[\s\S]*?class_id\s+uuid\s+NOT NULL REFERENCES public\.classes\(id\) ON DELETE CASCADE/);
+  });
+  it('enrollments.student_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/enrollments[\s\S]*?student_id\s+uuid\s+NOT NULL REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+  });
 });
 
 describe('0003 lessons_quizzes', () => {
@@ -172,6 +195,29 @@ describe('0003 lessons_quizzes', () => {
     expect(s()).toMatch(/ALTER TABLE public\.quiz_responses ENABLE ROW LEVEL SECURITY/);
     expect(s()).toMatch(/GRANT ALL ON public\.quiz_responses TO authenticated, anon, service_role/);
   });
+
+  // C4 cascade tests
+  it('lessons.class_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/lessons[\s\S]*?class_id\s+uuid\s+NOT NULL REFERENCES public\.classes\(id\) ON DELETE CASCADE/);
+  });
+  it('lessons.teacher_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/lessons[\s\S]*?teacher_id\s+uuid\s+NOT NULL REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+  });
+  it('quizzes.lesson_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/quizzes[\s\S]*?lesson_id\s+uuid\s+REFERENCES public\.lessons\(id\) ON DELETE CASCADE/);
+  });
+  it('quizzes.class_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/quizzes[\s\S]*?class_id\s+uuid\s+NOT NULL REFERENCES public\.classes\(id\) ON DELETE CASCADE/);
+  });
+  it('quizzes.teacher_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/quizzes[\s\S]*?teacher_id\s+uuid\s+NOT NULL REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+  });
+  it('quiz_attempts.quiz_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/quiz_attempts[\s\S]*?quiz_id\s+uuid\s+NOT NULL REFERENCES public\.quizzes\(id\) ON DELETE CASCADE/);
+  });
+  it('quiz_attempts.student_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/quiz_attempts[\s\S]*?student_id\s+uuid\s+NOT NULL REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+  });
 });
 
 describe('0004 assignments_homework', () => {
@@ -192,6 +238,23 @@ describe('0004 assignments_homework', () => {
   it('enables RLS + grants', () => {
     expect(s()).toMatch(/ALTER TABLE public\.homework_attempts\s+ENABLE ROW LEVEL SECURITY/);
     expect(s()).toMatch(/GRANT ALL ON public\.assignments\s+TO authenticated, anon, service_role/);
+  });
+
+  // C4 cascade tests
+  it('assignments.student_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/assignments[\s\S]*?student_id\s+uuid NOT NULL REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+  });
+  it('assignments.class_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/assignments[\s\S]*?class_id\s+uuid NOT NULL REFERENCES public\.classes\(id\) ON DELETE CASCADE/);
+  });
+  it('assignments.lesson_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/assignments[\s\S]*?lesson_id\s+uuid REFERENCES public\.lessons\(id\) ON DELETE CASCADE/);
+  });
+  it('homework_attempts.assignment_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/homework_attempts[\s\S]*?assignment_id\s+uuid NOT NULL REFERENCES public\.assignments\(id\) ON DELETE CASCADE/);
+  });
+  it('homework_attempts.student_id ON DELETE CASCADE', () => {
+    expect(s()).toMatch(/homework_attempts[\s\S]*?student_id\s+uuid NOT NULL REFERENCES public\.users\(id\) ON DELETE CASCADE/);
   });
 });
 

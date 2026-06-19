@@ -62,8 +62,8 @@ CREATE TABLE IF NOT EXISTS public.users (
 -- ── Guardians (parent ↔ student link — Parent screen has no data path without it) ──
 CREATE TABLE IF NOT EXISTS public.guardians (
   id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  parent_id  uuid NOT NULL REFERENCES public.users(id),
-  student_id uuid NOT NULL REFERENCES public.users(id),
+  parent_id  uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  student_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   created_at timestamptz DEFAULT now(),
   UNIQUE(parent_id, student_id)
 );

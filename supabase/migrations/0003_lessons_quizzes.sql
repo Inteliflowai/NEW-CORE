@@ -6,8 +6,8 @@
 -- ── Lessons ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.lessons (
   id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  class_id       uuid        NOT NULL REFERENCES public.classes(id),
-  teacher_id     uuid        NOT NULL REFERENCES public.users(id),
+  class_id       uuid        NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  teacher_id     uuid        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   title          text,
   file_name      text,
   file_url       text,
@@ -23,9 +23,9 @@ CREATE TABLE IF NOT EXISTS public.lessons (
 -- ── Quizzes ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.quizzes (
   id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  lesson_id      uuid        REFERENCES public.lessons(id),
-  class_id       uuid        NOT NULL REFERENCES public.classes(id),
-  teacher_id     uuid        NOT NULL REFERENCES public.users(id),
+  lesson_id      uuid        REFERENCES public.lessons(id) ON DELETE CASCADE,
+  class_id       uuid        NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  teacher_id     uuid        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   title          text,
   status         text        DEFAULT 'draft' CHECK (status IN ('draft','pending_review','approved','published','archived')),
   rubric_version text        DEFAULT '1.0',
@@ -52,8 +52,8 @@ CREATE TABLE IF NOT EXISTS public.quiz_questions (
 -- ── Quiz Attempts ────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.quiz_attempts (
   id             uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  quiz_id        uuid        NOT NULL REFERENCES public.quizzes(id),
-  student_id     uuid        NOT NULL REFERENCES public.users(id),
+  quiz_id        uuid        NOT NULL REFERENCES public.quizzes(id) ON DELETE CASCADE,
+  student_id     uuid        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   session_id     text,
   started_at     timestamptz DEFAULT now(),
   submitted_at   timestamptz,

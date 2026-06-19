@@ -4,9 +4,9 @@
 CREATE TABLE IF NOT EXISTS public.assignments (
   id                      uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   quiz_attempt_id         uuid REFERENCES public.quiz_attempts(id),
-  student_id              uuid NOT NULL REFERENCES public.users(id),
-  class_id                uuid NOT NULL REFERENCES public.classes(id),
-  lesson_id               uuid REFERENCES public.lessons(id),
+  student_id              uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  class_id                uuid NOT NULL REFERENCES public.classes(id) ON DELETE CASCADE,
+  lesson_id               uuid REFERENCES public.lessons(id) ON DELETE CASCADE,
   mastery_band            text CHECK (mastery_band IN ('reteach','grade_level','advanced')),
   assignment_mode         text DEFAULT 'standard',
   learning_style          text,
@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS public.assignments (
 
 CREATE TABLE IF NOT EXISTS public.homework_attempts (
   id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  assignment_id     uuid NOT NULL REFERENCES public.assignments(id),
-  student_id        uuid NOT NULL REFERENCES public.users(id),
+  assignment_id     uuid NOT NULL REFERENCES public.assignments(id) ON DELETE CASCADE,
+  student_id        uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   status            text DEFAULT 'in_progress',
   responses         jsonb,
   canvas_data       jsonb,
