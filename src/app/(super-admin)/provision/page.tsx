@@ -14,11 +14,16 @@ interface CredentialEntry {
   email: string;
 }
 
+interface CredentialsSummary {
+  shared_password: string;
+  accounts?: Record<string, CredentialEntry>;
+}
+
 interface ProvisionResult {
   school_id: string;
   trial_expires_at: string;
-  credentials_summary: Record<string, CredentialEntry>;
-  shared_password: string;
+  roster_status?: string;
+  credentials_summary: CredentialsSummary;
 }
 
 const TRIAL_PLANS = [
@@ -134,11 +139,10 @@ export default function ProvisionPage() {
         {/* Student roster */}
         <div className="flex flex-col gap-1">
           <label htmlFor="student-roster" className="text-sm font-medium text-fg">
-            Student roster <span className="text-fg-muted font-normal">(one name per line)</span>
+            Student roster <span className="text-fg-muted font-normal">(one name per line, optional — demo cast seeded if blank)</span>
           </label>
           <textarea
             id="student-roster"
-            required
             rows={6}
             value={roster}
             onChange={(e) => setRoster(e.target.value)}
@@ -213,17 +217,19 @@ export default function ProvisionPage() {
           </p>
           <div>
             <p className="font-medium text-fg mb-1">Credentials (share once — not stored in logs):</p>
-            <ul className="space-y-1 pl-4 list-disc">
-              {Object.entries(result.credentials_summary).map(([role, cred]) => (
-                <li key={role}>
-                  <span className="capitalize text-fg">{role}:</span>{' '}
-                  <code className="text-fg-muted">{cred.email}</code>
-                </li>
-              ))}
-            </ul>
+            {result.credentials_summary.accounts && (
+              <ul className="space-y-1 pl-4 list-disc">
+                {Object.entries(result.credentials_summary.accounts).map(([role, cred]) => (
+                  <li key={role}>
+                    <span className="capitalize text-fg">{role}:</span>{' '}
+                    <code className="text-fg-muted">{cred.email}</code>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="mt-2">
               <span className="font-medium text-fg">Shared password:</span>{' '}
-              <code className="text-brand font-mono">{result.shared_password}</code>
+              <code className="text-brand font-mono">{result.credentials_summary.shared_password}</code>
             </p>
           </div>
         </section>

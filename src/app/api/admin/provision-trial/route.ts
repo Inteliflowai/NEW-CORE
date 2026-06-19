@@ -5,11 +5,11 @@
  * Platform-admin-only endpoint: provisions a new trial school + teacher + demo data.
  *
  * Auth chain (p4b-02-auth.md):
- *   1. createServerSupabaseClient → getUser (401 if no session)
- *   2. guardPlatformAdmin() (403 if not platform_admin)
+ *   guardPlatformAdmin() handles session check (401 if no session) and role check
+ *   (403 if not platform_admin). No redundant pre-guard getUser needed.
  *
- * Body: { school_name, teacher_email, teacher_name, student_roster[], parent?, trial_plan, student_limit }
- * Success: 201 { school_id, trial_expires_at, credentials_summary }
+ * Body: { school_name, teacher_email, teacher_name, student_roster[]?, parent?, trial_plan, student_limit }
+ * Success: 201 { school_id, trial_expires_at, credentials_summary: { shared_password, accounts? } }
  * Validation failure: 400 { error }
  * provisionTrial throw: 500 { error: 'Internal server error' }  (no internals leaked)
  *
@@ -18,24 +18,17 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
+import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { guardPlatformAdmin } from '@/lib/auth/guards';
 import { provisionTrial } from '@/lib/trial/provisionTrial';
 import { validateProvisionInput } from './validate';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  // ── 1. Auth — session check ───────────────────────────────────────────────
-  const supabase = await createServerSupabaseClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // ── 2. Auth — platform_admin gate ────────────────────────────────────────
+  // ── 1. Auth — guardPlatformAdmin handles session (401) + role (403) ───────
   const guard = await guardPlatformAdmin();
   if (guard) return guard;
 
-  // ── 3. Parse + validate body ──────────────────────────────────────────────
+  // ── 2. Parse + validate body ──────────────────────────────────────────────
   let rawBody: unknown;
   try {
     rawBody = await req.json();
@@ -48,12 +41,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
-  const { school_name, teacher_email, teacher_name, trial_plan, student_limit } = result.value;
+  const { school_name, teacher_email, teacher_name, student_roster, trial_plan, student_limit } = result.value;
 
-  // ── 4. Provision ─────────────────────────────────────────────────────────
+  // ── 3. Provision ─────────────────────────────────────────────────────────
   const admin = createAdminSupabaseClient();
   let provisionResult;
   try {
+    // TODO: provisionTrial seeds the demo cast; wire caller-supplied roster when custom seeding lands
+    // student_roster is validated and accepted above but not forwarded yet — provisionTrial seeds demo cast.
     provisionResult = await provisionTrial({
       admin,
       schoolName: school_name,
@@ -67,22 +62,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
-  // ── 5. Build response — credentials_summary surfaced once, never logged ───
-  const credentials_summary: Record<string, { email: string }> = {};
+  // ── 4. Build response — credentials_summary surfaced once, never logged ───
+  const accounts: Record<string, { email: string }> = {};
   for (const [role, cred] of Object.entries(provisionResult.credentials)) {
-    credentials_summary[role] = { email: cred.email };
+    accounts[role] = { email: cred.email };
   }
 
+  /**
+   * credentials_summary nests both the shared password (surfaced ONCE — caller
+   * must handle securely, never logged) and the per-role account emails.
+   */
   return NextResponse.json(
     {
       school_id: provisionResult.schoolId,
       trial_expires_at: provisionResult.trialExpiresAt,
-      credentials_summary,
-      /**
-       * The shared password is surfaced here ONCE so the admin can relay it to
-       * the school. It is NOT stored in logs; the caller must handle it securely.
-       */
-      shared_password: provisionResult.password,
+      roster_status: 'deferred_demo_cast_seeded',
+      credentials_summary: {
+        shared_password: provisionResult.password,
+        accounts,
+      },
     },
     { status: 201 },
   );

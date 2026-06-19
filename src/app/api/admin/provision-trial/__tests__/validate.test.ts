@@ -9,22 +9,29 @@ const VALID_BASE = {
   school_name: 'Westfield Academy',
   teacher_email: 'teacher@school.edu',
   teacher_name: 'Jane Smith',
-  student_roster: ['Alex Johnson', 'Sofia Martinez'],
+  // student_roster is optional — omitted here to test the minimal valid payload
   trial_plan: 'pro',
   student_limit: 30,
 };
 
 describe('validateProvisionInput — valid input', () => {
-  it('passes a fully valid payload', () => {
+  it('passes a fully valid payload (roster omitted)', () => {
     const result = validateProvisionInput(VALID_BASE);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.school_name).toBe('Westfield Academy');
     expect(result.value.teacher_email).toBe('teacher@school.edu');
     expect(result.value.teacher_name).toBe('Jane Smith');
-    expect(result.value.student_roster).toEqual(['Alex Johnson', 'Sofia Martinez']);
+    expect(result.value.student_roster).toEqual([]);
     expect(result.value.trial_plan).toBe('pro');
     expect(result.value.student_limit).toBe(30);
+  });
+
+  it('passes a payload with an explicit roster', () => {
+    const result = validateProvisionInput({ ...VALID_BASE, student_roster: ['Alex Johnson', 'Sofia Martinez'] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.student_roster).toEqual(['Alex Johnson', 'Sofia Martinez']);
   });
 
   it('trims whitespace from school_name and teacher_name', () => {
@@ -127,14 +134,22 @@ describe('validateProvisionInput — email validation', () => {
 });
 
 describe('validateProvisionInput — student_roster validation', () => {
-  it('rejects an empty array', () => {
-    const result = validateProvisionInput({ ...VALID_BASE, student_roster: [] });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/student_roster/);
+  it('accepts missing roster (optional — demo cast seeded)', () => {
+    const { ...rest } = VALID_BASE; // VALID_BASE has no student_roster
+    const result = validateProvisionInput(rest);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.student_roster).toEqual([]);
   });
 
-  it('rejects a non-array value', () => {
+  it('accepts empty array roster (optional — treated same as absent)', () => {
+    const result = validateProvisionInput({ ...VALID_BASE, student_roster: [] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.student_roster).toEqual([]);
+  });
+
+  it('rejects a non-array value when student_roster is present', () => {
     const result = validateProvisionInput({ ...VALID_BASE, student_roster: 'Alex Johnson' });
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -143,6 +158,13 @@ describe('validateProvisionInput — student_roster validation', () => {
 
   it('rejects a roster with an empty-string entry', () => {
     const result = validateProvisionInput({ ...VALID_BASE, student_roster: ['Alex', '', 'Sofia'] });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/student_roster/);
+  });
+
+  it('rejects a roster entry over 200 characters', () => {
+    const result = validateProvisionInput({ ...VALID_BASE, student_roster: ['A'.repeat(201)] });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/student_roster/);
@@ -178,5 +200,12 @@ describe('validateProvisionInput — length caps (absurd values)', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error).toMatch(/trial_plan/);
+  });
+
+  it('rejects student_limit when passed a boolean (type guard)', () => {
+    const result = validateProvisionInput({ ...VALID_BASE, student_limit: true });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/student_limit/);
   });
 });

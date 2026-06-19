@@ -12,12 +12,15 @@ import ProvisionPage from '../page';
 const MOCK_SUCCESS = {
   school_id: 'school-uuid-123',
   trial_expires_at: '2026-07-19T00:00:00.000Z',
+  roster_status: 'deferred_demo_cast_seeded',
   credentials_summary: {
-    teacher: { email: 'teacher@school.edu' },
-    parent: { email: 'demo-parent@trial-school-u.core.com' },
-    student: { email: 'demo-alex@trial-school-u.core.com' },
+    shared_password: 'BrightOwl#4291',
+    accounts: {
+      teacher: { email: 'teacher@school.edu' },
+      parent: { email: 'demo-parent@trial-school-u.core.com' },
+      student: { email: 'demo-alex@trial-school-u.core.com' },
+    },
   },
-  shared_password: 'BrightOwl#4291',
 };
 
 function fillValidForm() {

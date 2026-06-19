@@ -19,6 +19,7 @@ export interface ValidatedProvisionInput {
   school_name: string;
   teacher_email: string;
   teacher_name: string;
+  /** Optional: if absent/empty, provisionTrial seeds the demo cast instead. */
   student_roster: string[];
   parent?: string;
   trial_plan: string;
@@ -72,23 +73,27 @@ export function validateProvisionInput(body: ProvisionInputBody): ValidationResu
     return { ok: false, error: `teacher_name exceeds ${MAX_TEACHER_NAME_LEN} characters` };
   }
 
-  // ── student_roster ────────────────────────────────────────────────────────
-  if (!Array.isArray(body.student_roster) || body.student_roster.length === 0) {
-    return { ok: false, error: 'student_roster must be a non-empty array' };
-  }
-  if (body.student_roster.length > MAX_ROSTER_STUDENTS) {
-    return { ok: false, error: `student_roster exceeds ${MAX_ROSTER_STUDENTS} entries` };
-  }
+  // ── student_roster (optional) ─────────────────────────────────────────────
+  // If absent or empty, validation passes — provisionTrial seeds the demo cast.
+  // If present, per-entry length and array size are still capped.
   const student_roster: string[] = [];
-  for (let i = 0; i < body.student_roster.length; i++) {
-    const entry = body.student_roster[i];
-    if (typeof entry !== 'string' || entry.trim() === '') {
-      return { ok: false, error: `student_roster[${i}] must be a non-empty string` };
+  if (body.student_roster !== undefined && body.student_roster !== null) {
+    if (!Array.isArray(body.student_roster)) {
+      return { ok: false, error: 'student_roster must be an array' };
     }
-    if (entry.trim().length > MAX_STUDENT_NAME_LEN) {
-      return { ok: false, error: `student_roster[${i}] exceeds ${MAX_STUDENT_NAME_LEN} characters` };
+    if (body.student_roster.length > MAX_ROSTER_STUDENTS) {
+      return { ok: false, error: `student_roster exceeds ${MAX_ROSTER_STUDENTS} entries` };
     }
-    student_roster.push(entry.trim());
+    for (let i = 0; i < body.student_roster.length; i++) {
+      const entry = body.student_roster[i];
+      if (typeof entry !== 'string' || entry.trim() === '') {
+        return { ok: false, error: `student_roster[${i}] must be a non-empty string` };
+      }
+      if (entry.trim().length > MAX_STUDENT_NAME_LEN) {
+        return { ok: false, error: `student_roster[${i}] exceeds ${MAX_STUDENT_NAME_LEN} characters` };
+      }
+      student_roster.push(entry.trim());
+    }
   }
 
   // ── trial_plan (optional, default 'pro') ─────────────────────────────────
@@ -103,6 +108,10 @@ export function validateProvisionInput(body: ProvisionInputBody): ValidationResu
   // ── student_limit (optional, default 300) ────────────────────────────────
   let student_limit = 300;
   if (body.student_limit !== undefined) {
+    // Reject non-number, non-numeric-string types (e.g. booleans, objects) before coercion.
+    if (typeof body.student_limit !== 'number' && typeof body.student_limit !== 'string') {
+      return { ok: false, error: 'student_limit must be a positive integer' };
+    }
     const raw = Number(body.student_limit);
     if (!Number.isInteger(raw) || raw < 1) {
       return { ok: false, error: 'student_limit must be a positive integer' };
