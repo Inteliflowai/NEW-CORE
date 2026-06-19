@@ -73,7 +73,24 @@ await admin.from('users').insert({
 
 **V2 adaptation:** identical shape. The `users` table in 0001 has all these columns. The INSERT must happen in the same function, not as a post-hook.
 
-**Idempotency contract (seed):** V1's `seedDemo.mjs` checked `supabase.from('users').select('id').eq('email', email).maybeSingle()` — if a `users` row exists, reuse its `id` and skip `createUser`. V2's spec (§6 open question 1, resolved) chooses **reconcile-on-seed**: look up the auth user by email, ensure the `users` row exists with an upsert, never duplicate. Implementation: `supabase.auth.admin.getUserByEmail(email)` → use returned `id`; `users` INSERT uses `upsert({ onConflict: 'id' })`.
+**Idempotency contract (seed):** V1's `seedDemo.mjs` checked `supabase.from('users').select('id').eq('email', email).maybeSingle()` — if a `users` row exists, reuse its `id` and skip `createUser`. V2's spec (§6 open question 1, resolved) chooses **reconcile-by-auth-id**: resolve the auth identity first, then ensure the `users` row exists with an upsert, never duplicate.
+
+**⚠️ C13 CORRECTION: `auth.admin.getUserByEmail` does NOT exist in the Supabase JS SDK.** ~~Implementation: `supabase.auth.admin.getUserByEmail(email)` → use returned `id`; `users` INSERT uses `upsert({ onConflict: 'id' })`.~~
+
+**Correct pattern:** Paginate `admin.auth.admin.listUsers({ page, perPage: 200 })` to resolve an auth id by email:
+```ts
+async function findAuthIdByEmail(admin, email: string): Promise<string | null> {
+  for (let page = 1; page <= 50; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw error;
+    const hit = data.users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+    if (hit) return hit.id;
+    if (data.users.length < 200) break;
+  }
+  return null;
+}
+```
+On conflict: `createUser` → if error matches `/already|exist|registered/i`, call `findAuthIdByEmail` to get the id; reconcile `public.users` row by id (never overwrite `role`/`school_id`); hard-fail if existing row's role/school_id mismatch.
 
 ---
 
@@ -279,7 +296,7 @@ This differentiation also applied to the `content.instructions` string and a `ba
 | Entity | V1 pattern | V2 adaptation |
 |---|---|---|
 | `schools` demo | SELECT by `name`, skip insert if found; `seedDemo` only | SELECT by `name` + `demo_mode=true`, upsert or skip |
-| Auth users | SELECT `users.email` → if found, reuse id; skip `createUser` | `auth.admin.getUserByEmail(email)` → reuse id; upsert `users` row |
+| Auth users | SELECT `users.email` → if found, reuse id; skip `createUser` | ~~`auth.admin.getUserByEmail(email)`~~ **does not exist**. Use `createUser` → on conflict, paginate `admin.auth.admin.listUsers({page,perPage:200})` to find the id by email; reconcile `public.users` by id (`upsert({ onConflict: 'id' })`). See C13 correction in §2. |
 | `classes` | SELECT by `name + teacher_id`, skip if found | Same pattern |
 | `enrollments` | `upsert({ onConflict: 'student_id,class_id' })` | Same — V2 0002 has this UNIQUE constraint |
 | `guardians` | `upsert({ onConflict: 'parent_id,student_id' })` | Same — V2 0001 has this UNIQUE constraint |

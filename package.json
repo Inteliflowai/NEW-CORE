@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "eval": "tsx scripts/eval/ci.ts",
     "spike:grader": "tsx scripts/eval/grader-spike.ts",
-    "a11y": "npx tsx scripts/a11y/contrast-check.ts"
+    "a11y": "npx tsx scripts/a11y/contrast-check.ts",
+    "seed:demo": "node --env-file=.env.local --import tsx scripts/seedDemo.ts",
+    "seed:demo:reset": "node --env-file=.env.local --import tsx scripts/resetDemo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.2",
