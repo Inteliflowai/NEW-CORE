@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
@@ -51,13 +51,13 @@ describe('SetPasswordPage', () => {
     updateUser.mockResolvedValue({ error: null });
     getSession.mockResolvedValue({ data: { session: { user: { id: 'u1' } } } });
     render(<SetPasswordPage />);
-    await vi.advanceTimersByTimeAsync(0); // flush getSession → ready
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); }); // flush getSession → ready
     fireEvent.change(screen.getByLabelText(/new password/i), { target: { value: 'longenough1' } });
     fireEvent.change(screen.getByLabelText(/confirm/i), { target: { value: 'longenough1' } });
-    fireEvent.click(screen.getByRole('button', { name: /set password/i }));
-    await vi.advanceTimersByTimeAsync(0); // flush updateUser promise
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /set password/i })); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); }); // flush updateUser promise
     expect(updateUser).toHaveBeenCalledWith({ password: 'longenough1' });
-    await vi.advanceTimersByTimeAsync(1500); // fire the redirect timeout
+    await act(async () => { await vi.advanceTimersByTimeAsync(1500); }); // fire the redirect timeout
     expect(push).toHaveBeenCalledWith('/login');
     vi.useRealTimers();
   });
@@ -66,9 +66,9 @@ describe('SetPasswordPage', () => {
     vi.useFakeTimers();
     getSession.mockResolvedValue({ data: { session: null } });
     render(<SetPasswordPage />);
-    await vi.advanceTimersByTimeAsync(0);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     expect(screen.getByText(/Verifying your reset link/i)).toBeInTheDocument();
-    await vi.advanceTimersByTimeAsync(3000);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /back to sign in/i })).toBeInTheDocument();
     vi.useRealTimers();
