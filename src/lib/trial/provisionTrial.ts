@@ -26,7 +26,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { ensureAuthUser } from '@/lib/trial/ensureAuthUser';
-import { seedTrialDemoData } from '@/lib/trial/seedTrialDemoData';
+import { seedTrialDemoData, type SeedReport } from '@/lib/trial/seedTrialDemoData';
 import { logTrialEvent } from '@/lib/trial/logTrialEvent';
 import { generateTrialPassword, type Rng } from '@/lib/trial/generatePassword';
 import { DEMO_STUDENTS, DEMO_PARENT } from '@/lib/demo/demoCast';
@@ -57,6 +57,7 @@ export interface ProvisionTrialResult {
   password: string;
   trialExpiresAt: string;
   credentials: Record<string, TrialCredential>; // keyed by role: teacher/parent/student
+  seedReport?: SeedReport; // present when seed ran (may have skipped steps)
 }
 
 export async function provisionTrial(input: ProvisionTrialInput): Promise<ProvisionTrialResult> {
@@ -193,8 +194,9 @@ export async function provisionTrial(input: ProvisionTrialInput): Promise<Provis
   }
 
   // ── Step 6: Seed the demo dataset (soft-fail per step internally) ────────────
+  let seedReport: SeedReport | undefined;
   try {
-    await seedTrialDemoData({
+    seedReport = await seedTrialDemoData({
       admin,
       schoolId,
       schoolIdShort,
@@ -203,6 +205,12 @@ export async function provisionTrial(input: ProvisionTrialInput): Promise<Provis
       parentId,
       password,
     });
+    if (seedReport.skipped.length > 0) {
+      console.warn(
+        '[trial] seedTrialDemoData partial seed — skipped steps:',
+        seedReport.skipped.map((s) => `${s.step}: ${s.reason}`).join('; ')
+      );
+    }
   } catch (e) {
     console.error('[trial] seedTrialDemoData failed (soft):', (e as Error).message);
   }
@@ -224,5 +232,6 @@ export async function provisionTrial(input: ProvisionTrialInput): Promise<Provis
     password,
     trialExpiresAt: trialExpiresAt.toISOString(),
     credentials,
+    seedReport,
   };
 }

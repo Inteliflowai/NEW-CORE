@@ -32,9 +32,21 @@ export interface SeedTrialDemoDataInput {
   password: string;
 }
 
-export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<void> {
+export interface SeedReport {
+  seeded: string[];                              // step names that completed successfully
+  skipped: { step: string; reason: string }[];  // steps that soft-failed or were gated out
+}
+
+export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<SeedReport> {
   const { admin, schoolId, schoolIdShort, teacherId, firstStudentId, parentId, password } = input;
   const now = new Date();
+
+  const report: SeedReport = { seeded: [], skipped: [] };
+  function recordOk(step: string) { report.seeded.push(step); }
+  function recordSkip(step: string, reason: string) {
+    report.skipped.push({ step, reason });
+    console.error(`[trial-seed] ${step} failed (soft): ${reason}`);
+  }
 
   const rows = buildTrialRows(DEMO_STUDENTS, { schoolId, schoolIdShort, teacherId }, now);
 
@@ -44,6 +56,8 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
   if (firstKey && firstStudentId) studentIds[firstKey] = firstStudentId;
 
   // ── Step 1: Create auth users for students 2-8 (soft fail per student) ───────
+  let studentsFailCount = 0;
+  let studentsFirstError = '';
   for (const spec of rows.students) {
     try {
       const sid = await ensureAuthUser({
@@ -56,8 +70,14 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
       });
       studentIds[spec.key] = sid;
     } catch (e) {
-      console.error(`[trial-seed] student ${spec.key} failed (soft):`, (e as Error).message);
+      studentsFailCount++;
+      if (!studentsFirstError) studentsFirstError = (e as Error).message;
     }
+  }
+  if (studentsFailCount === 0) {
+    recordOk('students');
+  } else {
+    recordSkip('students', `${studentsFailCount}/${rows.students.length} failed: ${studentsFirstError}`);
   }
 
   // ── Step 2: Class (soft fail) ────────────────────────────────────────────────
@@ -74,13 +94,16 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
       is_active: true,
     });
     if (error) throw error;
+    recordOk('class');
   } catch (e) {
     classId = null;
-    console.error('[trial-seed] class creation failed (soft):', (e as Error).message);
+    recordSkip('class', (e as Error).message);
   }
 
   // ── Step 3: Enrollments for all 8 students (soft fail) ───────────────────────
   if (classId) {
+    let enrollFailCount = 0;
+    let enrollFirstError = '';
     for (const enr of rows.enrollments) {
       const sid = studentIds[enr.student_key];
       if (!sid) continue;
@@ -90,9 +113,17 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
           { onConflict: 'class_id,student_id' }
         );
       } catch (e) {
-        console.error(`[trial-seed] enrollment ${enr.student_key} failed (soft):`, (e as Error).message);
+        enrollFailCount++;
+        if (!enrollFirstError) enrollFirstError = (e as Error).message;
       }
     }
+    if (enrollFailCount === 0) {
+      recordOk('enrollments');
+    } else {
+      recordSkip('enrollments', `${enrollFailCount}/${rows.enrollments.length} failed: ${enrollFirstError}`);
+    }
+  } else {
+    recordSkip('enrollments', 'prerequisite class missing');
   }
 
   // ── Step 4: Link parent → first student (Alex): users.parent_id + guardians ──
@@ -104,9 +135,12 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
         { parent_id: parentId, student_id: alexId },
         { onConflict: 'parent_id,student_id' }
       );
+      recordOk('guardian_link');
     } catch (e) {
-      console.error('[trial-seed] guardian link failed (soft):', (e as Error).message);
+      recordSkip('guardian_link', (e as Error).message);
     }
+  } else {
+    recordSkip('guardian_link', 'prerequisite parentId or alexId missing');
   }
 
   // ── Step 5: Lesson (soft fail) ───────────────────────────────────────────────
@@ -123,10 +157,13 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
         parsed_content: rows.lesson.parsed_content,
       });
       if (error) throw error;
+      recordOk('lesson');
     } catch (e) {
       lessonId = null;
-      console.error('[trial-seed] lesson creation failed (soft):', (e as Error).message);
+      recordSkip('lesson', (e as Error).message);
     }
+  } else {
+    recordSkip('lesson', 'prerequisite class missing');
   }
 
   // ── Step 6: Quiz + 5 quiz_questions (soft fail) ──────────────────────────────
@@ -156,14 +193,19 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
           console.error(`[trial-seed] quiz_question ${q.position} failed (soft):`, qErr.message);
         }
       }
+      recordOk('quiz');
     } catch (e) {
       quizId = null;
-      console.error('[trial-seed] quiz creation failed (soft):', (e as Error).message);
+      recordSkip('quiz', (e as Error).message);
     }
+  } else {
+    recordSkip('quiz', `prerequisite ${!classId ? 'class' : 'lesson'} missing`);
   }
 
   // ── Step 7: Quiz attempts (soft fail) ────────────────────────────────────────
   if (quizId) {
+    let qaFailCount = 0;
+    let qaFirstError = '';
     for (const qa of rows.quiz_attempts) {
       const sid = studentIds[qa.student_key];
       if (!sid) continue;
@@ -178,14 +220,25 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
           grading_status: 'complete',
         });
       } catch (e) {
-        console.error(`[trial-seed] quiz_attempt ${qa.student_key} failed (soft):`, (e as Error).message);
+        qaFailCount++;
+        if (!qaFirstError) qaFirstError = (e as Error).message;
       }
     }
+    if (qaFailCount === 0) {
+      recordOk('quiz_attempts');
+    } else {
+      recordSkip('quiz_attempts', `${qaFailCount}/${rows.quiz_attempts.length} failed: ${qaFirstError}`);
+    }
+  } else {
+    recordSkip('quiz_attempts', 'prerequisite quiz missing');
   }
 
   // ── Step 8: Assignments + homework_attempts (band-differentiated) ────────────
   const assignmentIds: Record<string, string> = {}; // `${assignmentKey}:${studentKey}` → uuid
   if (classId) {
+    let assignFailCount = 0;
+    let assignFirstError = '';
+    const totalAssignments = rows.assignments.length * DEMO_STUDENTS.length;
     for (const assignment of rows.assignments) {
       for (const student of DEMO_STUDENTS) {
         const sid = studentIds[student.key];
@@ -213,11 +266,19 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
           if (aErr) throw aErr;
           assignmentIds[assignmentKey] = aId;
         } catch (e) {
-          console.error(`[trial-seed] assignment ${assignmentKey} failed (soft):`, (e as Error).message);
+          assignFailCount++;
+          if (!assignFirstError) assignFirstError = (e as Error).message;
         }
       }
     }
+    if (assignFailCount === 0) {
+      recordOk('assignments');
+    } else {
+      recordSkip('assignments', `${assignFailCount}/${totalAssignments} failed: ${assignFirstError}`);
+    }
 
+    let hwFailCount = 0;
+    let hwFirstError = '';
     for (const attempt of rows.homework_attempts) {
       const sid = studentIds[attempt.student_key];
       if (!sid) continue;
@@ -240,12 +301,22 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
 
         const { error: hErr } = await admin.from('homework_attempts').insert(hw);
         if (hErr) {
-          console.error(`[trial-seed] homework_attempt ${attempt.student_key}/${attempt.assignment_key} failed (soft):`, hErr.message);
+          hwFailCount++;
+          if (!hwFirstError) hwFirstError = hErr.message;
         }
       } catch (e) {
-        console.error(`[trial-seed] homework_attempt ${attempt.student_key}/${attempt.assignment_key} failed (soft):`, (e as Error).message);
+        hwFailCount++;
+        if (!hwFirstError) hwFirstError = (e as Error).message;
       }
     }
+    if (hwFailCount === 0) {
+      recordOk('homework_attempts');
+    } else {
+      recordSkip('homework_attempts', `${hwFailCount}/${rows.homework_attempts.length} failed: ${hwFirstError}`);
+    }
+  } else {
+    recordSkip('assignments', 'prerequisite class missing');
+    recordSkip('homework_attempts', 'prerequisite class missing');
   }
 
   // ── Step 9a: Skill — insert-if-absent (no ON CONFLICT against expression index) ─
@@ -276,13 +347,16 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
       });
       if (skillErr) throw skillErr;
     }
+    recordOk('skill');
   } catch (e) {
     skillId = null;
-    console.error('[trial-seed] skill creation failed (soft):', (e as Error).message);
+    recordSkip('skill', (e as Error).message);
   }
 
   // ── Step 9b: Skill learning state (upsert onConflict student_id,skill_id) ─────
   if (skillId) {
+    let slsFailCount = 0;
+    let slsFirstError = '';
     for (const sls of rows.skill_learning_state) {
       const sid = studentIds[sls.student_key];
       if (!sid) continue;
@@ -302,13 +376,23 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
           onConflict: 'student_id,skill_id',
         });
       } catch (e) {
-        console.error(`[trial-seed] skill_learning_state ${sls.student_key} failed (soft):`, (e as Error).message);
+        slsFailCount++;
+        if (!slsFirstError) slsFirstError = (e as Error).message;
       }
     }
+    if (slsFailCount === 0) {
+      recordOk('skill_learning_state');
+    } else {
+      recordSkip('skill_learning_state', `${slsFailCount}/${rows.skill_learning_state.length} failed: ${slsFirstError}`);
+    }
+  } else {
+    recordSkip('skill_learning_state', 'prerequisite skill missing');
   }
 
   // ── Step 9c: Misconception observations (insert) ─────────────────────────────
   if (skillId) {
+    let miscFailCount = 0;
+    let miscFirstError = '';
     for (const m of rows.misconceptions) {
       const sid = studentIds[m.student_key];
       if (!sid) continue;
@@ -322,12 +406,22 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
           observed_at: m.observed_at,
         });
       } catch (e) {
-        console.error(`[trial-seed] misconception ${m.student_key} failed (soft):`, (e as Error).message);
+        miscFailCount++;
+        if (!miscFirstError) miscFirstError = (e as Error).message;
       }
     }
+    if (miscFailCount === 0) {
+      recordOk('misconceptions');
+    } else {
+      recordSkip('misconceptions', `${miscFailCount}/${rows.misconceptions.length} failed: ${miscFirstError}`);
+    }
+  } else {
+    recordSkip('misconceptions', 'prerequisite skill missing');
   }
 
   // ── Step 10: Student model snapshots (≥4/student; soft fail) ─────────────────
+  let snapFailCount = 0;
+  let snapFirstError = '';
   for (const snap of rows.snapshots) {
     const sid = studentIds[snap.student_key];
     if (!sid) continue;
@@ -351,7 +445,15 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
         { onConflict: 'student_id,snapshot_date' }
       );
     } catch (e) {
-      console.error(`[trial-seed] snapshot ${snap.student_key}/${snap.snapshot_date} failed (soft):`, (e as Error).message);
+      snapFailCount++;
+      if (!snapFirstError) snapFirstError = (e as Error).message;
     }
   }
+  if (snapFailCount === 0) {
+    recordOk('snapshots');
+  } else {
+    recordSkip('snapshots', `${snapFailCount}/${rows.snapshots.length} failed: ${snapFirstError}`);
+  }
+
+  return report;
 }
