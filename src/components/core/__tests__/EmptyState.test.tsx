@@ -58,4 +58,30 @@ describe('EmptyState', () => {
     const { container } = render(<EmptyState variant="not-yet-assessed" className="extra" />);
     expect(container.firstChild).toHaveClass('extra');
   });
+
+  it('uses overrides and deep-ink body (text-fg, not text-fg-muted)', () => {
+    const { container } = render(<EmptyState variant="on-track" titleOverride="Nothing flagged" bodyOverride="All clear here." />);
+    expect(screen.getByText('Nothing flagged')).toBeInTheDocument();
+    expect(container.querySelector('p')?.className).toContain('text-fg');
+    expect(container.querySelector('p')?.className).not.toContain('text-fg-muted');
+  });
+
+  it('titleOverride replaces the default heading', () => {
+    render(<EmptyState variant="not-yet-assessed" titleOverride="Custom Title" />);
+    expect(screen.getByText('Custom Title')).toBeInTheDocument();
+    expect(screen.queryByText('Not yet assessed')).not.toBeInTheDocument();
+  });
+
+  it('bodyOverride replaces the default body', () => {
+    render(<EmptyState variant="not-yet-assessed" bodyOverride="Custom body text." />);
+    expect(screen.getByText('Custom body text.')).toBeInTheDocument();
+    expect(screen.queryByText(/data will appear/i)).not.toBeInTheDocument();
+  });
+
+  it('body <p> always uses text-fg (not text-fg-muted)', () => {
+    const { container } = render(<EmptyState variant="just-getting-started" />);
+    const p = container.querySelector('p');
+    expect(p?.className).toContain('text-fg');
+    expect(p?.className).not.toContain('text-fg-muted');
+  });
 });

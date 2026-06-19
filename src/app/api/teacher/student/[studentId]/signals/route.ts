@@ -260,5 +260,6 @@ export async function GET(
       ...consistency,
       ...trajectoryResult,
     },
+    growth_history: snapshotScores,
   });
 }

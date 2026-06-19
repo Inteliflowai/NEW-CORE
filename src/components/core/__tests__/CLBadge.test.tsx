@@ -3,7 +3,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
-import { CLBadge } from '../CLBadge';
+import { CLBadge, type ConfidenceWord } from '../CLBadge';
 import type { SkillLearningState } from '@/lib/skills/clVerbs';
 
 afterEach(cleanup);
@@ -107,6 +107,33 @@ describe('CLBadge — raw confidence number NEVER appears in DOM', () => {
     // No element should contain only digits
     const allText = container.textContent ?? '';
     expect(/\b\d{2,3}\b/.test(allText)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// confidenceWord prop — bypasses numeric path
+// ---------------------------------------------------------------------------
+describe('CLBadge — confidenceWord prop', () => {
+  it('renders the soft word when confidenceWord given, no number', () => {
+    render(<CLBadge state="on_track" confidenceWord="consistent" />);
+    expect(screen.getByText(/consistent/)).toBeInTheDocument();
+  });
+
+  it('confidenceWord null suppresses confidence display', () => {
+    render(<CLBadge state="on_track" confidenceWord={null} />);
+    expect(screen.queryByText(/consistent|tentative|emerging/i)).not.toBeInTheDocument();
+  });
+
+  it('confidenceWord overrides numeric confidence when both provided', () => {
+    render(<CLBadge state="on_track" confidence={10} confidenceWord="consistent" />);
+    expect(screen.getByText(/consistent/)).toBeInTheDocument();
+    expect(screen.queryByText(/emerging/i)).not.toBeInTheDocument();
+  });
+
+  it('ConfidenceWord type is exported and assignable', () => {
+    const word: ConfidenceWord = 'tentative';
+    render(<CLBadge state="on_track" confidenceWord={word} />);
+    expect(screen.getByText(/tentative/)).toBeInTheDocument();
   });
 });
 

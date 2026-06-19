@@ -69,6 +69,23 @@ describe('RiskBadge — semantic role attribute', () => {
   });
 });
 
+describe('RiskBadge — band prop (pre-banded path)', () => {
+  it('renders band directly when band prop given, no score needed', () => {
+    render(<RiskBadge band="high" />);
+    expect(screen.getByText('high')).toBeInTheDocument();
+  });
+
+  it('band prop overrides score when both are provided', () => {
+    render(<RiskBadge band="low" score={80} />);
+    expect(screen.getByText('low')).toBeInTheDocument();
+  });
+
+  it('does NOT render any numeric score in the DOM when only band prop given', () => {
+    render(<RiskBadge band="high" />);
+    expect(screen.queryByText(/\d+/)).not.toBeInTheDocument();
+  });
+});
+
 describe('RiskBadge — tinted signal-pair token classes (WCAG AA readable)', () => {
   it('low band uses bg-ok-surface and text-ok-fg (not saturated bg-ok)', () => {
     const { container } = render(<RiskBadge score={10} />);

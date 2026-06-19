@@ -75,3 +75,35 @@ describe('GrowthMotif', () => {
     expect(container.querySelector('[data-testid="growth-motif"]')).toBeTruthy();
   });
 });
+
+describe('GrowthMotif — growth_history alias + accent prop', () => {
+  it('charts growth_history and applies wins class for accent=ok', () => {
+    const { container } = render(<GrowthMotif growth_history={[60, 65, 70, 80]} accent="ok" />);
+    expect(container.querySelector('.growth-motif--wins')).not.toBeNull();
+  });
+
+  it('cold-starts on <4 points regardless of accent', () => {
+    const { getByTestId } = render(<GrowthMotif growth_history={[60, 70]} accent="ok" />);
+    expect(getByTestId('growth-motif-cold-start')).toBeInTheDocument();
+  });
+
+  it('growth_history renders bars when ≥4 points', () => {
+    render(<GrowthMotif growth_history={[60, 65, 70, 80]} />);
+    expect(screen.getAllByRole('presentation')).toHaveLength(4);
+  });
+
+  it('accent=brand does NOT add wins class', () => {
+    const { container } = render(<GrowthMotif growth_history={[60, 65, 70, 80]} accent="brand" />);
+    expect(container.querySelector('.growth-motif--wins')).toBeNull();
+  });
+
+  it('no accent does NOT add wins class', () => {
+    const { container } = render(<GrowthMotif growth_history={[60, 65, 70, 80]} />);
+    expect(container.querySelector('.growth-motif--wins')).toBeNull();
+  });
+
+  it('existing history prop still works alongside growth_history alias', () => {
+    render(<GrowthMotif history={[10, 20, 30, 40]} />);
+    expect(screen.getAllByRole('presentation')).toHaveLength(4);
+  });
+});

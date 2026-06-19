@@ -26,9 +26,14 @@ export interface CLBadgeProps {
    * NEVER appears in the DOM. Pass null or omit to suppress confidence display.
    */
   confidence?: number | null;
+  /**
+   * Pre-computed confidence word. When provided, bypasses the numeric confidence
+   * path entirely. Pass null to suppress confidence display.
+   */
+  confidenceWord?: ConfidenceWord | null;
 }
 
-type ConfidenceWord = 'consistent' | 'tentative' | 'emerging';
+export type ConfidenceWord = 'consistent' | 'tentative' | 'emerging';
 
 /** Maps a numeric confidence to a soft word. Raw number never exposed. */
 function toConfidenceWord(confidence: number): ConfidenceWord {
@@ -55,16 +60,16 @@ const VERB_STYLES: Record<string, string> = {
  * Optionally renders a confidence soft word (consistent/tentative/emerging).
  * The raw confidence number is NEVER rendered and NEVER placed in a data attr.
  */
-export function CLBadge({ state, confidence }: CLBadgeProps) {
+export function CLBadge({ state, confidence, confidenceWord }: CLBadgeProps) {
   const verb = CL_VERB_BY_STATE[state];
   const label = verb ?? 'Not yet assessed';
   const styleClass = VERB_STYLES[label] ?? VERB_STYLES['Not yet assessed'];
 
-  // Only show confidence word when we have an active verb + a numeric confidence
+  // confidenceWord prop bypasses the numeric path; falls back to computing from confidence
   const word: ConfidenceWord | null =
-    verb !== null && typeof confidence === 'number' && confidence !== null
-      ? toConfidenceWord(confidence)
-      : null;
+    confidenceWord !== undefined
+      ? confidenceWord
+      : (verb !== null && typeof confidence === 'number' ? toConfidenceWord(confidence) : null);
 
   return (
     <span

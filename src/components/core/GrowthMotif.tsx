@@ -6,9 +6,13 @@
 
 interface GrowthMotifProps {
   /** Ordered history of scores (oldest first). Must have ≥4 points to render bars. */
-  history: number[];
+  history?: number[];
+  /** Alias for history — accepted from the signals API response shape. */
+  growth_history?: number[];
   /** Optional copy shown below the bars (e.g. "+18 pts vs 4 weeks ago"). */
   deltaLabel?: string;
+  /** When 'ok', rebinds --brand/--brand-accent to --ok (wins/positive accent). */
+  accent?: 'brand' | 'ok';
 }
 
 /** Minimum number of data points required to render the stepped bars. */
@@ -37,8 +41,9 @@ function clamp(n: number): number {
  * adult layouts bind them to the role accent (calm, restrained). Same component,
  * different hues via CSS token inheritance.
  */
-export function GrowthMotif({ history, deltaLabel }: GrowthMotifProps) {
-  const hasEnoughData = history.length >= COLD_START_THRESHOLD;
+export function GrowthMotif({ history, growth_history, deltaLabel, accent }: GrowthMotifProps) {
+  const series = growth_history ?? history ?? [];
+  const hasEnoughData = series.length >= COLD_START_THRESHOLD;
 
   if (!hasEnoughData) {
     return (
@@ -53,11 +58,11 @@ export function GrowthMotif({ history, deltaLabel }: GrowthMotifProps) {
 
   // Normalize to the series' own max so the tallest bar always fills the chart.
   // Guard maxVal ≥ 1 to avoid divide-by-zero; all-zero history → 0% → 2px floor.
-  const maxVal = Math.max(...history, 1);
+  const maxVal = Math.max(...series, 1);
 
   return (
     <div
-      className="growth-motif"
+      className={['growth-motif', accent === 'ok' ? 'growth-motif--wins' : ''].filter(Boolean).join(' ')}
       data-testid="growth-motif"
     >
       <div
@@ -73,9 +78,9 @@ export function GrowthMotif({ history, deltaLabel }: GrowthMotifProps) {
           padding: '0.5rem',
         }}
       >
-        {history.map((value, i) => {
+        {series.map((value, i) => {
           const heightPct = clamp((value / maxVal) * 100);
-          const isLast = i === history.length - 1;
+          const isLast = i === series.length - 1;
           return (
             <div
               key={i}

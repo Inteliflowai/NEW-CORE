@@ -9,8 +9,9 @@ import React from 'react';
 import { riskBandLabel, type RiskBand } from '@/lib/copy/riskBandLabel';
 
 export interface RiskBadgeProps {
-  score: number;
+  score?: number;
   scale?: '0to1' | '0to100';
+  band?: RiskBand;
 }
 
 // Band → Tailwind utility classes using Tier-2 signal-PAIR CSS token references only (C3).
@@ -29,8 +30,8 @@ const BAND_STYLES: Record<RiskBand, string> = {
  * Renders ONLY the band string ('low' | 'medium' | 'high' | 'critical').
  * The raw numeric score is NEVER rendered and NEVER placed in a data attribute.
  */
-export function RiskBadge({ score, scale = '0to100' }: RiskBadgeProps) {
-  const band = riskBandLabel(score, scale);
+export function RiskBadge(props: RiskBadgeProps) {
+  const band = props.band ?? riskBandLabel(props.score ?? 0, props.scale);
 
   return (
     <span

@@ -49,10 +49,14 @@ const COPY: Record<EmptyStateVariant, { heading: string; body: string; icon: str
 interface EmptyStateProps {
   variant: EmptyStateVariant;
   className?: string;
+  titleOverride?: string;
+  bodyOverride?: string;
 }
 
-export function EmptyState({ variant, className }: EmptyStateProps) {
-  const { icon, heading, body } = COPY[variant];
+export function EmptyState({ variant, className, titleOverride, bodyOverride }: EmptyStateProps) {
+  const { icon } = COPY[variant];
+  const heading = titleOverride ?? COPY[variant].heading;
+  const body = bodyOverride ?? COPY[variant].body;
 
   return (
     <div className={['bg-surface rounded p-8 text-center', className].filter(Boolean).join(' ')}>
@@ -60,7 +64,7 @@ export function EmptyState({ variant, className }: EmptyStateProps) {
         {icon}
       </div>
       <h3 className="text-fg font-display text-lg font-semibold mb-2">{heading}</h3>
-      <p className="text-fg-muted text-base leading-relaxed max-w-[28ch] mx-auto">{body}</p>
+      <p className="text-fg text-base leading-relaxed max-w-[28ch] mx-auto">{body}</p>
     </div>
   );
 }

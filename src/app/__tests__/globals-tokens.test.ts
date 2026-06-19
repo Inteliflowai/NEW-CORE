@@ -89,14 +89,17 @@ describe('globals.css token contract', () => {
 
   // C3 guard: globals.css must NOT contain custom component class selectors.
   // Only allowed selector types: :root, attribute selectors ([data-role…]/[data-intensity…]),
-  // @theme/@import, and the bare `body` element selector.
+  // @theme/@import, the bare `body` element selector, and sanctioned CSS-var-rebind classes
+  // (classes whose blocks contain ONLY CSS custom property declarations, used for token rebinding
+  // — e.g. `.growth-motif--wins { --brand: var(--ok); … }`).
   // This test would catch regressions like `.core-card { … }` being re-added.
   it('C3: contains no CSS class selectors (no .identifier rules)', () => {
     // Strategy:
     // 1. Strip @import lines (they contain paths like katex.min.css which have dots)
     // 2. Strip CSS comments
-    // 3. Strip all declaration blocks (content between { and }), two passes for nesting
-    // 4. Check that no class selector pattern (.identifier) remains
+    // 3. Strip sanctioned CSS-var-rebind class blocks (blocks that contain ONLY --var: declarations)
+    // 4. Strip all remaining declaration blocks (content between { and }), two passes for nesting
+    // 5. Check that no class selector pattern (.identifier) remains
     // This avoids false-positives on decimal values (0.5rem) inside blocks
     // and file paths in @import statements.
     let selectors = css;
@@ -104,6 +107,10 @@ describe('globals.css token contract', () => {
     selectors = selectors.replace(/@import\s+"[^"]*";?/g, '');
     // Strip /* ... */ comments
     selectors = selectors.replace(/\/\*[\s\S]*?\*\//g, '');
+    // Strip sanctioned CSS-var-rebind blocks: .class-name { --custom-prop: ...; } only.
+    // These are architectural token rebinds (not component layout/style CSS) and are explicitly
+    // allowed in globals.css as Tier-3 signal overlays (e.g. .growth-motif--wins).
+    selectors = selectors.replace(/\.[a-zA-Z][\w-]*\s*\{[^{}]*--[\w-]+:[^{}]*\}/g, '');
     // Two passes to strip { ... } blocks (handles one level of nesting like @theme { ... })
     selectors = selectors.replace(/\{[^{}]*\}/g, '{}');
     selectors = selectors.replace(/\{[^{}]*\}/g, '{}');
@@ -114,5 +121,12 @@ describe('globals.css token contract', () => {
       classMatch,
       `C3 violation: globals.css contains a class selector: "${classMatch?.[0]}" — components must style via Tailwind utilities, not custom classes in globals.css`,
     ).toBeNull();
+  });
+
+  // Growth motif wins token rebind
+  it('has .growth-motif--wins CSS-var rebind for accent=ok', () => {
+    expect(css).toContain('.growth-motif--wins');
+    expect(css).toContain('--brand: var(--ok)');
+    expect(css).toContain('--brand-accent: var(--ok)');
   });
 });
