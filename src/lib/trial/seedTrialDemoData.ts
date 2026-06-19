@@ -248,7 +248,86 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
     }
   }
 
-  // ── Step 9: Student model snapshots (≥4/student; soft fail) ──────────────────
+  // ── Step 9a: Skill — insert-if-absent (no ON CONFLICT against expression index) ─
+  let skillId: string | null = null;
+  try {
+    // Pre-query to find existing skill by (school_id, slug, null subject)
+    const { data: existingSkill } = await admin
+      .from('skills')
+      .select('id')
+      .eq('school_id', schoolId)
+      .eq('slug', 'demo-skill-1')
+      .is('subject', null)
+      .maybeSingle();
+
+    if (existingSkill) {
+      skillId = existingSkill.id;
+    } else {
+      skillId = randomUUID();
+      const { error: skillErr } = await admin.from('skills').insert({
+        id: skillId,
+        school_id: schoolId,
+        slug: 'demo-skill-1',
+        name: 'Core Concept Analysis',
+        subject: null,
+        status: 'active',
+        created_by: 'ai',
+        aliases: [],
+      });
+      if (skillErr) throw skillErr;
+    }
+  } catch (e) {
+    skillId = null;
+    console.error('[trial-seed] skill creation failed (soft):', (e as Error).message);
+  }
+
+  // ── Step 9b: Skill learning state (upsert onConflict student_id,skill_id) ─────
+  if (skillId) {
+    for (const sls of rows.skill_learning_state) {
+      const sid = studentIds[sls.student_key];
+      if (!sid) continue;
+      try {
+        const row: Record<string, unknown> = {
+          student_id: sid,
+          school_id: schoolId,
+          skill_id: skillId,
+          state: sls.state,
+          confidence: sls.confidence,
+          observation_count: sls.observation_count,
+          evidence: sls.evidence,
+        };
+        if (sls.last_reteach_outcome) row.last_reteach_outcome = sls.last_reteach_outcome;
+
+        await admin.from('skill_learning_state').upsert(row, {
+          onConflict: 'student_id,skill_id',
+        });
+      } catch (e) {
+        console.error(`[trial-seed] skill_learning_state ${sls.student_key} failed (soft):`, (e as Error).message);
+      }
+    }
+  }
+
+  // ── Step 9c: Misconception observations (insert) ─────────────────────────────
+  if (skillId) {
+    for (const m of rows.misconceptions) {
+      const sid = studentIds[m.student_key];
+      if (!sid) continue;
+      try {
+        await admin.from('misconception_observations').insert({
+          student_id: sid,
+          skill_id: skillId,
+          school_id: schoolId,
+          error_type: m.error_type,
+          reasoning_pattern: m.reasoning_pattern,
+          observed_at: m.observed_at,
+        });
+      } catch (e) {
+        console.error(`[trial-seed] misconception ${m.student_key} failed (soft):`, (e as Error).message);
+      }
+    }
+  }
+
+  // ── Step 10: Student model snapshots (≥4/student; soft fail) ─────────────────
   for (const snap of rows.snapshots) {
     const sid = studentIds[snap.student_key];
     if (!sid) continue;

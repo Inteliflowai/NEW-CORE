@@ -110,6 +110,24 @@ export interface TrialSnapshot {
   snapshot_schema_version: 'v2';
 }
 
+export interface TrialSkillLearningState {
+  student_key: string;
+  skill_key: string;  // resolved to skill uuid by writer
+  state: string;
+  confidence: number;
+  observation_count: number;
+  evidence: Record<string, unknown>;
+  last_reteach_outcome?: string;
+}
+
+export interface TrialMisconception {
+  student_key: string;
+  skill_key: string;
+  error_type: string;
+  reasoning_pattern: string;
+  observed_at: string;
+}
+
 export interface TrialRows {
   students: TrialStudentSpec[]; // students 2-8 (first student pre-created)
   class: TrialClass;
@@ -121,6 +139,8 @@ export interface TrialRows {
   assignments: TrialAssignment[];
   homework_attempts: TrialHomeworkAttempt[];
   snapshots: TrialSnapshot[];
+  skill_learning_state: TrialSkillLearningState[];
+  misconceptions: TrialMisconception[];
 }
 
 // ── Band-differentiated content (from p4b-05 §11) ─────────────────────────────
@@ -368,6 +388,65 @@ export function buildTrialRows(students: DemoStudent[], ids: TrialIds, now: Date
     }
   }
 
+  // ── Skill learning state (6-value enum across students) ──────────────────────
+  // Mirrors buildSeedRows exactly: same state map, same confidence logic,
+  // same last_reteach_outcome pattern, keyed on 'demo-skill-1'.
+  const SLS_STATES = [
+    'needs_different_instruction',
+    'needs_more_time',
+    'on_track',
+    'ready_to_extend',
+    'insufficient_data',
+    'not_attempted',
+  ] as const;
+
+  type SlsState = typeof SLS_STATES[number];
+
+  const stateMap: Record<string, SlsState> = {
+    alex:   'ready_to_extend',
+    sofia:  'on_track',
+    marcus: 'needs_different_instruction',
+    emma:   'needs_more_time',
+    jordan: 'on_track',
+    lily:   'on_track',
+    darius: 'needs_different_instruction',
+    nadia:  'insufficient_data',
+  };
+
+  const skill_learning_state: TrialSkillLearningState[] = students.map(student => {
+    const state = stateMap[student.key] ?? 'not_attempted';
+    const hasReteachOutcome = student.key === 'jordan' || student.key === 'marcus';
+    return {
+      student_key: student.key,
+      skill_key: 'demo-skill-1',
+      state,
+      confidence: state === 'ready_to_extend' ? 85 : state === 'on_track' ? 70 : state === 'insufficient_data' ? 10 : 45,
+      observation_count: student.quizzes.length + student.homework.length,
+      evidence: {},
+      ...(hasReteachOutcome
+        ? { last_reteach_outcome: student.key === 'jordan' ? 'improved' : 'needs_follow_up' }
+        : {}),
+    };
+  });
+
+  // ── Misconceptions (darius + emma, valid error_type codes) ───────────────────
+  const misconceptions: TrialMisconception[] = [
+    {
+      student_key: 'darius',
+      skill_key: 'demo-skill-1',
+      error_type: 'reasoning_gap',
+      reasoning_pattern: 'partial_reasoning',
+      observed_at: isoOf(daysAgo(now, 5)),
+    },
+    {
+      student_key: 'emma',
+      skill_key: 'demo-skill-1',
+      error_type: 'factual_error',
+      reasoning_pattern: 'misconception',
+      observed_at: isoOf(daysAgo(now, 3)),
+    },
+  ];
+
   return {
     students: studentSpecs,
     class: trialClass,
@@ -379,5 +458,7 @@ export function buildTrialRows(students: DemoStudent[], ids: TrialIds, now: Date
     assignments,
     homework_attempts,
     snapshots,
+    skill_learning_state,
+    misconceptions,
   };
 }

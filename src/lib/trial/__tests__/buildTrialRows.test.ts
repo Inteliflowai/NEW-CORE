@@ -76,4 +76,39 @@ describe('buildTrialRows', () => {
     const BAND = new Set(['reteach', 'grade_level', 'advanced', null]);
     rows.snapshots.forEach(s => expect(BAND.has(s.mastery_band)).toBe(true));
   });
+
+  it('emits >=1 skill_learning_state row per assessed student with valid state enum', () => {
+    const VALID_STATES = new Set([
+      'needs_different_instruction',
+      'needs_more_time',
+      'on_track',
+      'ready_to_extend',
+      'insufficient_data',
+      'not_attempted',
+    ]);
+    // Every student has exactly one SLS row
+    DEMO_STUDENTS.forEach(s =>
+      expect(rows.skill_learning_state.filter(r => r.student_key === s.key).length).toBeGreaterThanOrEqual(1)
+    );
+    // All state values are schema-valid
+    rows.skill_learning_state.forEach(r => expect(VALID_STATES.has(r.state)).toBe(true));
+    // Multiple distinct states spread across students (mirrors 6-state enum spread intent)
+    const statesUsed = new Set(rows.skill_learning_state.map(r => r.state));
+    expect(statesUsed.size).toBeGreaterThanOrEqual(4);
+    // Keyed on demo-skill-1
+    rows.skill_learning_state.forEach(r => expect(r.skill_key).toBe('demo-skill-1'));
+  });
+
+  it('emits >=1 misconception_observations row with a valid error_type', () => {
+    const VALID_ERROR_TYPES = new Set([
+      'none', 'factual_error', 'reasoning_gap', 'incomplete',
+      'misunderstood_question', 'vocabulary_confusion', 'off_topic', 'blank',
+    ]);
+    expect(rows.misconceptions.length).toBeGreaterThanOrEqual(1);
+    rows.misconceptions.forEach(m => expect(VALID_ERROR_TYPES.has(m.error_type)).toBe(true));
+    // Targets the struggling students (darius + emma)
+    const misconceptionStudents = new Set(rows.misconceptions.map(m => m.student_key));
+    expect(misconceptionStudents.has('darius')).toBe(true);
+    expect(misconceptionStudents.has('emma')).toBe(true);
+  });
 });
