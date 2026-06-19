@@ -2,9 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const getUser = vi.fn();
 // Table-aware: the impl reads ONLY from('users').select('role').eq('id', user.id).
+let userRole: string | null = 'teacher';
 const from = vi.fn((table: string) => {
   if (table !== 'users') throw new Error(`Unexpected table in proxy: ${table}`);
-  return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: async () => ({ data: { role: 'teacher' } }) };
+  return { select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), single: async () => ({ data: { role: userRole } }) };
 });
 // Capture the cookie adapter so a test can simulate Supabase's session refresh.
 let capturedCookies: { setAll: (c: { name: string; value: string; options?: Record<string, unknown> }[]) => void };
@@ -24,6 +25,7 @@ function req(path: string): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  userRole = 'teacher';
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co';
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'pk';
 });
@@ -70,5 +72,12 @@ describe('proxy (auth gate + session refresh)', () => {
     });
     const res = await proxy(req('/login'));
     expect(res.cookies.get('sb-access-token')?.value).toBe('refreshed');
+  });
+
+  it('does NOT loop: an authed user with no role on /login falls through (no redirect)', async () => {
+    userRole = null;
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    const res = await proxy(req('/login'));
+    expect(res.headers.get('location')).toBeNull();
   });
 });
