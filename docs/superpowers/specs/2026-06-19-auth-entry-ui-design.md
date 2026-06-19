@@ -67,10 +67,10 @@ V2 has the full **server** auth chain (`createServerSupabaseClient` → `getUser
 ### 4.3 `ROLE_HOME` (V2 paths)
 Add to `src/lib/auth/roles.ts` (or a new `src/lib/auth/roleHome.ts`):
 ```
-teacher        → /today
-platform_admin → /provision
-school_sysadmin→ /provision      (super-admin route group)
+teacher        → /today          (built)
+platform_admin → /provision      (built, super-admin group)
 school_admin   → /admin-home     (placeholder, see §5.7)
+school_sysadmin→ /admin-home     (placeholder; school-tier role, NOT super-admin)
 student        → /student-home   (placeholder)
 parent         → /parent-home    (placeholder)
 ```
