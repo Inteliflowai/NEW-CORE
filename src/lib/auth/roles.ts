@@ -9,6 +9,9 @@ export type Role = (typeof ROLES)[number];
 /** Roles routed through the School Admin route group + passing guardSchoolAdmin. */
 export const SCHOOL_ADMIN_ROLES = ['school_admin', 'school_sysadmin', 'platform_admin'] as const;
 
+/** All staff roles allowed to access teacher-facing API routes. */
+export const STAFF_ROLES = ['teacher', 'school_admin', 'school_sysadmin', 'platform_admin'] as const;
+
 // CL_VERB_BY_STATE moved to src/lib/skills/clVerbs.ts (Plan 3 Task 16).
 // Re-exported here for backward compatibility with existing importers.
 export { CL_VERB_BY_STATE } from '@/lib/skills/clVerbs';
