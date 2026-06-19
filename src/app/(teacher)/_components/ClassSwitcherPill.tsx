@@ -53,7 +53,7 @@ export function ClassSwitcherPill() {
     <select
       onChange={handleChange}
       defaultValue={searchParams.get('class') ?? undefined}
-      className="text-fg bg-surface border border-[var(--surface)] rounded px-3 py-1 text-sm hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand"
+      className="text-fg bg-surface border border-surface rounded px-3 py-1 text-sm hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand"
     >
       {classes.map((c) => (
         <option key={c.class_id} value={c.class_id}>
