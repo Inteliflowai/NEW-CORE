@@ -66,7 +66,7 @@ describe('LoginPage', () => {
   it('switches to magic-link mode and calls signInWithOtp with the /auth/callback redirect', async () => {
     signInWithOtp.mockResolvedValue({ error: null });
     render(<LoginPage />);
-    fireEvent.click(screen.getByRole('button', { name: /magic link/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /magic link/i }));
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.edu' } });
     fireEvent.click(screen.getByRole('button', { name: /send magic link/i }));
     await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith(

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { homeForRole } from '@/lib/auth/roleHome';
@@ -28,6 +28,12 @@ function LoginInner() {
   const [error, setError] = useState<string | null>(ERROR_COPY[params.get('error') ?? ''] ?? null);
   const [success, setSuccess] = useState<string | null>(null);
   const expired = params.get('expired') === 'true';
+  const [showExpired, setShowExpired] = useState(expired);
+  useEffect(() => {
+    if (!expired) return;
+    const t = setTimeout(() => setShowExpired(false), 5000);
+    return () => clearTimeout(t);
+  }, [expired]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -80,20 +86,20 @@ function LoginInner() {
           {/* Mode toggle (hidden in forgot) */}
           {mode !== 'forgot' && (
             <div className="mb-5 inline-flex rounded bg-bg p-1" role="tablist">
-              <button type="button" onClick={() => setMode('signin')}
+              <button type="button" role="tab" aria-selected={mode === 'signin'} onClick={() => setMode('signin')}
                 className={`px-3 py-1 text-sm rounded ${mode === 'signin' ? 'bg-surface text-fg shadow' : 'text-fg-muted'}`}>
                 Password
               </button>
-              <button type="button" onClick={() => setMode('magic')}
+              <button type="button" role="tab" aria-selected={mode === 'magic'} onClick={() => setMode('magic')}
                 className={`px-3 py-1 text-sm rounded ${mode === 'magic' ? 'bg-surface text-fg shadow' : 'text-fg-muted'}`}>
                 Magic Link
               </button>
             </div>
           )}
 
-          {expired && (
+          {showExpired && (
             <div role="status" className="mb-4 rounded bg-warn-surface text-warn-fg px-3 py-2 text-sm">
-              Your session expired — please sign in again.
+              Your session expired, please sign in again.
             </div>
           )}
           {error && (
@@ -110,6 +116,12 @@ function LoginInner() {
           {mode === 'forgot' && (
             <button type="button" onClick={() => setMode('signin')}
               className="mb-3 text-sm text-fg-muted hover:text-brand">← Back to sign in</button>
+          )}
+          {mode === 'forgot' && (
+            <div className="mb-2">
+              <h1 className="text-lg font-display text-fg">Reset your password</h1>
+              <p className="mt-1 text-sm text-fg">Enter your email and we&apos;ll send you a reset link.</p>
+            </div>
           )}
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">

@@ -8,4 +8,3 @@ async function handle(request: Request) {
   return NextResponse.redirect(new URL('/login', request.url), 303);
 }
 export const POST = handle;
-export const GET = handle;

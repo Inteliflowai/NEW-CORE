@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('@/lib/supabase/server', () => ({ createServerSupabaseClient: vi.fn() }));
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { POST, GET } from '../route';
+import { POST } from '../route';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -16,13 +16,6 @@ describe('logout route', () => {
     const signOut = mockSignOut();
     const res = await POST(new Request('https://app.test/logout', { method: 'POST' }));
     expect(signOut).toHaveBeenCalled();
-    expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe('https://app.test/login');
-  });
-
-  it('GET also signs out and redirects', async () => {
-    mockSignOut();
-    const res = await GET(new Request('https://app.test/logout'));
     expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('https://app.test/login');
   });

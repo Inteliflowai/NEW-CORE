@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
+/** True if path is a safe same-origin relative path (no //, no scheme, no backslash). */
 function isSafeRedirectPath(path: string): boolean {
   return path.startsWith('/') && !path.startsWith('//') && !path.includes('://') && !path.includes('\\');
 }
@@ -22,7 +23,11 @@ export async function GET(request: Request) {
     // role-fetch here: `/` is resolved to the role home by proxy.ts (single
     // source of role routing), and any crafted-but-safe internal `next` is
     // re-checked by that route's server-layout guard — so no role leak.
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) {
+      // Only a recovery link may land on /set-password; other OTP types ignore that next.
+      const dest = (next === '/set-password' && type !== 'recovery') ? '/' : next;
+      return NextResponse.redirect(`${origin}${dest}`);
+    }
     return NextResponse.redirect(`${origin}/login?error=reset_expired`);
   }
 

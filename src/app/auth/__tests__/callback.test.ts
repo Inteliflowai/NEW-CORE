@@ -177,4 +177,10 @@ describe('auth/callback/route.ts', () => {
     const res = await GET(makeOtpRequest('https://localhost:3000/auth/callback', 'th', 'recovery', '//evil.com'));
     expect(res.headers.get('location')).toBe('https://localhost:3000/');
   });
+
+  it('verifyOtp success with type=magiclink and next=/set-password redirects to / (not /set-password)', async () => {
+    mockVerifySuccess();
+    const res = await GET(makeOtpRequest('https://localhost:3000/auth/callback', 'th', 'magiclink', '/set-password'));
+    expect(res.headers.get('location')).toBe('https://localhost:3000/');
+  });
 });

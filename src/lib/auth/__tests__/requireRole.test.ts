@@ -20,9 +20,14 @@ function mockSupabase(opts: {
 }) {
   const usersSelect = vi.fn().mockReturnThis();
   const usersEq = vi.fn().mockReturnThis();
+  const schoolsSelect = vi.fn().mockReturnThis();
+  const schoolsEq = vi.fn().mockReturnThis();
   const from = vi.fn((table: string) => {
     if (table === 'users') {
       return { select: usersSelect, eq: usersEq, single: async () => ({ data: opts.profile ?? null }) };
+    }
+    if (table === 'schools') {
+      return { select: schoolsSelect, eq: schoolsEq, single: async () => ({ data: opts.school ?? null }) };
     }
     return {
       select: vi.fn().mockReturnThis(),
@@ -34,7 +39,7 @@ function mockSupabase(opts: {
     auth: { getUser: async () => ({ data: { user: opts.user } }) },
     from,
   } as never);
-  return { from, usersSelect, usersEq };
+  return { from, usersSelect, usersEq, schoolsSelect, schoolsEq };
 }
 
 describe('requireRole', () => {
@@ -51,12 +56,14 @@ describe('requireRole', () => {
   });
 
   it('redirects to /trial-expired when the school trial is expired', async () => {
-    mockSupabase({
+    const spies = mockSupabase({
       user: { id: 'u1' },
       profile: { role: 'teacher', school_id: 's1' },
       school: { trial_status: 'expired' },
     });
     await expect(requireRole(['teacher'])).rejects.toThrow('REDIRECT:/trial-expired');
+    expect(spies.schoolsSelect).toHaveBeenCalledWith('trial_status');
+    expect(spies.schoolsEq).toHaveBeenCalledWith('id', 's1');
   });
 
   it('redirects a wrong-role user to their own home', async () => {
