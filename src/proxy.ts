@@ -1,5 +1,13 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import { homeForRole } from '@/lib/auth/roleHome';
+
+// Public at the proxy level (request proceeds). NOTE: /set-password is "public"
+// here but the PAGE guards itself via getSession (Task 7). /logout signs out.
+const PUBLIC_PREFIXES = ['/login', '/set-password', '/logout', '/auth', '/trial-expired'];
+function isPublic(pathname: string): boolean {
+  return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'));
+}
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -23,9 +31,28 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  // IMPORTANT: use getUser() not getSession() — getUser() revalidates with the
-  // auth server and is the only call that keeps the session cookie fresh.
-  await supabase.auth.getUser();
+  // IMPORTANT: use getUser() not getSession() — and do not run code between
+  // createServerClient and getUser().
+  const { data: { user } } = await supabase.auth.getUser();
+  const { pathname } = request.nextUrl;
+
+  // Build a redirect that carries the refreshed cookies (so the session survives).
+  const redirectTo = (path: string, search = '') => {
+    const url = request.nextUrl.clone();
+    url.pathname = path;
+    url.search = search;
+    const redirect = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    return redirect;
+  };
+
+  if (user && (pathname === '/' || pathname === '/login')) {
+    const { data: profile } = await supabase
+      .from('users').select('role').eq('id', user.id).single();
+    return redirectTo(homeForRole(profile?.role ?? null));
+  }
+  if (!user && pathname === '/') return redirectTo('/login');
+  if (!user && !isPublic(pathname)) return redirectTo('/login', '?expired=true');
 
   return supabaseResponse;
 }
