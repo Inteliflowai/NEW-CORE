@@ -19,6 +19,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { buildSeedRows } from '../src/lib/demo/buildSeedRows';
+import { ensureAuthUser } from '../src/lib/trial/ensureAuthUser';
 import {
   DEMO_STUDENTS,
   DEMO_TEACHER,
@@ -41,74 +42,9 @@ if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
 const admin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Paginate listUsers to resolve an auth id by email (getUserByEmail does NOT exist). */
-async function findAuthIdByEmail(email: string): Promise<string | null> {
-  for (let page = 1; page <= 50; page++) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
-    if (error) throw error;
-    const hit = data.users.find((u: { email?: string; id: string }) =>
-      u.email?.toLowerCase() === email.toLowerCase()
-    );
-    if (hit) return hit.id;
-    if (data.users.length < 200) break;
-  }
-  return null;
-}
-
-interface EnsureAuthUserParams {
-  email: string;
-  password: string;
-  full_name: string;
-  role: string;
-  school_id: string;
-}
-
-/** Reconciles by AUTH ID. Never overwrites role/school_id on existing rows. */
-async function ensureAuthUser({
-  email,
-  password,
-  full_name,
-  role,
-  school_id,
-}: EnsureAuthUserParams): Promise<string> {
-  // 1. Resolve auth identity (the only source of truth — email is NOT unique).
-  const { data: created, error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name },
-  });
-  let id = created?.user?.id ?? null;
-  if (!id) {
-    if (error && /already|exist|registered/i.test(error.message)) {
-      id = await findAuthIdByEmail(email);
-    }
-    if (!id) throw error ?? new Error(`Could not ensure auth user ${email}`);
-  }
-
-  // 2. Reconcile the public.users row by ID. NEVER overwrite role/school_id on a row the seed didn't create.
-  const { data: existing, error: selErr } = await admin
-    .from('users')
-    .select('id, role, school_id')
-    .eq('id', id)
-    .maybeSingle();
-  if (selErr) throw selErr;
-  if (existing) {
-    if (existing.role !== role || (existing.school_id && existing.school_id !== school_id)) {
-      throw new Error(
-        `Refusing to rebind existing user ${email} (role/school mismatch) — not seed-owned`
-      );
-    }
-    await admin.from('users').update({ full_name }).eq('id', id);  // only non-identity fields
-  } else {
-    const { error: insErr } = await admin
-      .from('users')
-      .insert({ id, email, full_name, role, school_id });
-    if (insErr) throw insErr;
-  }
-  return id;
-}
+// ensureAuthUser + findAuthIdByEmail moved to src/lib/trial/ensureAuthUser.ts so the
+// seed and trial provisioning share the SAME account-takeover guard. Call sites below
+// pass the admin client explicitly.
 
 /** Find or insert a skill by (school_id, slug, subject) — no ON CONFLICT (expression index). */
 async function ensureSkill({
@@ -218,6 +154,7 @@ async function main() {
   console.log('[seed] Ensuring teacher…');
   const teacherEmail = `${DEMO_TEACHER.key}@demo.coreedtech.com`;
   const teacherId = await ensureAuthUser({
+    admin,
     email: teacherEmail,
     password: DEMO_PASSWORD,
     full_name: DEMO_TEACHER.full_name,
@@ -232,6 +169,7 @@ async function main() {
 
   try {
     parentId = await ensureAuthUser({
+      admin,
       email: `${DEMO_PARENT.key}@demo.coreedtech.com`,
       password: DEMO_PASSWORD,
       full_name: DEMO_PARENT.full_name,
@@ -245,6 +183,7 @@ async function main() {
 
   try {
     adminId = await ensureAuthUser({
+      admin,
       email: `${DEMO_ADMIN.key}@demo.coreedtech.com`,
       password: DEMO_PASSWORD,
       full_name: DEMO_ADMIN.full_name,
@@ -262,6 +201,7 @@ async function main() {
   for (const student of DEMO_STUDENTS) {
     try {
       const sid = await ensureAuthUser({
+        admin,
         email: `${student.key}@demo.coreedtech.com`,
         password: DEMO_PASSWORD,
         full_name: student.full_name,
