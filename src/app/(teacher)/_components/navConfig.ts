@@ -7,6 +7,7 @@
 
 export type NavIconKey =
   | 'today'
+  | 'challenges'
   | 'roster'
   | 'gradebook'
   | 'alerts'
@@ -38,6 +39,7 @@ export function isGroup(e: NavEntry): e is NavGroup {
 
 export const NAV_ENTRIES: NavEntry[] = [
   { label: 'Today', href: '/today', icon: 'today' },
+  { label: 'Spark Challenges', href: '/challenges', icon: 'challenges' },
   {
     groupLabel: 'CLASS',
     items: [

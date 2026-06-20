@@ -5,11 +5,12 @@ import { usePathname } from 'next/navigation';
 import { NAV_ENTRIES, isGroup, matchActive, type NavItem, type NavIconKey } from './navConfig';
 import {
   IconToday, IconRoster, IconGradebook, IconAlerts, IconHighFive,
-  IconLessons, IconQuizzes, IconInsights, IconUpload,
+  IconLessons, IconQuizzes, IconInsights, IconUpload, IconBolt,
 } from '@/components/core/icons';
 
 const ICON: Record<NavIconKey, (p: { className?: string }) => React.JSX.Element> = {
   today: IconToday,
+  challenges: IconBolt,
   roster: IconRoster,
   gradebook: IconGradebook,
   alerts: IconAlerts,

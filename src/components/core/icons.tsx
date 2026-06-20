@@ -99,3 +99,8 @@ export const IconMenu = (p: IconProps) => (
     <path d="M3 6h18M3 12h18M3 18h18" />
   </Svg>
 );
+export const IconBolt = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M13 2 5 13h6l-1 9 8-11h-6l1-9z" />
+  </Svg>
+);
