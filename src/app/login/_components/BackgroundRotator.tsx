@@ -1,13 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 
+// Borrowed from the SPARK login: AI-generated pop-art slides — cooler + far more
+// colorful than the previous CORE stock set. Served via next/image (these PNGs are
+// large) so they're optimized + lazy beyond the first.
 const SLIDES = [
-  { src: '/images/login/login-classroom-ai.jpg', caption: 'The future of education is brilliantly personal.' },
-  { src: '/images/login/login-student-before-after.jpg', caption: 'Every student has the potential to transform.' },
-  { src: '/images/login/login-brain-ai.jpg', caption: 'Intelligence flows in every direction.' },
-  { src: '/images/login/login-learning-paths.jpg', caption: 'Every mind is an explosion waiting to happen.' },
-  { src: '/images/login/login-student-discovery.jpg', caption: 'Learning is the most colorful adventure.' },
+  { src: '/images/login/spark-slide-1.png', caption: 'Where curiosity catches fire.' },
+  { src: '/images/login/spark-slide-2.png', caption: 'Every mind is an explosion waiting to happen.' },
+  { src: '/images/login/spark-slide-3.png', caption: 'Learning, in full color.' },
+  { src: '/images/login/spark-slide-4.jpg', caption: 'Bold ideas, brilliantly personal.' },
+  { src: '/images/login/spark-slide-5.png', caption: 'The spark that changes everything.' },
 ];
 const INTERVAL = 7000;
 
@@ -23,11 +27,16 @@ export default function BackgroundRotator() {
   return (
     <div className="absolute inset-0 overflow-hidden" style={{ backgroundColor: 'var(--ink-950)' }}>
       {SLIDES.map((s, i) => (
-        <div
+        <Image
           key={s.src}
+          src={s.src}
+          alt=""
           aria-hidden
-          className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000"
-          style={{ backgroundImage: `url(${s.src})`, opacity: i === current ? 1 : 0 }}
+          fill
+          priority={i === 0}
+          sizes="50vw"
+          className="object-cover transition-opacity duration-1000"
+          style={{ opacity: i === current ? 1 : 0 }}
         />
       ))}
       {/* Scrim for caption legibility (Tier-1 primitive — sanctioned per spec G3). */}

@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { homeForRole } from '@/lib/auth/roleHome';
@@ -76,11 +77,43 @@ function LoginInner() {
         <BackgroundRotator />
       </div>
 
-      <div className="flex items-center justify-center p-6 sm:p-10">
-        <div className="w-full max-w-sm rounded-lg bg-surface p-8 shadow-pop">
-          <div className="mb-6">
-            <span className="font-display font-bold text-brand text-2xl tracking-tight">◆ CORE</span>
-            <p className="mt-1 text-sm text-fg">Learning Intelligence</p>
+      <div className="relative flex items-center justify-center overflow-hidden p-6 sm:p-10">
+        {/* Pop-Art backdrop so the form side isn't a dull white slab */}
+        <div aria-hidden className="pop-dots pointer-events-none absolute inset-0 opacity-60" />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -left-12 top-10 size-28 -rotate-12 rounded-2xl border-2 border-sidebar-edge bg-brand/15"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-10 bottom-14 size-20 rotate-12 rounded-full border-2 border-sidebar-edge bg-sidebar-active/30"
+        />
+
+        <div className="relative w-full max-w-sm rounded-lg border-2 border-sidebar-edge bg-surface p-8 shadow-sticker">
+          {/* Logo lockup — real CORE mark + SPARK "with" tag */}
+          <div className="mb-6 flex flex-col gap-2.5">
+            <Image
+              src="/images/brand/core-logo.png"
+              alt="CORE"
+              width={1108}
+              height={466}
+              priority
+              className="h-9 w-auto"
+            />
+            <div className="flex items-center gap-2 text-sm text-fg">
+              <span>Learning Intelligence</span>
+              <span aria-hidden className="text-fg-muted">·</span>
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
+                with
+                <Image
+                  src="/images/brand/spark.svg"
+                  alt="SPARK"
+                  width={1071}
+                  height={481}
+                  className="h-3.5 w-auto"
+                />
+              </span>
+            </div>
           </div>
 
           {/* Mode toggle (hidden in forgot) */}

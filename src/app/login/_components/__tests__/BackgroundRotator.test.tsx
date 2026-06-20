@@ -9,7 +9,7 @@ afterEach(() => vi.useRealTimers());
 describe('BackgroundRotator', () => {
   it('renders the first caption active on mount', () => {
     render(<BackgroundRotator />);
-    expect(screen.getByText('The future of education is brilliantly personal.')).toBeInTheDocument();
+    expect(screen.getByText('Where curiosity catches fire.')).toBeInTheDocument();
   });
 
   it('renders five navigation dots', () => {
