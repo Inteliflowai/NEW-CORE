@@ -34,6 +34,14 @@ const RAIL_BY_TONE: Record<SkillMapTone, string> = {
   'not-yet': 'bg-fg-muted',
 };
 
+// Faint card wash by tone — colour-codes each skill at a glance (teacher surface).
+const SURFACE_BY_TONE: Record<SkillMapTone, string> = {
+  reinforce: 'bg-warn-surface',
+  'on-track': 'bg-ok-surface',
+  enrich: 'bg-brand-surface',
+  'not-yet': 'bg-surface',
+};
+
 // Per-row deferred action label by tone.
 const ACTION_BY_TONE: Partial<Record<SkillMapTone, string>> = {
   reinforce: 'Flag for reteach',
@@ -49,11 +57,11 @@ function SkillRow({ row }: { row: SkillMapRow }) {
   const actionLabel = ACTION_BY_TONE[tone] ?? 'Note';
 
   return (
-    <div className="flex overflow-hidden rounded border border-surface">
-      <div className={`w-1 shrink-0 ${RAIL_BY_TONE[tone]}`} aria-hidden="true" />
-      <div className="flex flex-1 flex-col gap-1 p-3">
+    <div className={`flex overflow-hidden rounded-lg border-2 border-sidebar-edge shadow-sticker ${SURFACE_BY_TONE[tone]}`}>
+      <div className={`w-2 shrink-0 ${RAIL_BY_TONE[tone]}`} aria-hidden="true" />
+      <div className="flex flex-1 flex-col gap-1 p-2.5">
         <div className="flex items-center gap-2">
-          <span className="text-fg font-medium flex-1">
+          <span className="text-fg font-semibold flex-1 text-sm">
             <MathText>{row.skill_name}</MathText>
           </span>
           <CLBadge state={row.state} confidenceWord={confidenceWordOf(row.confidence_label)} />
@@ -69,7 +77,7 @@ function SkillRow({ row }: { row: SkillMapRow }) {
           </button>
         </div>
         {row.misconception && (
-          <p className="text-warn-fg text-sm">△ {row.misconception}</p>
+          <p className="text-warn-fg text-[13px] leading-snug">△ {row.misconception}</p>
         )}
       </div>
     </div>
@@ -100,9 +108,9 @@ export function SkillMapMatrix({ rows }: SkillMapMatrixProps): React.JSX.Element
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
-          className="self-start text-brand-fg text-sm underline"
+          className="inline-flex w-fit items-center gap-1 self-start rounded-md border-2 border-sidebar-edge bg-surface px-2.5 py-1 text-xs font-bold text-fg shadow-sticker transition-colors hover:bg-brand hover:text-fg-on-brand"
         >
-          {showAll ? 'Show fewer' : 'Show all on-track skills'}
+          {showAll ? 'Show fewer ▴' : 'Show all on-track skills ▾'}
         </button>
       )}
     </div>

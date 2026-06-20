@@ -38,22 +38,25 @@ export function IdentityHeader({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Breadcrumb back */}
-      <Link href={backHref} className="text-brand-fg text-sm underline self-start">
+      {/* Breadcrumb back — pop pill */}
+      <Link
+        href={backHref}
+        className="inline-flex w-fit items-center gap-1 self-start rounded-md border-2 border-sidebar-edge bg-surface px-2.5 py-1 text-xs font-bold text-fg shadow-sticker transition-colors hover:bg-brand hover:text-fg-on-brand"
+      >
         ← {backLabel}
       </Link>
 
-      <div className="flex items-center gap-4">
-        {/* Avatar — initials */}
+      <div className="flex items-center gap-3">
+        {/* Avatar — bold cobalt sticker tile */}
         <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-surface text-brand-fg font-display font-semibold"
+          className="grid size-14 shrink-0 -rotate-3 place-items-center rounded-xl border-2 border-sidebar-edge bg-brand font-display text-lg font-extrabold text-fg-on-brand shadow-sticker"
           aria-hidden="true"
         >
           {initialsOf(fullName)}
         </div>
 
         <div className="flex-1">
-          <h1 className="font-display text-2xl text-fg font-semibold">{fullName}</h1>
+          <h1 className="font-display text-xl text-fg font-bold tracking-tight">{fullName}</h1>
           {sub && <p className="text-fg-muted text-sm">{sub}</p>}
         </div>
 
@@ -66,7 +69,7 @@ export function IdentityHeader({
             disabled
             aria-disabled="true"
             title="Coming soon"
-            className="rounded border border-fg-muted px-3 py-1.5 text-sm text-fg-muted opacity-60"
+            className="rounded-md border-2 border-sidebar-edge px-3 py-1.5 text-sm font-bold text-fg-muted opacity-50"
           >
             High Five
           </button>
@@ -75,7 +78,7 @@ export function IdentityHeader({
             disabled
             aria-disabled="true"
             title="Coming soon"
-            className="rounded border border-fg-muted px-3 py-1.5 text-sm text-fg-muted opacity-60"
+            className="rounded-md border-2 border-sidebar-edge px-3 py-1.5 text-sm font-bold text-fg-muted opacity-50"
           >
             Add note
           </button>
@@ -84,7 +87,7 @@ export function IdentityHeader({
             disabled
             aria-disabled="true"
             title="Coming soon"
-            className="rounded border border-fg-muted px-3 py-1.5 text-sm text-fg-muted opacity-60"
+            className="rounded-md border-2 border-sidebar-edge px-3 py-1.5 text-sm font-bold text-fg-muted opacity-50"
           >
             Open Assignments ›
           </button>

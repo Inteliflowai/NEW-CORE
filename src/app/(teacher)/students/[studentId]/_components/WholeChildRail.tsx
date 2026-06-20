@@ -20,6 +20,7 @@ import { trajectoryPhrase } from '@/lib/copy/trajectoryPhrase';
 import type { StudentSignals } from '@/lib/signals/loadStudentSignals';
 import type { PriorityCta } from '../_lib/priorityCta';
 import { PriorityRecommendation } from './PriorityRecommendation';
+import { SectionLabel } from '../../../_components/SectionLabel';
 
 interface WholeChildRailProps {
   signals: StudentSignals;
@@ -27,9 +28,13 @@ interface WholeChildRailProps {
   cta: PriorityCta;
 }
 
-function Eyebrow({ children }: { children: React.ReactNode }) {
+type EyebrowTone = 'brand' | 'ok' | 'warn' | 'risk';
+
+function Eyebrow({ children, tone }: { children: React.ReactNode; tone: EyebrowTone }) {
   return (
-    <p className="text-fg-muted text-xs font-medium uppercase tracking-wide mb-1">{children}</p>
+    <div className="mb-2">
+      <SectionLabel tone={tone}>{children}</SectionLabel>
+    </div>
   );
 }
 
@@ -40,50 +45,51 @@ export function WholeChildRail({
 }: WholeChildRailProps): React.JSX.Element {
   const riskLevel = signals.risk.roster.risk_level;
   const topFactor = signals.risk.roster.risk_factors[0] ?? null;
+  const atRiskTone: EyebrowTone = riskLevel === 'low' ? 'ok' : 'risk';
 
   return (
-    <div className="flex flex-col gap-4 lg:sticky lg:top-6">
+    <div className="flex flex-col gap-3 lg:sticky lg:top-5">
       {/* Whole-child narrative */}
-      <p className="text-fg text-base">{storyLine}</p>
+      <p className="text-fg text-sm leading-snug">{storyLine}</p>
 
       {/* ONE deterministic priority recommendation (write deferred) */}
       <PriorityRecommendation cta={cta} />
 
       {/* Mastery */}
-      <Card>
-        <Eyebrow>Mastery</Eyebrow>
+      <Card tone="brand">
+        <Eyebrow tone="brand">Mastery</Eyebrow>
         <div className="flex flex-col gap-2">
           <MasteryLabel band={signals.current_band} />
-          <p className="text-fg text-sm">{trajectoryPhrase(signals.trajectory.trajectory)}</p>
+          <p className="text-fg text-[13px]">{trajectoryPhrase(signals.trajectory.trajectory)}</p>
         </div>
       </Card>
 
       {/* Growing */}
-      <Card>
-        <Eyebrow>Growing</Eyebrow>
+      <Card tone="ok">
+        <Eyebrow tone="ok">Growing</Eyebrow>
         <GrowthMotif growth_history={signals.growth_history} accent="ok" />
         <p className="text-fg-muted text-xs mt-2">vs your own past, never classmates</p>
       </Card>
 
       {/* At risk? — id is the scroll target for the review-risk priority CTA (#at-risk) */}
       <div id="at-risk">
-        <Card>
-          <Eyebrow>At risk?</Eyebrow>
+        <Card tone={atRiskTone}>
+          <Eyebrow tone={atRiskTone}>At risk?</Eyebrow>
           {riskLevel === 'low' ? (
-            <p className="text-fg text-sm">Nothing flagged.</p>
+            <p className="text-fg text-[13px]">Nothing flagged.</p>
           ) : (
             <div className="flex flex-col gap-2">
               <RiskBadge band={riskLevel} />
-              {topFactor && <p className="text-fg text-sm">△ {riskFactorPhrase(topFactor)}</p>}
+              {topFactor && <p className="text-fg text-[13px]">△ {riskFactorPhrase(topFactor)}</p>}
             </div>
           )}
         </Card>
       </div>
 
       {/* Effort */}
-      <Card>
-        <Eyebrow>Effort</Eyebrow>
-        <p className="text-fg text-sm">{effortPhrase(signals.effort.dominant_effort_pattern)}</p>
+      <Card tone="warn">
+        <Eyebrow tone="warn">Effort</Eyebrow>
+        <p className="text-fg text-[13px]">{effortPhrase(signals.effort.dominant_effort_pattern)}</p>
       </Card>
     </div>
   );
