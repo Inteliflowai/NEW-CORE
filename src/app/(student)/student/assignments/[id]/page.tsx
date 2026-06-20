@@ -1,4 +1,4 @@
-// src/app/(student)/assignments/[id]/page.tsx
+// src/app/(student)/student/assignments/[id]/page.tsx
 // Student assignment detail page. Role gate in (student)/layout.tsx.
 // Four-audience: student sees ONLY title + instructions + soft Spark status / launch card.
 // NO transfer scores, rubric dims, mastery enums, CL verbs, or risk numbers.

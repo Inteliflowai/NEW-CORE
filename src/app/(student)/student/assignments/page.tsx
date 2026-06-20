@@ -1,4 +1,4 @@
-// src/app/(student)/assignments/page.tsx
+// src/app/(student)/student/assignments/page.tsx
 // Student assignment list. Role gate in (student)/layout.tsx (requireRole(['student'])).
 // Four-audience: no scores, rubric dims, mastery bands, or risk numbers shown.
 // Shows assignment title + "Spark Challenge" badge when spark_status !== 'none'.

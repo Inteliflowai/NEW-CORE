@@ -187,5 +187,10 @@ describe('POST /api/attempts/spark-launch', () => {
         spark_attempt_id: 'spark-attempt-42',
       }),
     );
+
+    // Lock the return_url to the canonical /student/assignments/<id> path
+    // (route group (student) adds no URL segment — the page lives at /student/assignments/[id]).
+    const claims = mockSignLaunchJwt.mock.calls[0][0] as { return_url: string };
+    expect(claims.return_url).toMatch(/\/student\/assignments\/assign-1$/);
   });
 });

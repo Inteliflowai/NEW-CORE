@@ -1,5 +1,5 @@
 'use client';
-// src/app/(student)/assignments/[id]/_components/SparkLaunchCard.tsx
+// src/app/(student)/student/assignments/[id]/_components/SparkLaunchCard.tsx
 // Four-audience: student sees ONLY soft status text + a launch button.
 // NO transfer scores, rubric dims, mastery enums, CL verbs, or risk numbers ever rendered here.
 import { useState } from 'react';

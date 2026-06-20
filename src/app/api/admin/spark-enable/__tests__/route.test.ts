@@ -34,21 +34,26 @@ function makeAdminMock(opts: {
   school?: unknown;
   schoolError?: unknown;
   licenseData?: unknown;
+  licenseUpdateError?: unknown;
+  existingApiKey?: string | null;
 } = {}) {
   const {
     school = { id: 'school-1', name: 'Demo School' },
     schoolError = null,
     licenseData = { feature_overrides: { existing_feature: true } },
+    licenseUpdateError = null,
+    existingApiKey = null,
   } = opts;
 
   const schoolChain = makeChain(school, schoolError);
   const licenseChain = makeChain(licenseData);
-  const platformLinksChain = makeChain(null);
+  // platform_links SELECT → existing link row (with api_key) or null (FIX B idempotent read).
+  const platformLinksChain = makeChain(existingApiKey ? { api_key: existingApiKey } : null);
   const schoolLicensesUpdateChain = makeChain(null);
 
-  // Intercept update on school_licenses
+  // Intercept update on school_licenses (FIX C surfaces the update error in steps.license).
   licenseChain['update'] = vi.fn().mockReturnValue(schoolLicensesUpdateChain);
-  schoolLicensesUpdateChain['eq'] = vi.fn().mockResolvedValue({ data: null, error: null });
+  schoolLicensesUpdateChain['eq'] = vi.fn().mockResolvedValue({ data: null, error: licenseUpdateError });
 
   return {
     from: vi.fn((table: string) => {
@@ -192,6 +197,51 @@ describe('POST /api/admin/spark-enable', () => {
         label: 'SPARK',
       }),
     );
+    // No existing link → a fresh core_spark_ key is minted.
+    const mintedArg = mockProvisionSparkLink.mock.calls[0][1] as { apiKey: string };
+    expect(mintedArg.apiKey).toMatch(/^core_spark_/);
+  });
+
+  // ── FIX B: idempotent api_key — re-enable reuses the existing platform_links key ──
+  it('reuses the existing platform_links api_key on re-enable (does not rotate the credential)', async () => {
+    mockGuardPlatformAdmin.mockResolvedValue(null);
+    const { createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    const EXISTING_KEY = 'core_spark_already-provisioned-key';
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      makeAdminMock({ existingApiKey: EXISTING_KEY }) as never,
+    );
+
+    mockProvisionSparkSchool.mockResolvedValue({ success: true, sparkSchoolId: 'spark-school-1' });
+    mockProvisionSparkLink.mockResolvedValue(undefined);
+
+    const { POST } = await import('@/app/api/admin/spark-enable/route');
+    const res = await POST(makeRequest({ school_id: 'school-1' }));
+    expect(res.status).toBe(200);
+
+    // The existing key was passed through, NOT a freshly minted one.
+    expect(mockProvisionSparkLink).toHaveBeenCalledOnce();
+    const passedArg = mockProvisionSparkLink.mock.calls[0][1] as { apiKey: string };
+    expect(passedArg.apiKey).toBe(EXISTING_KEY);
+  });
+
+  // ── FIX C: a failed license update is surfaced in steps + flips ok to false ──
+  it('reports a failed license update in steps.license and sets ok=false', async () => {
+    mockGuardPlatformAdmin.mockResolvedValue(null);
+    const { createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      makeAdminMock({ licenseUpdateError: { message: 'permission denied for table school_licenses' } }) as never,
+    );
+
+    mockProvisionSparkSchool.mockResolvedValue({ success: true, sparkSchoolId: 'spark-school-1' });
+    mockProvisionSparkLink.mockResolvedValue(undefined);
+
+    const { POST } = await import('@/app/api/admin/spark-enable/route');
+    const res = await POST(makeRequest({ school_id: 'school-1' }));
+    expect(res.status).toBe(200);
+
+    const body = await res.json();
+    expect(body.steps.license).toMatch(/^failed/);
+    expect(body.ok).toBe(false);
   });
 
   // ── license skipped when no license row ─────────────────────────────────────

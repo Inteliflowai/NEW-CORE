@@ -30,23 +30,29 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const sparkRes = await provisionSparkSchool({ coreSchoolId: school.id as string, name: school.name as string, coreBaseUrl: CORE_BASE_URL });
   steps.spark = sparkRes.success ? `ok (${sparkRes.sparkSchoolId})` : `failed: ${sparkRes.error}`;
 
-  // 2. V2 platform_links row (the gate).
+  // 2. V2 platform_links row (the gate). Idempotent: reuse an existing api_key on re-enable
+  //    so a repeat enable preserves the credential instead of rotating it.
   try {
-    await provisionSparkLink(admin, { schoolId: school.id as string, apiKey: `core_spark_${randomUUID()}`, coreBaseUrl: CORE_BASE_URL, label: 'SPARK' });
+    const { data: existingLink } = await admin
+      .from('platform_links').select('api_key').eq('school_id', school.id).eq('product', 'spark').maybeSingle();
+    const apiKey = existingLink?.api_key ?? `core_spark_${randomUUID()}`;
+    await provisionSparkLink(admin, { schoolId: school.id as string, apiKey, coreBaseUrl: CORE_BASE_URL, label: 'SPARK' });
     steps.link = 'ok';
   } catch (e) { steps.link = `failed: ${(e as Error).message}`; }
 
   // 3. License feature grant (V1-parity): school_licenses.feature_overrides.spark_experiences = true.
+  //    Capture the update error so a failed grant is reflected in steps.license (not silently 'ok').
   try {
     const { data: lic } = await admin.from('school_licenses').select('feature_overrides').eq('school_id', school.id).maybeSingle();
     const overrides = { ...(lic?.feature_overrides ?? {}), spark_experiences: true };
     if (lic) {
-      await admin.from('school_licenses').update({ feature_overrides: overrides }).eq('school_id', school.id);
-      steps.license = 'ok';
+      const { error: licErr } = await admin.from('school_licenses').update({ feature_overrides: overrides }).eq('school_id', school.id);
+      steps.license = licErr ? `failed: ${licErr.message}` : 'ok';
     } else {
       steps.license = 'skipped (no license row)';
     }
   } catch (e) { steps.license = `failed: ${(e as Error).message}`; }
 
-  return NextResponse.json({ ok: sparkRes.success && steps.link === 'ok', spark_school_id: sparkRes.sparkSchoolId ?? null, steps });
+  const ok = sparkRes.success && steps.link === 'ok' && (steps.license === 'ok' || steps.license.startsWith('skipped'));
+  return NextResponse.json({ ok, spark_school_id: sparkRes.sparkSchoolId ?? null, steps });
 }
