@@ -21,7 +21,7 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
     return (
       <Card>
         <h2 className="mb-3">
-        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn-surface px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-warn-fg shadow-sticker">
+        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg shadow-sticker">
           Needs you
         </span>
       </h2>
@@ -37,7 +37,7 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
   return (
     <Card>
       <h2 className="mb-3">
-        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn-surface px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-warn-fg shadow-sticker">
+        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg shadow-sticker">
           Needs you
         </span>
       </h2>
@@ -62,7 +62,7 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
       </ul>
       <a
         href={`/roster?class=${classId}`}
-        className="block mt-4 text-brand text-sm hover:underline"
+        className="mt-4 inline-flex items-center gap-1 rounded-md border-2 border-sidebar-edge bg-brand px-3 py-1.5 text-sm font-bold text-fg-on-brand shadow-sticker transition-transform hover:-translate-y-0.5"
       >
         See the full roster ›
       </a>

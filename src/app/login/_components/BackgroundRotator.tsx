@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 
-// Borrowed from the SPARK login: AI-generated pop-art slides — cooler + far more
-// colorful than the previous CORE stock set. Served via next/image (these PNGs are
-// large) so they're optimized + lazy beyond the first.
+// Full-bleed pop-art gallery, borrowed from SPARK's login — edge-to-edge, with a
+// slow Ken Burns drift + cross-fade. These are the first impression, so they're
+// the hero: object-cover fills the viewport (no letterbox) and next/image keeps the
+// large PNGs optimized.
 const SLIDES = [
   { src: '/images/login/spark-slide-1.png', caption: 'Where curiosity catches fire.' },
   { src: '/images/login/spark-slide-2.png', caption: 'Every mind is an explosion waiting to happen.' },
@@ -34,25 +35,32 @@ export default function BackgroundRotator() {
           aria-hidden
           fill
           priority={i === 0}
-          sizes="50vw"
-          className="object-contain transition-opacity duration-1000"
-          style={{ opacity: i === current ? 1 : 0 }}
+          sizes="100vw"
+          className={`object-cover ${i === current ? 'scale-105 opacity-100' : 'scale-100 opacity-0'}`}
+          // Opacity cross-fade + slow Ken Burns zoom on the transform.
+          style={{ transition: 'opacity 1.4s ease, transform 8s ease' }}
         />
       ))}
-      {/* Scrim for caption legibility (Tier-1 primitive — sanctioned per spec G3). */}
+      {/* Diagonal + bottom scrims (token-derived translucent ink) so the white billboard
+          text and caption stay legible over busy art. Sanctioned per spec G3. */}
       <div
         aria-hidden
         className="absolute inset-0"
-        style={{ background: 'linear-gradient(to top, var(--ink-950) 0%, transparent 55%)' }}
+        style={{ background: 'linear-gradient(105deg, color-mix(in srgb, var(--ink-950) 55%, transparent) 0%, color-mix(in srgb, var(--ink-950) 12%, transparent) 38%, transparent 60%)' }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--ink-950) 70%, transparent) 0%, transparent 35%)' }}
       />
       <p
-        className="absolute bottom-16 left-8 right-8 text-lg font-display"
+        className="absolute bottom-8 left-8 right-8 hidden max-w-md font-display text-2xl font-bold sm:left-10 sm:block"
         data-active="true"
-        style={{ color: 'var(--white)', textShadow: '0 1px 8px rgb(0 0 0 / 0.6)' }}
+        style={{ color: 'var(--white)', textShadow: '0 2px 14px rgb(0 0 0 / 0.75)' }}
       >
         {SLIDES[current].caption}
       </p>
-      <div role="tablist" aria-label="Slideshow" className="absolute bottom-8 right-8 flex gap-2">
+      <div role="tablist" aria-label="Slideshow" className="absolute bottom-4 left-8 z-10 flex gap-2 sm:left-10">
         {SLIDES.map((s, i) => (
           <button
             key={s.src}
@@ -63,9 +71,9 @@ export default function BackgroundRotator() {
             onClick={() => setCurrent(i)}
             className="h-1.5 rounded-full transition-all"
             style={{
-              width: i === current ? '20px' : '6px',
+              width: i === current ? '24px' : '7px',
               backgroundColor: 'var(--white)',
-              opacity: i === current ? 0.9 : 0.35,
+              opacity: i === current ? 0.95 : 0.4,
             }}
           />
         ))}

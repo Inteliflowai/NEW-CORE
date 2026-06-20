@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { homeForRole } from '@/lib/auth/roleHome';
+import { IconBolt } from '@/components/core/icons';
 import BackgroundRotator from './_components/BackgroundRotator';
 
 type Mode = 'signin' | 'magic' | 'forgot';
@@ -72,49 +73,50 @@ function LoginInner() {
     : 'Send reset link';
 
   return (
-    <div className="min-h-screen grid md:grid-cols-2 bg-bg">
-      <div className="relative hidden md:block">
-        <BackgroundRotator />
+    <div className="relative min-h-screen overflow-hidden" style={{ backgroundColor: 'var(--ink-950)' }}>
+      {/* Full-bleed rotating pop-art gallery — the hero / first impression */}
+      <BackgroundRotator />
+
+      {/* Brand billboard over the art (white CORE mark for dark backgrounds) */}
+      <div className="pointer-events-none absolute left-6 top-6 z-10 flex flex-col gap-2 sm:left-10 sm:top-9">
+        <Image
+          src="/images/brand/core-logo.png"
+          alt="CORE"
+          width={1108}
+          height={466}
+          priority
+          className="h-10 w-auto sm:h-12"
+          style={{ filter: 'drop-shadow(0 2px 10px rgb(0 0 0 / 0.6))' }}
+        />
+        <span
+          className="inline-flex items-center gap-1.5 text-sm font-semibold"
+          style={{ color: 'var(--white)', textShadow: '0 1px 8px rgb(0 0 0 / 0.75)' }}
+        >
+          Learning Intelligence · with
+          <Image src="/images/brand/spark.svg" alt="SPARK" width={1071} height={481} className="h-4 w-auto" />
+        </span>
       </div>
 
-      <div className="relative flex items-center justify-center overflow-hidden bg-brand-surface p-6 sm:p-10">
-        {/* Pop-Art backdrop so the form side isn't a dull white slab: cobalt wash +
-            visible dot grid + two bold tilted sticker shapes flanking the card. */}
-        <div aria-hidden className="pop-dots pointer-events-none absolute inset-0" />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute left-6 top-14 size-16 -rotate-12 rounded-2xl border-2 border-sidebar-edge bg-sidebar-active shadow-sticker"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute right-7 bottom-16 size-14 rotate-12 rounded-full border-2 border-sidebar-edge bg-brand shadow-sticker"
-        />
+      {/* Sign-in card — floats to the side so the art stays the hero */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center p-6 sm:justify-end sm:p-10 lg:pr-24 xl:pr-40">
+        <div className="relative w-full max-w-sm rounded-xl border-2 border-sidebar-edge bg-surface p-7 shadow-sticker-lg">
+          {/* Lime bolt sticker tab — the signature, echoes the teacher rail's active sticker */}
+          <span
+            aria-hidden
+            className="absolute -right-3 -top-3 grid size-10 -rotate-12 place-items-center rounded-xl border-2 border-sidebar-edge bg-sidebar-active text-sidebar-active-fg shadow-sticker"
+          >
+            <IconBolt className="size-5" />
+          </span>
 
-        <div className="relative w-full max-w-sm rounded-lg border-2 border-sidebar-edge bg-surface p-6 shadow-sticker">
-          {/* Logo lockup — real CORE mark (dark-on-white variant) + SPARK "with" tag */}
-          <div className="mb-5 flex flex-col gap-2">
-            <Image
-              src="/images/brand/core-logo-white.png"
-              alt="CORE"
-              width={1700}
-              height={760}
-              priority
-              className="h-8 w-auto"
-            />
-            <div className="flex items-center gap-2 text-sm text-fg">
-              <span>Learning Intelligence</span>
-              <span aria-hidden className="text-fg-muted">·</span>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">
-                with
-                <Image
-                  src="/images/brand/spark.svg"
-                  alt="SPARK"
-                  width={1071}
-                  height={481}
-                  className="h-3.5 w-auto"
-                />
-              </span>
-            </div>
+          <div className="mb-5">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-fg">
+              {mode === 'forgot' ? 'Reset your password' : 'Welcome back'}
+            </h1>
+            <p className="mt-1 text-sm text-fg-muted">
+              {mode === 'forgot'
+                ? "Enter your email and we'll send you a reset link."
+                : 'Sign in to your CORE account.'}
+            </p>
           </div>
 
           {/* Mode toggle (hidden in forgot) */}
@@ -150,12 +152,6 @@ function LoginInner() {
           {mode === 'forgot' && (
             <button type="button" onClick={() => setMode('signin')}
               className="mb-3 text-sm text-fg-muted hover:text-brand">← Back to sign in</button>
-          )}
-          {mode === 'forgot' && (
-            <div className="mb-2">
-              <h1 className="text-lg font-display text-fg">Reset your password</h1>
-              <p className="mt-1 text-sm text-fg">Enter your email and we&apos;ll send you a reset link.</p>
-            </div>
           )}
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -208,7 +204,7 @@ function LoginInner() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-bg" />}>
+    <Suspense fallback={<div className="min-h-screen" style={{ backgroundColor: 'var(--ink-950)' }} />}>
       <LoginInner />
     </Suspense>
   );

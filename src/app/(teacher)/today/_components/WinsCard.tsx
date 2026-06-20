@@ -22,7 +22,7 @@ export function WinsCard({ roster }: WinsCardProps): React.JSX.Element {
   return (
     <Card>
       <h2 className="mb-3">
-        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-ok-surface px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-ok-fg shadow-sticker">
+        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-ok px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg shadow-sticker">
           Wins
         </span>
       </h2>

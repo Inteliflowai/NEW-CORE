@@ -140,7 +140,7 @@ export default async function RosterPage({
           {/* Part 4 — "Needs you today" stack */}
           <section className="flex flex-col gap-3">
             <h2>
-              <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn-surface px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-warn-fg shadow-sticker">
+              <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg shadow-sticker">
                 Needs you today
               </span>
             </h2>

@@ -305,6 +305,7 @@
   --shadow-DEFAULT: var(--shadow);
   --shadow-pop:     var(--shadow-pop);
   --shadow-sticker: 3px 3px 0 var(--sidebar-edge);
+  --shadow-sticker-lg: 6px 6px 0 var(--sidebar-edge);
 
   /* Fonts (set by layout.tsx via next/font/google) */
   --font-display: var(--font-bricolage);
