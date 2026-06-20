@@ -7,6 +7,7 @@ export interface AuthedContext {
   userId: string;
   role: Role;
   schoolId: string | null;
+  fullName: string | null;
 }
 
 /**
@@ -20,7 +21,7 @@ export async function requireRole(allowed: readonly Role[]): Promise<AuthedConte
   if (!user) redirect('/login?expired=true');
 
   const { data: profile } = await supabase
-    .from('users').select('role, school_id').eq('id', user.id).single();
+    .from('users').select('role, school_id, full_name').eq('id', user.id).single();
   const role = (profile?.role ?? null) as Role | null;
   if (!role) redirect('/login');
 
@@ -33,5 +34,5 @@ export async function requireRole(allowed: readonly Role[]): Promise<AuthedConte
 
   if (!allowed.includes(role)) redirect(homeForRole(role));
 
-  return { userId: user.id, role, schoolId };
+  return { userId: user.id, role, schoolId, fullName: (profile?.full_name ?? null) as string | null };
 }
