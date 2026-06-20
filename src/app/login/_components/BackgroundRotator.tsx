@@ -35,7 +35,7 @@ export default function BackgroundRotator() {
           fill
           priority={i === 0}
           sizes="50vw"
-          className="object-cover transition-opacity duration-1000"
+          className="object-contain transition-opacity duration-1000"
           style={{ opacity: i === current ? 1 : 0 }}
         />
       ))}

@@ -79,27 +79,27 @@ function LoginInner() {
 
       <div className="relative flex items-center justify-center overflow-hidden bg-brand-surface p-6 sm:p-10">
         {/* Pop-Art backdrop so the form side isn't a dull white slab: cobalt wash +
-            dot grid + two bold tilted sticker shapes bleeding off the edges. */}
-        <div aria-hidden className="pop-dots pointer-events-none absolute inset-0 opacity-70" />
+            visible dot grid + two bold tilted sticker shapes flanking the card. */}
+        <div aria-hidden className="pop-dots pointer-events-none absolute inset-0" />
         <div
           aria-hidden
-          className="pointer-events-none absolute -left-10 top-8 size-32 -rotate-12 rounded-2xl border-2 border-sidebar-edge bg-brand/20 shadow-sticker"
+          className="pointer-events-none absolute left-6 top-14 size-16 -rotate-12 rounded-2xl border-2 border-sidebar-edge bg-sidebar-active shadow-sticker"
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-8 bottom-12 size-24 rotate-12 rounded-full border-2 border-sidebar-edge bg-sidebar-active/40 shadow-sticker"
+          className="pointer-events-none absolute right-7 bottom-16 size-14 rotate-12 rounded-full border-2 border-sidebar-edge bg-brand shadow-sticker"
         />
 
-        <div className="relative w-full max-w-sm rounded-lg border-2 border-sidebar-edge bg-surface p-8 shadow-sticker">
-          {/* Logo lockup — real CORE mark + SPARK "with" tag */}
-          <div className="mb-6 flex flex-col gap-2.5">
+        <div className="relative w-full max-w-sm rounded-lg border-2 border-sidebar-edge bg-surface p-6 shadow-sticker">
+          {/* Logo lockup — real CORE mark (dark-on-white variant) + SPARK "with" tag */}
+          <div className="mb-5 flex flex-col gap-2">
             <Image
-              src="/images/brand/core-logo.png"
+              src="/images/brand/core-logo-white.png"
               alt="CORE"
-              width={1108}
-              height={466}
+              width={1700}
+              height={760}
               priority
-              className="h-9 w-auto"
+              className="h-8 w-auto"
             />
             <div className="flex items-center gap-2 text-sm text-fg">
               <span>Learning Intelligence</span>

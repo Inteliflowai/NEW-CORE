@@ -16,23 +16,23 @@ export function TeacherSidebar({ userName }: { userName: string | null }) {
       <div className="sidebar-dots pointer-events-none absolute inset-0 opacity-50" aria-hidden />
       <div className="relative z-[1] flex h-full flex-col">
         {/* Logo plate */}
-        <div className="flex justify-center px-4 pt-5 pb-3">
-          <div className="inline-flex items-center justify-center rounded-xl bg-sidebar-plate px-3.5 py-2 shadow-sticker">
+        <div className="flex justify-center px-4 pt-4 pb-2">
+          <div className="inline-flex items-center justify-center rounded-xl bg-sidebar-plate px-3 py-1.5 shadow-sticker">
             <Image
               src="/images/brand/core-logo-white.png"
               alt="CORE"
               width={1700}
               height={760}
               priority
-              className="h-14 w-auto"
+              className="h-10 w-auto"
             />
           </div>
         </div>
 
         {/* S2 — SPARK recognition sticker (brand color lives in the SVG; tag is deep ink).
             Tilted like a slapped-on sticker; straightens on hover for a little life. */}
-        <div className="flex justify-center px-4 pb-3">
-          <div className="inline-flex -rotate-3 items-center gap-2 rounded-lg border-2 border-sidebar-edge bg-sidebar-plate px-2.5 py-1.5 shadow-sticker transition-transform hover:rotate-0">
+        <div className="flex justify-center px-4 pb-2">
+          <div className="inline-flex -rotate-3 items-center gap-2 rounded-lg border-2 border-sidebar-edge bg-sidebar-plate px-2.5 py-1 shadow-sticker transition-transform hover:rotate-0">
             <Image
               src="/images/brand/spark.svg"
               alt="SPARK"
@@ -45,7 +45,7 @@ export function TeacherSidebar({ userName }: { userName: string | null }) {
         </div>
 
         {/* Active class */}
-        <div className="px-4 pb-3">
+        <div className="px-4 pb-2">
           <ClassSwitcherPill />
         </div>
 
@@ -53,7 +53,7 @@ export function TeacherSidebar({ userName }: { userName: string | null }) {
         <SidebarNav />
 
         {/* Footer: user + sign out */}
-        <div className="flex flex-col gap-2 border-t border-sidebar-fg/20 p-3">
+        <div className="flex flex-col gap-1.5 border-t border-sidebar-fg/20 p-2.5">
           <div className="flex items-center gap-2.5 rounded-xl bg-sidebar-fg/15 px-2.5 py-2">
             <span
               aria-hidden
