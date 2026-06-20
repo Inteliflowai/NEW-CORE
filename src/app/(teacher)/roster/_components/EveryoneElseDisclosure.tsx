@@ -21,7 +21,7 @@ export function EveryoneElseDisclosure({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        className="text-sm text-fg-muted hover:text-fg transition-colors"
+        className="text-sm text-fg hover:text-brand transition-colors"
       >
         Everyone else ({others.length}) ▾
       </button>
@@ -37,7 +37,7 @@ export function EveryoneElseDisclosure({
               )}
               <Link
                 href={`/students/${r.student_id}?from=roster&class=${classId}`}
-                className="ml-auto text-fg-muted hover:text-fg"
+                className="ml-auto text-fg hover:text-brand"
               >
                 look closer ›
               </Link>
