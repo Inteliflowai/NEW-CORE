@@ -32,6 +32,7 @@ describe('Config files', () => {
         'LICENSE_KEY_SECRET',
         // Spark
         'CORE_SPARK_API_SECRET',
+        'SPARK_API_URL',
         // Media
         'FLUX_API_KEY',
         'RUNWAY_API_KEY',

@@ -181,10 +181,10 @@ describe('checkAllPairs() — regression anchor', () => {
     }
   });
 
-  it('total pair count is 45 (5 roles × 9 pairs each)', () => {
+  it('total pair count is 49 (5 roles × 9 pairs + 4 sidebar pairs)', () => {
     const results = checkAllPairs();
-    // 5 roles × 9 pairs = 45 total (was 5 roles × 8 pairs = 40 before brand-pill pair)
-    expect(results.length).toBe(45);
+    // 5 roles × 9 pairs = 45, plus 4 sidebar/base pairs = 49 total
+    expect(results.length).toBe(49);
   });
 
   it('covers the new brand-fg/brand-surface pair across all roles', () => {

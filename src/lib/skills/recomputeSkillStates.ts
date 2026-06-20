@@ -27,6 +27,7 @@ import {
   type SkillQuizObservation,
   type SkillHomeworkObservation,
   type SkillReteachEvent,
+  type SkillSparkObservation,
 } from './computeSkillState';
 import { toSessionErrorPattern } from './errorPatternMap';
 
@@ -299,6 +300,42 @@ export async function recomputeSkillStatesForStudent(
       }
     }
 
+    // ── SPARK completions → per-skill observations (assignment-level attribution) ──
+    // Mirrors the homework gather: a completion is attributed to every skill in its
+    // parent assignment's skill_ids. Pass ALL completions through — computeSkillState
+    // owns the engagement guard (non_engaged/minimal filtered there, counted as contact).
+    const sparkBySkill = new Map<string, SkillSparkObservation[]>();
+    {
+      const { data: sparkData } = await admin
+        .from('spark_completions')
+        .select(
+          'transfer_score, content_quality, completed_at, received_at, ' +
+          'assignments!inner(skill_ids, student_id)',
+        )
+        .eq('student_id', studentId)
+        .limit(2000);
+      type SparkRow = {
+        transfer_score: number | null;
+        content_quality: 'engaged' | 'minimal' | 'non_engaged' | null;
+        completed_at: string | null;
+        received_at: string | null;
+        assignments: { skill_ids: string[] | null } | null;
+      };
+      for (const row of (sparkData ?? []) as unknown as SparkRow[]) {
+        const skillIdsForRow = row.assignments?.skill_ids ?? [];
+        const obs: SkillSparkObservation = {
+          transferScore: row.transfer_score ?? null,
+          contentQuality: row.content_quality ?? null,
+          completed: true,
+          occurredAt: row.completed_at ?? row.received_at ?? '',
+        };
+        for (const sid of skillIdsForRow) {
+          if (!sparkBySkill.has(sid)) sparkBySkill.set(sid, []);
+          sparkBySkill.get(sid)!.push(obs);
+        }
+      }
+    }
+
     // ── 4. Determine which skills to recompute ────────────────────────────────
     // skillIds provided → always recompute those (even if zero observations
     // → honest insufficient_data / not_attempted result).
@@ -306,6 +343,7 @@ export async function recomputeSkillStatesForStudent(
     const touched = new Set<string>([
       ...quizBySkill.keys(),
       ...hwBySkill.keys(),
+      ...sparkBySkill.keys(),
     ]);
     const targets: string[] =
       args.skillIds?.length ? args.skillIds : Array.from(touched);
@@ -322,7 +360,7 @@ export async function recomputeSkillStatesForStudent(
         homework: hwBySkill.get(skillId) ?? [],
         sessionErrorPatterns,
         reteach: reteachBySkill.get(skillId) ?? null,
-        spark: [], // SPARK webhook is Plan 6; always empty here
+        spark: sparkBySkill.get(skillId) ?? [],
       };
 
       const fused = computeSkillState(input);

@@ -15,7 +15,7 @@ import { requireRole } from '../requireRole';
  */
 function mockSupabase(opts: {
   user: { id: string } | null;
-  profile?: { role: string | null; school_id: string | null } | null;
+  profile?: { role: string | null; school_id: string | null; full_name?: string | null } | null;
   school?: { trial_status: string } | null;
 }) {
   const usersSelect = vi.fn().mockReturnThis();
@@ -94,13 +94,13 @@ describe('requireRole', () => {
   it('returns context for an allowed role AND queries users with the right columns + id', async () => {
     const spies = mockSupabase({
       user: { id: 'u1' },
-      profile: { role: 'teacher', school_id: 's1' },
+      profile: { role: 'teacher', school_id: 's1', full_name: 'Ms. Mitchell' },
       school: { trial_status: 'active' },
     });
     const ctx = await requireRole(['teacher']);
-    expect(ctx).toEqual({ userId: 'u1', role: 'teacher', schoolId: 's1' });
+    expect(ctx).toEqual({ userId: 'u1', role: 'teacher', schoolId: 's1', fullName: 'Ms. Mitchell' });
     // Catch impl drift: wrong table/columns/filter would fail here.
-    expect(spies.usersSelect).toHaveBeenCalledWith('role, school_id');
+    expect(spies.usersSelect).toHaveBeenCalledWith('role, school_id, full_name');
     expect(spies.usersEq).toHaveBeenCalledWith('id', 'u1');
   });
 });

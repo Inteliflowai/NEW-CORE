@@ -569,3 +569,31 @@ describe('0008 platform', () => {
     }
   });
 });
+
+describe('0012_spark.sql', () => {
+  const s = () => sql('0012_spark.sql');
+
+  it('adds spark binding columns to assignments (idempotent)', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.assignments/);
+    expect(s()).toMatch(/ADD COLUMN IF NOT EXISTS spark_assignment_id/);
+    expect(s()).toMatch(/ADD COLUMN IF NOT EXISTS spark_attempt_id/);
+    expect(s()).toMatch(/ADD COLUMN IF NOT EXISTS spark_experiment_id/);
+    expect(s()).toMatch(/ADD COLUMN IF NOT EXISTS spark_status\s+text DEFAULT 'none'/);
+    expect(s()).toMatch(/assignments_spark_status_check/);
+  });
+
+  it('creates spark_completions with the (assignment_id, student_id) upsert key + cascade FKs', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.spark_completions/);
+    expect(s()).toMatch(/assignment_id\s+uuid\s+NOT NULL REFERENCES public\.assignments\(id\) ON DELETE CASCADE/);
+    expect(s()).toMatch(/student_id\s+uuid\s+NOT NULL REFERENCES public\.users\(id\) ON DELETE CASCADE/);
+    expect(s()).toMatch(/UNIQUE \(assignment_id, student_id\)/);
+    expect(s()).toMatch(/content_quality\s+text\s+CHECK \(content_quality IN \('engaged','minimal','non_engaged'\)\)/);
+  });
+
+  it('enables RLS with service_role-all + staff-only school-scoped read (no student/parent)', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.spark_completions ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/spark_completions_service_role_all/);
+    expect(s()).toMatch(/spark_completions_staff_read/);
+    expect(s()).toMatch(/public\.get_my_role\(\) IN \('teacher','school_admin','school_sysadmin','platform_admin'\)/);
+  });
+});

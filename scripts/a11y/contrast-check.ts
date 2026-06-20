@@ -337,6 +337,15 @@ const PAIRS: PairDef[] = [
   ['brand-fg/brand-surface', 'brandFg', 'brandSurface', 4.5],
 ];
 
+// Sidebar (teacher rail) pairs — resolved from :root (not role/intensity-scoped).
+// [label, fgProp, bgProp, requiredRatio]
+const SIDEBAR_PAIRS: Array<[string, string, string, number]> = [
+  ['sidebar-fg/sidebar',               '--sidebar-fg',        '--sidebar',        4.5],
+  ['sidebar-fg-muted/sidebar',         '--sidebar-fg-muted',  '--sidebar',        4.5],
+  ['sidebar-active-fg/sidebar-active', '--sidebar-active-fg', '--sidebar-active', 4.5],
+  ['signout/sidebar-danger',           '--white',             '--sidebar-danger', 4.5],
+];
+
 // ---------------------------------------------------------------------------
 // Build resolved palettes from parsed CSS
 // ---------------------------------------------------------------------------
@@ -481,6 +490,17 @@ export function checkAllPairs(cssSource?: string): ContrastResult[] {
           passes: ratio >= required,
         });
       }
+    }
+  }
+
+  // Sidebar pairs (single palette, resolved from :root) — only when the tokens
+  // are defined (synthetic fixture CSS in tests omits them).
+  if (parsed.rootProps.has('--sidebar')) {
+    for (const [pairLabel, fgProp, bgProp, required] of SIDEBAR_PAIRS) {
+      const fg = resolveToHex(`var(${fgProp})`, parsed.rootProps, `sidebar slot="${fgProp}"`);
+      const bg = resolveToHex(`var(${bgProp})`, parsed.rootProps, `sidebar slot="${bgProp}"`);
+      const ratio = contrastRatio(fg, bg);
+      results.push({ role: 'sidebar', intensity: 'base', pair: pairLabel, fg, bg, ratio, required, passes: ratio >= required });
     }
   }
 

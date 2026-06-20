@@ -123,6 +123,16 @@
   --radius-lg:    1rem;
   --shadow:       0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
   --shadow-pop:   0 8px 24px -4px rgb(0 0 0 / 0.16), 0 4px 8px -2px rgb(0 0 0 / 0.10);
+
+  /* Sidebar (teacher "pop-art" rail) — references Tier-1 ramps; consumed via bg-sidebar etc. */
+  --sidebar:           var(--cobalt-700);
+  --sidebar-fg:        var(--white);
+  --sidebar-fg-muted:  var(--cobalt-100);
+  --sidebar-active:    var(--lime-400);
+  --sidebar-active-fg: var(--ink-950);
+  --sidebar-edge:      var(--ink-950);
+  --sidebar-plate:     var(--white);
+  --sidebar-danger:    var(--coral-600);
 }
 
 /* ============================================================
@@ -277,6 +287,16 @@
   --color-risk-surface: var(--risk-surface);
   --color-risk-fg:      var(--risk-fg);
 
+  /* Sidebar (teacher rail) tokens */
+  --color-sidebar:            var(--sidebar);
+  --color-sidebar-fg:         var(--sidebar-fg);
+  --color-sidebar-fg-muted:   var(--sidebar-fg-muted);
+  --color-sidebar-active:     var(--sidebar-active);
+  --color-sidebar-active-fg:  var(--sidebar-active-fg);
+  --color-sidebar-edge:       var(--sidebar-edge);
+  --color-sidebar-plate:      var(--sidebar-plate);
+  --color-sidebar-danger:     var(--sidebar-danger);
+
   /* Radius — rounded / rounded-lg utilities */
   --radius-DEFAULT: var(--radius);
   --radius-lg:      var(--radius-lg);
@@ -284,6 +304,7 @@
   /* Shadows */
   --shadow-DEFAULT: var(--shadow);
   --shadow-pop:     var(--shadow-pop);
+  --shadow-sticker: 3px 3px 0 var(--sidebar-edge);
 
   /* Fonts (set by layout.tsx via next/font/google) */
   --font-display: var(--font-bricolage);
@@ -301,4 +322,25 @@ body {
 
 /* GROWTH MOTIFS */
 .growth-motif--wins { --brand: var(--ok); --brand-accent: var(--ok); }
+
+/* Pop-art rail texture + corner glow (decorative; token-derived, no hardcoded hex).
+   Defined as Tailwind v4 @utility (not bare class selectors) per the globals.css
+   token contract — used as `sidebar-dots` / `sidebar-glow` classes in markup. */
+@utility sidebar-dots {
+  background-image: radial-gradient(color-mix(in srgb, var(--white) 28%, transparent) 1.5px, transparent 1.7px);
+  background-size: 13px 13px;
+}
+@utility sidebar-glow {
+  &::after {
+    content: "";
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    top: -30px;
+    right: -26px;
+    border-radius: 9999px;
+    pointer-events: none;
+    background: radial-gradient(circle, color-mix(in srgb, var(--lime-400) 40%, transparent), transparent 70%);
+  }
+}
 

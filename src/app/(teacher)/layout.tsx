@@ -1,29 +1,16 @@
 // Route-group layout for the teacher role.
-// Sets data-role="teacher" + data-intensity="calm" via RoleLayout.
+// Auth gate (requireRole) first, then the left-sidebar app shell (TeacherShell),
+// which sets data-role="teacher" + data-intensity="calm" for token binding.
 // The root layout (src/app/layout.tsx) owns <html>/<body> — this nests inside it.
 
-import { RoleLayout } from '@/components/core/RoleLayout';
+import { TeacherShell } from './_components/TeacherShell';
 import { requireRole } from '@/lib/auth/requireRole';
-import { TeacherNav } from './_components/TeacherNav';
-import { ClassSwitcherPill } from './_components/ClassSwitcherPill';
 
 export default async function TeacherLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  await requireRole(['teacher']);
-  return (
-    <RoleLayout
-      role="teacher"
-      nav={
-        <>
-          <TeacherNav />
-          <ClassSwitcherPill />
-        </>
-      }
-    >
-      {children}
-    </RoleLayout>
-  );
+  const { fullName } = await requireRole(['teacher']);
+  return <TeacherShell userName={fullName}>{children}</TeacherShell>;
 }

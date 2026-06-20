@@ -15,6 +15,34 @@ import { normalizeLearningStyle } from '@/lib/utils/learningStyle';
 import { OPENAI_GEN_MODEL } from '@/lib/ai/models';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 import { computeBehavioralSummary, formatSignalsForPrompt } from '@/lib/utils/scoring';
+import { getSparkLink } from '@/lib/spark/sparkLink';
+import { notifyAssignmentCreated } from '@/lib/spark/notifyAssignmentCreated';
+
+// Shape of the widened quiz_attempts row (with quizzes/lessons + users joins).
+// Supabase's typed-query inference can't resolve a join this deep and returns
+// GenericStringError, so the query result is cast to this interface. Field types
+// match the inline casts the route already relied on.
+interface AttemptJoinRow {
+  id: string;
+  student_id: string;
+  mastery_band: 'reteach' | 'grade_level' | 'advanced' | null;
+  learning_style: string | null;
+  quizzes: {
+    class_id: string | null;
+    lesson_id: string | null;
+    lessons: {
+      parsed_content: { key_concepts?: string[] } | null;
+      title: string | null;
+      grade_level: string | null;
+      subject: string | null;
+    } | null;
+  } | null;
+  users: {
+    full_name: string | null;
+    grade_level: string | null;
+    school_id: string | null;
+  } | null;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,14 +64,21 @@ export async function POST(req: NextRequest) {
     }
 
     // â”€â”€ Fetch attempt with quizzes join (C15: class_id + lesson_id from quizzes) â”€â”€
+    // The widened nested select below exceeds Supabase's typed-query inference
+    // (data resolves to GenericStringError), so we cast the row to the local
+    // AttemptJoinRow shape. The runtime data shape is correct; this is purely a
+    // TypeScript inference limitation -- do NOT narrow the select to satisfy tsc.
     const admin = createAdminSupabaseClient();
-    const { data: attempt } = await admin
+    const { data } = await admin
       .from('quiz_attempts')
       .select(
-        'id, student_id, mastery_band, learning_style, quizzes(class_id, lesson_id, lessons(parsed_content, title)), users:student_id(full_name)',
+        'id, student_id, mastery_band, learning_style, ' +
+        'quizzes(class_id, lesson_id, lessons(parsed_content, title, grade_level, subject)), ' +
+        'users:student_id(full_name, grade_level, school_id)',
       )
       .eq('id', quiz_attempt_id)
       .single();
+    const attempt = (data ?? null) as unknown as AttemptJoinRow | null;
 
     if (!attempt) {
       return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
@@ -140,6 +175,53 @@ export async function POST(req: NextRequest) {
 
     if (insErr || !row) {
       return NextResponse.json({ error: 'Failed to save assignment' }, { status: 500 });
+    }
+
+    // ── SPARK create-notify (non-blocking; never fails assignment generation) ──
+    try {
+      const userRow = attempt.users as { school_id?: string; grade_level?: string | null } | null;
+      const schoolId = userRow?.school_id ?? null;
+      if (schoolId) {
+        const link = await getSparkLink(admin, schoolId);
+        if (link) {
+          const lessonRow =
+            ((attempt.quizzes as { lessons?: Record<string, unknown> } | null)?.lessons ?? {}) as {
+              parsed_content?: { key_concepts?: string[] };
+              grade_level?: string | null;
+              subject?: string | null;
+            };
+          const grade = userRow?.grade_level ?? lessonRow.grade_level ?? null;
+          const result = await notifyAssignmentCreated({
+            coreHomeworkId: row.id as string,
+            studentId: attempt.student_id as string,
+            schoolId,
+            coreClassId: classId,
+            band,
+            learningStyle: normalizeLearningStyle(style),
+            grade,
+            subject: lessonRow.subject ?? null,
+            conceptTags: lessonRow.parsed_content?.key_concepts ?? [],
+            title: assignment.title,
+            content: `${assignment.title}\n\n${assignment.instructions}`,
+          });
+          await admin
+            .from('assignments')
+            .update({
+              spark_assignment_id: result.sparkAssignmentId,
+              spark_attempt_id: result.sparkAttemptId ?? null,
+              spark_experiment_id: result.syntheticExperimentId ?? null,
+              spark_status: result.success ? 'created' : 'notify_failed',
+            })
+            .eq('id', row.id);
+        }
+      }
+    } catch (sparkErr) {
+      console.error('[teacher/assignments/generate] spark notify failed (non-blocking):', sparkErr);
+      try {
+        await admin.from('assignments').update({ spark_status: 'notify_failed' }).eq('id', row.id);
+      } catch {
+        /* best-effort; never block assignment generation */
+      }
     }
 
     return NextResponse.json({ assignment_id: row.id, content: assignment });

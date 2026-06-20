@@ -7,6 +7,15 @@ import { EmptyState } from '@/components/core/EmptyState';
 interface ClassOption {
   class_id: string;
   label: string;
+  subject: string | null;
+  student_count: number;
+}
+
+/** Truthful meta line for the selected class — subject omitted when null, count pluralized. */
+export function classMetaLine({ subject, student_count }: { subject: string | null; student_count: number }): string {
+  const noun = student_count === 1 ? 'student' : 'students';
+  const count = `${student_count} ${noun}`;
+  return subject ? `${subject} · ${count}` : count;
 }
 
 export function ClassSwitcherPill() {
@@ -50,30 +59,33 @@ export function ClassSwitcherPill() {
   }
 
   if (loading) {
-    return (
-      <div
-        aria-busy="true"
-        className="inline-block w-40 h-8 rounded bg-surface animate-pulse"
-      />
-    );
+    return <div aria-busy="true" className="h-9 w-full rounded bg-sidebar-plate/20 animate-pulse" />;
   }
 
   if (!classes || classes.length === 0) {
     return <EmptyState variant="just-getting-started" />;
   }
 
+  const selectedId = searchParams.get('class') ?? classes[0]?.class_id;
+  const selected = classes.find((c) => c.class_id === selectedId) ?? classes[0];
+
   return (
-    <select
-      onChange={handleChange}
-      defaultValue={searchParams.get('class') ?? undefined}
-      className="text-fg bg-surface border border-surface rounded px-3 py-1 text-sm hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand"
-    >
-      {classes.map((c) => (
-        <option key={c.class_id} value={c.class_id}>
-          {c.label}
-        </option>
-      ))}
-    </select>
+    <div className="flex flex-col gap-1.5">
+      <p className="text-sidebar-fg-muted text-[10px] font-bold uppercase tracking-wider">Active class</p>
+      <select
+        onChange={handleChange}
+        defaultValue={selectedId ?? undefined}
+        aria-label="Active class"
+        className="w-full rounded border border-sidebar-edge bg-sidebar-plate px-3 py-2 text-sm font-bold text-brand shadow-sticker focus:outline-none focus:ring-2 focus:ring-sidebar-active"
+      >
+        {classes.map((c) => (
+          <option key={c.class_id} value={c.class_id}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+      <p className="text-sidebar-fg-muted text-[11px]">{classMetaLine(selected)}</p>
+    </div>
   );
 }
 
