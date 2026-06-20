@@ -62,6 +62,12 @@ export default async function TodayPage({
   const summary = buildSummary(needs, onTrack, notAssessed);
   const focusSorted = sortFocusGroup(data.focus_group);
 
+  // Wins celebrates only students who are NOT in the "needs you" group, so its
+  // count stays consistent with the summary's on-track number (a focus-group
+  // student is never also "on track or stronger").
+  const focusIds = new Set(focusSorted.map((f) => f.student_id));
+  const winsRoster = data.roster.filter((r) => !focusIds.has(r.student_id));
+
   return (
     <div className="p-6 flex flex-col gap-6">
       <div>
@@ -70,7 +76,7 @@ export default async function TodayPage({
       <p className="text-fg text-sm">{summary}</p>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <NeedsYouCard focusGroup={focusSorted} classId={classId} />
-        <WinsCard roster={data.roster} classId={classId} />
+        <WinsCard roster={winsRoster} />
         <QuickStartCard classId={classId} />
       </div>
     </div>

@@ -10,8 +10,7 @@ import { GrowthMotif } from '@/components/core/GrowthMotif';
 import type { RosterItem } from '@/lib/signals/loadRosterSignals';
 
 interface WinsCardProps {
-  roster: RosterItem[];
-  classId: string;
+  roster: RosterItem[]; // students NOT in the focus group (caller filters)
 }
 
 export function WinsCard({ roster }: WinsCardProps): React.JSX.Element {
