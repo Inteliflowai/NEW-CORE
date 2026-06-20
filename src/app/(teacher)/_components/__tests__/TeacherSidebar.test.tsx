@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
+import { render, screen } from '@testing-library/react';
 import '@/test/setup-dom';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
 
 vi.mock('../ClassSwitcherPill', () => ({ ClassSwitcherPill: () => <div data-testid="pill" /> }));
 vi.mock('../SidebarNav', () => ({ SidebarNav: () => <nav data-testid="nav" /> }));
@@ -25,5 +25,18 @@ describe('TeacherSidebar', () => {
     render(<TeacherSidebar userName={null} />);
     // both the footer name and the role label read "Teacher"
     expect(screen.getAllByText('Teacher').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('TeacherSidebar — S2 SPARK sticker', () => {
+  it('renders a SPARK sticker image and the "Inside CORE" tag', () => {
+    render(<TeacherSidebar userName="Dana Whitfield" />);
+    expect(screen.getByAltText('SPARK')).toBeInTheDocument();
+    expect(screen.getByText(/inside core/i)).toBeInTheDocument();
+  });
+
+  it('still renders the CORE logo plate (no regression)', () => {
+    render(<TeacherSidebar userName="Dana Whitfield" />);
+    expect(screen.getByAltText('CORE')).toBeInTheDocument();
   });
 });

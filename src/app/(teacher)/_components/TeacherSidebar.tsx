@@ -29,6 +29,20 @@ export function TeacherSidebar({ userName }: { userName: string | null }) {
           </div>
         </div>
 
+        {/* S2 — SPARK recognition sticker (brand color lives in the SVG; tag is deep ink) */}
+        <div className="flex justify-center px-4 pb-3">
+          <div className="inline-flex items-center gap-2 rounded-lg bg-sidebar-plate px-2.5 py-1.5 shadow-sticker">
+            <Image
+              src="/images/brand/spark.svg"
+              alt="SPARK"
+              width={1071}
+              height={481}
+              className="h-5 w-auto"
+            />
+            <span className="text-[9px] font-bold uppercase tracking-wider text-fg">Inside CORE</span>
+          </div>
+        </div>
+
         {/* Active class */}
         <div className="px-4 pb-3">
           <ClassSwitcherPill />
