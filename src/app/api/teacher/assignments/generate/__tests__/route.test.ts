@@ -173,6 +173,16 @@ vi.mock('@/lib/engine/assignmentGen', () => ({
   inferLearningStyle: (...a: unknown[]) => mockInferLearningStyle(...a),
 }));
 
+// SPARK hooks — hoisted so they reliably intercept the route's static imports
+const mockGetSparkLink = vi.fn();
+vi.mock('@/lib/spark/sparkLink', () => ({
+  getSparkLink: (...a: unknown[]) => mockGetSparkLink(...a),
+}));
+const mockNotify = vi.fn();
+vi.mock('@/lib/spark/notifyAssignmentCreated', () => ({
+  notifyAssignmentCreated: (...a: unknown[]) => mockNotify(...a),
+}));
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('POST /api/teacher/assignments/generate', () => {
@@ -180,6 +190,8 @@ describe('POST /api/teacher/assignments/generate', () => {
     mockGuardStudentAccess.mockReset();
     mockGenerateAssignment.mockReset();
     mockInferLearningStyle.mockReset();
+    mockGetSparkLink.mockReset();
+    mockNotify.mockReset();
     vi.resetModules();
   });
 
@@ -353,45 +365,44 @@ describe('POST /api/teacher/assignments/generate', () => {
     expect(res.status).toBe(404);
   });
 
-  // ── SPARK T7: gate off (no enabled platform_links row) → notify NOT called ─
+  // ── SPARK T7: gate off (no enabled spark link) → notify NOT called ─────────
   it('does NOT notify SPARK when the school has no enabled spark link (gate off)', async () => {
     const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
     vi.mocked(createServerSupabaseClient).mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null }) },
     } as never);
-    vi.mocked(createAdminSupabaseClient).mockReturnValue(makeAdminMock({ sparkLink: null }) as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(makeAdminMock() as never);
     mockGuardStudentAccess.mockResolvedValue(null);
     mockGenerateAssignment.mockResolvedValue({ title: 'T', instructions: 'I' });
-
-    const notifySpy = vi.fn();
-    vi.doMock('@/lib/spark/notifyAssignmentCreated', () => ({ notifyAssignmentCreated: notifySpy }));
+    mockGetSparkLink.mockResolvedValue(null);
 
     const { POST } = await import('@/app/api/teacher/assignments/generate/route');
     const res = await POST(makeRequest());
     expect(res.status).toBe(200);
-    expect(notifySpy).not.toHaveBeenCalled();
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 
-  // ── SPARK T7: gate on (enabled platform_links row) → notify called + spark_status persisted ─
+  // ── SPARK T7: gate on (enabled spark link) → notify called + args verified ─
   it('notifies SPARK + persists spark_status when an enabled link exists (non-blocking)', async () => {
     const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
     vi.mocked(createServerSupabaseClient).mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null }) },
     } as never);
-    vi.mocked(createAdminSupabaseClient).mockReturnValue(
-      makeAdminMock({ sparkLink: { api_key: 'k', core_base_url: null, enabled: true } }) as never,
-    );
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(makeAdminMock() as never);
     mockGuardStudentAccess.mockResolvedValue(null);
     mockGenerateAssignment.mockResolvedValue({ title: 'T', instructions: 'I' });
-
-    const notifySpy = vi.fn().mockResolvedValue({
+    mockGetSparkLink.mockResolvedValue({ api_key: 'k', core_base_url: null, enabled: true });
+    mockNotify.mockResolvedValue({
       success: true, sparkAssignmentId: 'sa-1', sparkAttemptId: 'att-1', syntheticExperimentId: 'exp-1',
     });
-    vi.doMock('@/lib/spark/notifyAssignmentCreated', () => ({ notifyAssignmentCreated: notifySpy }));
 
     const { POST } = await import('@/app/api/teacher/assignments/generate/route');
     const res = await POST(makeRequest());
     expect(res.status).toBe(200);
-    expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(mockNotify).toHaveBeenCalledTimes(1);
+    expect(mockNotify).toHaveBeenCalledWith(expect.objectContaining({
+      coreHomeworkId: expect.any(String),
+      studentId: expect.any(String),
+    }));
   });
 });
