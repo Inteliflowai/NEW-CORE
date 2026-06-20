@@ -10,6 +10,7 @@ import type { FocusGroupItem, RosterItem } from '@/lib/signals/loadRosterSignals
 import { MasteryLabel } from '@/components/core/MasteryLabel';
 import { RiskBadge } from '@/components/core/RiskBadge';
 import { ActionChip } from './ActionChip';
+import { riskFactorPhrase } from '@/lib/copy/riskFactorPhrase';
 
 // Left accent bar colour by severity
 const ACCENT_BY_SEVERITY: Record<1 | 2 | 3, string> = {
@@ -72,7 +73,7 @@ export function RosterTriageCard({
             <span className="text-warn-fg">∿ moving around lately</span>
           )}
           {r && r.risk.risk_factors.length > 0 && (
-            <span className="text-fg-muted">△ {r.risk.risk_factors[0]}</span>
+            <span className="text-fg-muted">△ {riskFactorPhrase(r.risk.risk_factors[0])}</span>
           )}
           <Link
             href={lookCloserHref}

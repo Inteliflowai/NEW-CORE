@@ -27,7 +27,7 @@ const mockRosterEntry: RosterItem = {
   risk: {
     risk_score: 73,
     risk_level: 'high',
-    risk_factors: ['Low homework average'],
+    risk_factors: ['Low average quiz score (48%)'],
   },
 };
 
@@ -65,11 +65,13 @@ describe('RosterTriageCard', () => {
     expect(container.innerHTML).toContain('moving around lately');
   });
 
-  it('renders the first risk factor', () => {
+  it('renders the first risk factor words-only (strips the raw %)', () => {
     const { container } = render(
       <RosterTriageCard item={mockItem} rosterById={rosterById} classId={CLASS_ID} />,
     );
-    expect(container.innerHTML).toContain('Low homework average');
+    expect(container.innerHTML).toContain('Low average quiz score'); // clean phrase
+    expect(container.innerHTML).not.toContain('48');                 // raw % stripped
+    expect(container.innerHTML).not.toContain('(48%)');
   });
 
   it('renders look-closer link with correct href', () => {
