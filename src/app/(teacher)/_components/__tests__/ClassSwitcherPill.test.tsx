@@ -2,7 +2,7 @@
 import '@/test/setup-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { ClassSwitcherPill } from '../ClassSwitcherPill';
+import { ClassSwitcherPill, classMetaLine } from '../ClassSwitcherPill';
 
 const replace = vi.fn();
 
@@ -13,8 +13,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 const MOCK_CLASSES = [
-  { class_id: 'c1', label: 'Algebra I — Period 3' },
-  { class_id: 'c2', label: 'Geometry' },
+  { class_id: 'c1', label: 'Algebra I — Period 3', subject: 'Mathematics', student_count: 8 },
+  { class_id: 'c2', label: 'Geometry', subject: 'Mathematics', student_count: 1 },
 ];
 
 beforeEach(() => {
@@ -25,6 +25,14 @@ beforeEach(() => {
       json: () => Promise.resolve({ classes: MOCK_CLASSES }),
     }),
   );
+});
+
+describe('classMetaLine', () => {
+  it('formats subject + pluralized count', () => {
+    expect(classMetaLine({ subject: 'Mathematics', student_count: 8 })).toBe('Mathematics · 8 students');
+    expect(classMetaLine({ subject: 'Mathematics', student_count: 1 })).toBe('Mathematics · 1 student');
+    expect(classMetaLine({ subject: null, student_count: 12 })).toBe('12 students');
+  });
 });
 
 describe('ClassSwitcherPill', () => {
@@ -45,9 +53,14 @@ describe('ClassSwitcherPill', () => {
     expect(replace).toHaveBeenCalledWith(expect.stringContaining('class=c2'));
   });
 
+  it('shows the selected class meta line (subject + count)', async () => {
+    render(<ClassSwitcherPill />);
+    await screen.findByText('Algebra I — Period 3');
+    expect(screen.getByText('Mathematics · 8 students')).toBeInTheDocument();
+  });
+
   it('renders no aria-current (it is not nav)', async () => {
     render(<ClassSwitcherPill />);
-    // Wait for loading to resolve
     await screen.findByText('Algebra I — Period 3');
     const combo = screen.getByRole('combobox');
     expect(combo.getAttribute('aria-current')).toBeNull();
