@@ -56,7 +56,7 @@ export default async function ChallengesPage({
   const { challenges } = await loadChallenges(admin, classId);
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="p-5 flex flex-col gap-5">
       <PageHeader title="Spark Challenges" kicker="SPARK · inside CORE" accent="lime" />
 
       {challenges.length === 0 ? (

@@ -21,16 +21,31 @@
 
 import type { ReactNode } from 'react';
 
-const CARD_BASE = 'bg-surface rounded-lg border-2 border-sidebar-edge shadow-sticker p-5';
+const CARD_CHROME = 'rounded-lg border-2 border-sidebar-edge shadow-sticker p-4';
+
+// Optional faint wash so a card can carry its theme colour (matches its sticker
+// label). All are WCAG-validated -surface tokens; deep-ink content stays readable.
+const TONE_SURFACE = {
+  surface: 'bg-surface',
+  brand: 'bg-brand-surface',
+  ok: 'bg-ok-surface',
+  warn: 'bg-warn-surface',
+  risk: 'bg-risk-surface',
+} as const;
+
+type CardTone = keyof typeof TONE_SURFACE;
+
+const CARD_BASE = `${TONE_SURFACE.surface} ${CARD_CHROME}`;
 
 interface CardProps {
   children: ReactNode;
   className?: string;
+  tone?: CardTone;
 }
 
-export function Card({ children, className }: CardProps) {
+export function Card({ children, className, tone = 'surface' }: CardProps) {
   return (
-    <div className={[CARD_BASE, className].filter(Boolean).join(' ')}>
+    <div className={[TONE_SURFACE[tone], CARD_CHROME, className].filter(Boolean).join(' ')}>
       {children}
     </div>
   );

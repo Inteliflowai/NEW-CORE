@@ -124,13 +124,13 @@ export default async function RosterPage({
   const others = data.roster.filter((r) => !focusIds.has(r.student_id));
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="p-5 flex flex-col gap-5">
       {/* Part 1 — Header */}
       <PageHeader title="Roster" kicker="Who needs you today" accent="brand" />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         {/* Left column — Parts 2–5 */}
-        <div className="flex flex-1 flex-col gap-6">
+        <div className="flex flex-1 flex-col gap-5">
           {/* Part 2 — Calm-glance summary */}
           <SummaryCallout>{summary}</SummaryCallout>
 

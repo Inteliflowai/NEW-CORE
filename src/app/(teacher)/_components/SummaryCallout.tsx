@@ -8,14 +8,14 @@ import React from 'react';
 
 export function SummaryCallout({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <div className="flex items-start gap-3 rounded-lg border-2 border-sidebar-edge bg-brand-surface px-4 py-3 shadow-sticker">
+    <div className="flex items-center gap-2.5 rounded-lg border-2 border-sidebar-edge bg-brand-surface px-3.5 py-2 shadow-sticker">
       <span
         aria-hidden
-        className="mt-px grid size-6 shrink-0 -rotate-6 place-items-center rounded-md border-2 border-sidebar-edge bg-brand text-[13px] font-black text-fg-on-brand"
+        className="grid size-5 shrink-0 -rotate-6 place-items-center rounded border-2 border-sidebar-edge bg-brand text-[11px] font-black text-fg-on-brand"
       >
         ★
       </span>
-      <p className="text-sm font-semibold text-brand-fg">{children}</p>
+      <p className="text-[13px] font-semibold text-brand-fg">{children}</p>
     </div>
   );
 }

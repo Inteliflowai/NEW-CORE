@@ -12,7 +12,7 @@ interface QuickStartCardProps {
 
 export function QuickStartCard({ classId }: QuickStartCardProps): React.JSX.Element {
   return (
-    <Card>
+    <Card tone="brand">
       <h2 className="mb-3">
         <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-brand px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg-on-brand shadow-sticker">
           Quick start

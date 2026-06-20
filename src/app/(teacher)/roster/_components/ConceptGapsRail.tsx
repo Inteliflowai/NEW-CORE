@@ -12,9 +12,9 @@ import { EmptyState } from '@/components/core/EmptyState';
 
 export function ConceptGapsRail({ gaps }: { gaps: ConceptGapItem[] }): React.JSX.Element {
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-fg font-display text-base font-semibold">
-        The whole class is stuck on
+    <section className="flex flex-col gap-2">
+      <h2 className="text-fg font-display text-sm font-bold">
+        Worth revisiting together
       </h2>
 
       {gaps.length === 0 ? (
@@ -24,17 +24,17 @@ export function ConceptGapsRail({ gaps }: { gaps: ConceptGapItem[] }): React.JSX
           bodyOverride="No single skill is tripping up the group right now."
         />
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="flex flex-col gap-1.5">
           {gaps.map((gap) => {
             const skillLabel = gap.skill_name ?? "a skill we're still naming";
             const frequencyWords = pctIncorrectToWords(gap.pct_incorrect);
             return (
               <li
                 key={gap.question_index}
-                className="flex items-center justify-between rounded bg-surface p-3 text-sm"
+                className="flex items-center justify-between gap-2 rounded-lg border-2 border-sidebar-edge bg-surface px-2.5 py-2 text-[13px]"
               >
-                <span className="text-fg font-medium">{skillLabel}</span>
-                <span className="text-fg-muted text-xs">{frequencyWords} got this wrong</span>
+                <span className="text-fg font-semibold">{skillLabel}</span>
+                <span className="text-fg-muted text-xs whitespace-nowrap">{frequencyWords} missed this</span>
               </li>
             );
           })}

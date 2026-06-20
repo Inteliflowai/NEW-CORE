@@ -19,7 +19,7 @@ interface NeedsYouCardProps {
 export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.JSX.Element {
   if (focusGroup.length === 0) {
     return (
-      <Card>
+      <Card tone="warn">
         <h2 className="mb-3">
         <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg shadow-sticker">
           Needs you
@@ -35,13 +35,13 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
   const top3 = focusGroup.slice(0, 3);
 
   return (
-    <Card>
+    <Card tone="warn">
       <h2 className="mb-3">
         <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg shadow-sticker">
           Needs you
         </span>
       </h2>
-      <ul className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-2.5">
         {top3.map((item) => {
           const whySentence = triageWhySentence({
             suggestedAction: item.diagnosis.suggestedAction,
@@ -55,7 +55,7 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
                 <span className="text-fg font-medium text-sm">{item.full_name}</span>
                 <ActionChip action={item.diagnosis.suggestedAction} />
               </div>
-              <p className="text-fg-muted text-sm">{whySentence}</p>
+              <p className="text-fg-muted text-[13px] leading-snug">{whySentence}</p>
             </li>
           );
         })}

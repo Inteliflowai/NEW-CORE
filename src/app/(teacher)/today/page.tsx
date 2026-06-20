@@ -91,10 +91,10 @@ export default async function TodayPage({
   const winsRoster = data.roster.filter((r) => !focusIds.has(r.student_id));
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="p-5 flex flex-col gap-5">
       <PageHeader title="Today" kicker="Your class at a glance" accent="brand" />
       <SummaryCallout>{summary}</SummaryCallout>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <NeedsYouCard focusGroup={focusSorted} classId={classId} />
         <WinsCard roster={winsRoster} />
         <QuickStartCard classId={classId} />

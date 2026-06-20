@@ -31,20 +31,20 @@ export function PageHeader({
 }): React.JSX.Element {
   return (
     <div className="flex items-end justify-between gap-4">
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
         {kicker && (
-          <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-fg-muted">
+          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-fg-muted">
             {kicker}
           </span>
         )}
-        <div className="flex items-center gap-2.5">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-fg">{title}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-display text-xl font-bold tracking-tight text-fg">{title}</h1>
           <span
             aria-hidden
-            className={`size-3.5 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge shadow-sticker ${ACCENT_BG[accent]}`}
+            className={`size-3 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge shadow-sticker ${ACCENT_BG[accent]}`}
           />
         </div>
-        <span aria-hidden className={`h-1.5 w-12 rounded-full ${ACCENT_BG[accent]}`} />
+        <span aria-hidden className={`mt-0.5 h-1 w-10 rounded-full ${ACCENT_BG[accent]}`} />
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
