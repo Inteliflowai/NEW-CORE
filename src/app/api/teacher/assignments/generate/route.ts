@@ -15,6 +15,8 @@ import { normalizeLearningStyle } from '@/lib/utils/learningStyle';
 import { OPENAI_GEN_MODEL } from '@/lib/ai/models';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 import { computeBehavioralSummary, formatSignalsForPrompt } from '@/lib/utils/scoring';
+import { getSparkLink } from '@/lib/spark/sparkLink';
+import { notifyAssignmentCreated } from '@/lib/spark/notifyAssignmentCreated';
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,7 +42,9 @@ export async function POST(req: NextRequest) {
     const { data: attempt } = await admin
       .from('quiz_attempts')
       .select(
-        'id, student_id, mastery_band, learning_style, quizzes(class_id, lesson_id, lessons(parsed_content, title)), users:student_id(full_name)',
+        'id, student_id, mastery_band, learning_style, ' +
+        'quizzes(class_id, lesson_id, lessons(parsed_content, title, grade_level, subject)), ' +
+        'users:student_id(full_name, grade_level, school_id)',
       )
       .eq('id', quiz_attempt_id)
       .single();
@@ -140,6 +144,53 @@ export async function POST(req: NextRequest) {
 
     if (insErr || !row) {
       return NextResponse.json({ error: 'Failed to save assignment' }, { status: 500 });
+    }
+
+    // ── SPARK create-notify (non-blocking; never fails assignment generation) ──
+    try {
+      const userRow = attempt.users as { school_id?: string; grade_level?: string | null } | null;
+      const schoolId = userRow?.school_id ?? null;
+      if (schoolId) {
+        const link = await getSparkLink(admin, schoolId);
+        if (link) {
+          const lessonRow =
+            ((attempt.quizzes as { lessons?: Record<string, unknown> } | null)?.lessons ?? {}) as {
+              parsed_content?: { key_concepts?: string[] };
+              grade_level?: string | null;
+              subject?: string | null;
+            };
+          const grade = userRow?.grade_level ?? lessonRow.grade_level ?? null;
+          const result = await notifyAssignmentCreated({
+            coreHomeworkId: row.id as string,
+            studentId: attempt.student_id as string,
+            schoolId,
+            coreClassId: classId,
+            band,
+            learningStyle: normalizeLearningStyle(style),
+            grade,
+            subject: lessonRow.subject ?? null,
+            conceptTags: lessonRow.parsed_content?.key_concepts ?? [],
+            title: assignment.title,
+            content: `${assignment.title}\n\n${assignment.instructions}`,
+          });
+          await admin
+            .from('assignments')
+            .update({
+              spark_assignment_id: result.sparkAssignmentId,
+              spark_attempt_id: result.sparkAttemptId ?? null,
+              spark_experiment_id: result.syntheticExperimentId ?? null,
+              spark_status: result.success ? 'created' : 'notify_failed',
+            })
+            .eq('id', row.id);
+        }
+      }
+    } catch (sparkErr) {
+      console.error('[teacher/assignments/generate] spark notify failed (non-blocking):', sparkErr);
+      try {
+        await admin.from('assignments').update({ spark_status: 'notify_failed' }).eq('id', row.id);
+      } catch {
+        /* best-effort; never block assignment generation */
+      }
     }
 
     return NextResponse.json({ assignment_id: row.id, content: assignment });

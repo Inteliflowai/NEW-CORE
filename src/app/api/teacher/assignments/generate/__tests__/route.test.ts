@@ -35,9 +35,11 @@ const FAKE_ATTEMPT_GRADED = {
     lessons: {
       parsed_content: { title: 'Fractions', key_concepts: ['numerator', 'denominator'] },
       title: 'Fractions',
+      grade_level: '7',
+      subject: 'Math',
     },
   },
-  users: { full_name: 'Sam Student' },
+  users: { full_name: 'Sam Student', grade_level: '7', school_id: 'sch-1' },
 };
 
 // A NOT-YET-GRADED attempt (mastery_band is null — C20 must refuse)
@@ -89,6 +91,7 @@ function makeChain(data: unknown, error: unknown = null) {
   chain['insert'] = vi.fn().mockReturnValue(chain);
   chain['update'] = vi.fn().mockReturnValue(chain);
   chain['single'] = vi.fn().mockResolvedValue({ data, error });
+  chain['maybeSingle'] = vi.fn().mockResolvedValue({ data, error });
   chain['then'] = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data, error }).then(resolve);
   return chain;
@@ -99,6 +102,8 @@ function makeChain(data: unknown, error: unknown = null) {
 //   1. quiz_attempts.select(...).eq('id', id).single()   → attempt
 //   2. quiz_responses.select(...).eq('attempt_id', id)   → responses (only when no style → C17)
 //   3. assignments.insert(...).select().single()         → inserted row
+//   4. platform_links.select(...).eq(...).maybeSingle()  → spark link (SPARK gate, T7)
+//   5. assignments.update(...).eq('id', row.id)          → persist spark_status (T7)
 function makeAdminMock(opts: {
   attempt?: unknown;
   attemptError?: unknown;
@@ -106,6 +111,9 @@ function makeAdminMock(opts: {
   responsesError?: unknown;
   insertedRow?: unknown;
   insertError?: unknown;
+  // SPARK gate — defaults to null (off) so all pre-existing tests are unaffected
+  sparkLink?: unknown;
+  userRow?: unknown;
 } = {}) {
   const {
     attempt = FAKE_ATTEMPT_GRADED,
@@ -114,6 +122,8 @@ function makeAdminMock(opts: {
     responsesError = null,
     insertedRow = { id: 'assign-1', ...FAKE_ASSIGNMENT },
     insertError = null,
+    sparkLink = null,
+    userRow = { school_id: 'sch-1', grade_level: '7' },
   } = opts;
 
   const attemptChain = makeChain(attempt, attemptError);
@@ -129,6 +139,10 @@ function makeAdminMock(opts: {
         chain['insert'] = vi.fn().mockReturnValue(insertChain);
         return chain;
       }
+      // SPARK gate: platform_links returns the configured sparkLink (null = off by default)
+      if (table === 'platform_links') return makeChain(sparkLink);
+      // users fallback (in case of a direct users query)
+      if (table === 'users') return makeChain(userRow);
       return makeChain(null);
     }),
   };
@@ -337,5 +351,47 @@ describe('POST /api/teacher/assignments/generate', () => {
     const { POST } = await import('@/app/api/teacher/assignments/generate/route');
     const res = await POST(makeRequest());
     expect(res.status).toBe(404);
+  });
+
+  // ── SPARK T7: gate off (no enabled platform_links row) → notify NOT called ─
+  it('does NOT notify SPARK when the school has no enabled spark link (gate off)', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(makeAdminMock({ sparkLink: null }) as never);
+    mockGuardStudentAccess.mockResolvedValue(null);
+    mockGenerateAssignment.mockResolvedValue({ title: 'T', instructions: 'I' });
+
+    const notifySpy = vi.fn();
+    vi.doMock('@/lib/spark/notifyAssignmentCreated', () => ({ notifyAssignmentCreated: notifySpy }));
+
+    const { POST } = await import('@/app/api/teacher/assignments/generate/route');
+    const res = await POST(makeRequest());
+    expect(res.status).toBe(200);
+    expect(notifySpy).not.toHaveBeenCalled();
+  });
+
+  // ── SPARK T7: gate on (enabled platform_links row) → notify called + spark_status persisted ─
+  it('notifies SPARK + persists spark_status when an enabled link exists (non-blocking)', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null }) },
+    } as never);
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      makeAdminMock({ sparkLink: { api_key: 'k', core_base_url: null, enabled: true } }) as never,
+    );
+    mockGuardStudentAccess.mockResolvedValue(null);
+    mockGenerateAssignment.mockResolvedValue({ title: 'T', instructions: 'I' });
+
+    const notifySpy = vi.fn().mockResolvedValue({
+      success: true, sparkAssignmentId: 'sa-1', sparkAttemptId: 'att-1', syntheticExperimentId: 'exp-1',
+    });
+    vi.doMock('@/lib/spark/notifyAssignmentCreated', () => ({ notifyAssignmentCreated: notifySpy }));
+
+    const { POST } = await import('@/app/api/teacher/assignments/generate/route');
+    const res = await POST(makeRequest());
+    expect(res.status).toBe(200);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
   });
 });
