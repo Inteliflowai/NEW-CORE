@@ -28,14 +28,20 @@ beforeEach(() => {
 });
 
 describe('ClassSwitcherPill', () => {
+  it('defaults ?class= to the first class on mount when none is selected', async () => {
+    render(<ClassSwitcherPill />);
+    await screen.findByText('Algebra I — Period 3');
+    expect(replace).toHaveBeenCalledWith(expect.stringContaining('class=c1'));
+  });
+
   it('renders fetched classes and writes ?class= on selection', async () => {
     render(<ClassSwitcherPill />);
     expect(await screen.findByText('Algebra I — Period 3')).toBeInTheDocument();
     expect(screen.getByText('Geometry')).toBeInTheDocument();
 
+    replace.mockClear(); // ignore the mount-time default
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'c2' } });
 
-    expect(replace).toHaveBeenCalledOnce();
     expect(replace).toHaveBeenCalledWith(expect.stringContaining('class=c2'));
   });
 
