@@ -77,16 +77,17 @@ function LoginInner() {
         <BackgroundRotator />
       </div>
 
-      <div className="relative flex items-center justify-center overflow-hidden p-6 sm:p-10">
-        {/* Pop-Art backdrop so the form side isn't a dull white slab */}
-        <div aria-hidden className="pop-dots pointer-events-none absolute inset-0 opacity-60" />
+      <div className="relative flex items-center justify-center overflow-hidden bg-brand-surface p-6 sm:p-10">
+        {/* Pop-Art backdrop so the form side isn't a dull white slab: cobalt wash +
+            dot grid + two bold tilted sticker shapes bleeding off the edges. */}
+        <div aria-hidden className="pop-dots pointer-events-none absolute inset-0 opacity-70" />
         <div
           aria-hidden
-          className="pointer-events-none absolute -left-12 top-10 size-28 -rotate-12 rounded-2xl border-2 border-sidebar-edge bg-brand/15"
+          className="pointer-events-none absolute -left-10 top-8 size-32 -rotate-12 rounded-2xl border-2 border-sidebar-edge bg-brand/20 shadow-sticker"
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-10 bottom-14 size-20 rotate-12 rounded-full border-2 border-sidebar-edge bg-sidebar-active/30"
+          className="pointer-events-none absolute -right-8 bottom-12 size-24 rotate-12 rounded-full border-2 border-sidebar-edge bg-sidebar-active/40 shadow-sticker"
         />
 
         <div className="relative w-full max-w-sm rounded-lg border-2 border-sidebar-edge bg-surface p-8 shadow-sticker">

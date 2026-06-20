@@ -20,13 +20,11 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
   if (focusGroup.length === 0) {
     return (
       <Card>
-        <div className="mb-3 flex items-center gap-2">
-        <span
-          aria-hidden
-          className="size-3 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge bg-warn"
-        />
-        <h2 className="font-display text-lg font-bold text-fg">Needs you</h2>
-      </div>
+        <h2 className="mb-3">
+        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn-surface px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-warn-fg shadow-sticker">
+          Needs you
+        </span>
+      </h2>
         <p className="text-fg-muted text-sm">
           Nothing urgent today — everyone&apos;s tracking along.
         </p>
@@ -38,13 +36,11 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
 
   return (
     <Card>
-      <div className="mb-3 flex items-center gap-2">
-        <span
-          aria-hidden
-          className="size-3 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge bg-warn"
-        />
-        <h2 className="font-display text-lg font-bold text-fg">Needs you</h2>
-      </div>
+      <h2 className="mb-3">
+        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn-surface px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-warn-fg shadow-sticker">
+          Needs you
+        </span>
+      </h2>
       <ul className="flex flex-col gap-4">
         {top3.map((item) => {
           const whySentence = triageWhySentence({

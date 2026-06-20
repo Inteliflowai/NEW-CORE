@@ -139,13 +139,11 @@ export default async function RosterPage({
 
           {/* Part 4 — "Needs you today" stack */}
           <section className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <span
-                aria-hidden
-                className="size-3 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge bg-warn"
-              />
-              <h2 className="font-display text-lg text-fg font-bold">Needs you today</h2>
-            </div>
+            <h2>
+              <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn-surface px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-warn-fg shadow-sticker">
+                Needs you today
+              </span>
+            </h2>
 
             {focusVisible.length === 0 ? (
               <p className="text-fg-muted text-sm">No students need immediate attention.</p>

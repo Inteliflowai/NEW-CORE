@@ -21,13 +21,11 @@ export function WinsCard({ roster }: WinsCardProps): React.JSX.Element {
 
   return (
     <Card>
-      <div className="mb-3 flex items-center gap-2">
-        <span
-          aria-hidden
-          className="size-3 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge bg-ok"
-        />
-        <h2 className="font-display text-lg font-bold text-fg">Wins</h2>
-      </div>
+      <h2 className="mb-3">
+        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-ok-surface px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-ok-fg shadow-sticker">
+          Wins
+        </span>
+      </h2>
       {strongStudents.length === 0 ? (
         <p className="text-fg-muted text-sm mb-3">
           Everyone&apos;s still building — keep at it.

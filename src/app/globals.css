@@ -353,3 +353,11 @@ body {
   background-size: 16px 16px;
 }
 
+/* Whisper-faint version for a full content CANVAS (the teacher main scroll area).
+   Ties the pale content to the saturated rail without competing with cards/text;
+   the dots tile and sit behind opaque white cards, so only gaps/margins carry it. */
+@utility pop-canvas {
+  background-image: radial-gradient(color-mix(in srgb, var(--brand) 10%, transparent) 1.5px, transparent 1.7px);
+  background-size: 18px 18px;
+}
+
