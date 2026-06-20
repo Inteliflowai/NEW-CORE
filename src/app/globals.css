@@ -323,18 +323,24 @@ body {
 /* GROWTH MOTIFS */
 .growth-motif--wins { --brand: var(--ok); --brand-accent: var(--ok); }
 
-/* Pop-art rail texture + corner glow (decorative; token-derived, no hardcoded hex) */
-.sidebar-dots {
+/* Pop-art rail texture + corner glow (decorative; token-derived, no hardcoded hex).
+   Defined as Tailwind v4 @utility (not bare class selectors) per the globals.css
+   token contract — used as `sidebar-dots` / `sidebar-glow` classes in markup. */
+@utility sidebar-dots {
   background-image: radial-gradient(color-mix(in srgb, var(--white) 28%, transparent) 1.5px, transparent 1.7px);
   background-size: 13px 13px;
 }
-.sidebar-glow::after {
-  content: "";
-  position: absolute;
-  width: 120px; height: 120px;
-  top: -30px; right: -26px;
-  border-radius: 9999px;
-  pointer-events: none;
-  background: radial-gradient(circle, color-mix(in srgb, var(--lime-400) 40%, transparent), transparent 70%);
+@utility sidebar-glow {
+  &::after {
+    content: "";
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    top: -30px;
+    right: -26px;
+    border-radius: 9999px;
+    pointer-events: none;
+    background: radial-gradient(circle, color-mix(in srgb, var(--lime-400) 40%, transparent), transparent 70%);
+  }
 }
 

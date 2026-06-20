@@ -493,12 +493,15 @@ export function checkAllPairs(cssSource?: string): ContrastResult[] {
     }
   }
 
-  // Sidebar pairs (single palette, resolved from :root).
-  for (const [pairLabel, fgProp, bgProp, required] of SIDEBAR_PAIRS) {
-    const fg = resolveToHex(`var(${fgProp})`, parsed.rootProps, `sidebar slot="${fgProp}"`);
-    const bg = resolveToHex(`var(${bgProp})`, parsed.rootProps, `sidebar slot="${bgProp}"`);
-    const ratio = contrastRatio(fg, bg);
-    results.push({ role: 'sidebar', intensity: 'base', pair: pairLabel, fg, bg, ratio, required, passes: ratio >= required });
+  // Sidebar pairs (single palette, resolved from :root) — only when the tokens
+  // are defined (synthetic fixture CSS in tests omits them).
+  if (parsed.rootProps.has('--sidebar')) {
+    for (const [pairLabel, fgProp, bgProp, required] of SIDEBAR_PAIRS) {
+      const fg = resolveToHex(`var(${fgProp})`, parsed.rootProps, `sidebar slot="${fgProp}"`);
+      const bg = resolveToHex(`var(${bgProp})`, parsed.rootProps, `sidebar slot="${bgProp}"`);
+      const ratio = contrastRatio(fg, bg);
+      results.push({ role: 'sidebar', intensity: 'base', pair: pairLabel, fg, bg, ratio, required, passes: ratio >= required });
+    }
   }
 
   return results;
