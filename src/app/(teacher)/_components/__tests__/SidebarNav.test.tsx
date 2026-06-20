@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 // Suite: /students/abc — Roster alias
-vi.mock('next/navigation', () => ({ usePathname: () => '/students/abc' }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/students/abc', useSearchParams: () => new URLSearchParams() }));
 import { SidebarNav } from '../SidebarNav';
 
 describe('SidebarNav — /students/abc (Roster alias)', () => {

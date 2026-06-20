@@ -13,7 +13,13 @@ interface QuickStartCardProps {
 export function QuickStartCard({ classId }: QuickStartCardProps): React.JSX.Element {
   return (
     <Card>
-      <h2 className="font-display text-base font-semibold text-fg mb-3">Quick start</h2>
+      <div className="mb-3 flex items-center gap-2">
+        <span
+          aria-hidden
+          className="size-3 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge bg-brand"
+        />
+        <h2 className="font-display text-lg font-bold text-fg">Quick start</h2>
+      </div>
       <ul className="flex flex-col gap-3">
         <li>
           <a

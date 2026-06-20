@@ -6,10 +6,26 @@ import React from 'react';
 
 // ── Mocks — all declared before imports ──────────────────────────────────────
 
+// redirect throws like the real next/navigation redirect, so we can assert its target.
+const { redirect } = vi.hoisted(() => ({
+  redirect: vi.fn((url: string) => {
+    throw new Error('REDIRECT:' + url);
+  }),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/roster',
+  redirect,
+}));
+
+vi.mock('@/lib/auth/requireRole', () => ({
+  requireRole: vi.fn().mockResolvedValue({ userId: 't1', role: 'teacher', schoolId: null, fullName: null }),
+}));
+
+vi.mock('@/lib/teacher/firstClassIdForTeacher', () => ({
+  firstClassIdForTeacher: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -28,10 +44,12 @@ vi.mock('@/lib/signals/loadRosterSignals', () => ({
 // ── Import mocked modules to control their return values ──────────────────────
 import { loadRosterSignals } from '@/lib/signals/loadRosterSignals';
 import { guardClassAccess } from '@/lib/auth/guards';
+import { firstClassIdForTeacher } from '@/lib/teacher/firstClassIdForTeacher';
 import type { RosterSignals } from '@/lib/signals/loadRosterSignals';
 
 const mockLoadRosterSignals = vi.mocked(loadRosterSignals);
 const mockGuardClassAccess = vi.mocked(guardClassAccess);
+const mockFirstClass = vi.mocked(firstClassIdForTeacher);
 
 // ── Fixture ───────────────────────────────────────────────────────────────────
 // 8 roster items: 1 null-band, 3 in focus_group, 4 not in focus_group
@@ -158,12 +176,19 @@ describe('RosterPage', () => {
     mockGuardClassAccess.mockResolvedValue(null);
   });
 
-  it('renders Pick-a-class EmptyState when searchParams has no class', async () => {
+  it('defaults to the teacher first class (redirects) when no class param is present', async () => {
+    mockFirstClass.mockResolvedValue('c1');
+    const { default: RosterPage } = await import('../page');
+    await expect(RosterPage({ searchParams: Promise.resolve({}) })).rejects.toThrow('REDIRECT:/roster?class=c1');
+  });
+
+  it('renders a dignified no-classes state when the teacher owns no classes', async () => {
+    mockFirstClass.mockResolvedValue(null);
     const { default: RosterPage } = await import('../page');
     const { container } = render(
       await RosterPage({ searchParams: Promise.resolve({}) }),
     );
-    expect(container.innerHTML).toContain('Pick a class to begin');
+    expect(container.innerHTML).toContain('No classes yet');
   });
 
   it('renders the correct needs count (3) in the summary sentence', async () => {

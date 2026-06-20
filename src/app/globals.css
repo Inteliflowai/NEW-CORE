@@ -344,3 +344,12 @@ body {
   }
 }
 
+/* Pop-art content texture — a faint brand-tinted dot grid for teacher content
+   header zones / otherwise-dull light panels (e.g. the login form side). Echoes
+   the rail's .sidebar-dots on a light surface. Decorative + token-derived (no
+   hardcoded hex); introduces no text/bg pair, so the WCAG-AA gate is unaffected. */
+@utility pop-dots {
+  background-image: radial-gradient(color-mix(in srgb, var(--brand) 20%, transparent) 1.5px, transparent 1.7px);
+  background-size: 16px 16px;
+}
+

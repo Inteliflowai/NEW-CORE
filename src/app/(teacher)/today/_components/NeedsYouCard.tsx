@@ -20,7 +20,13 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
   if (focusGroup.length === 0) {
     return (
       <Card>
-        <h2 className="font-display text-base font-semibold text-fg mb-3">Needs you</h2>
+        <div className="mb-3 flex items-center gap-2">
+        <span
+          aria-hidden
+          className="size-3 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge bg-warn"
+        />
+        <h2 className="font-display text-lg font-bold text-fg">Needs you</h2>
+      </div>
         <p className="text-fg-muted text-sm">
           Nothing urgent today — everyone&apos;s tracking along.
         </p>
@@ -32,7 +38,13 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
 
   return (
     <Card>
-      <h2 className="font-display text-base font-semibold text-fg mb-3">Needs you</h2>
+      <div className="mb-3 flex items-center gap-2">
+        <span
+          aria-hidden
+          className="size-3 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge bg-warn"
+        />
+        <h2 className="font-display text-lg font-bold text-fg">Needs you</h2>
+      </div>
       <ul className="flex flex-col gap-4">
         {top3.map((item) => {
           const whySentence = triageWhySentence({

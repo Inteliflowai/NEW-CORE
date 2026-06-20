@@ -45,9 +45,9 @@ export function RosterTriageCard({
   const lookCloserHref = `/students/${item.student_id}?from=roster&class=${classId}`;
 
   return (
-    <div className="flex overflow-hidden rounded border border-surface">
+    <div className="flex overflow-hidden rounded-lg border-2 border-sidebar-edge bg-surface shadow-sticker">
       {/* Left accent bar */}
-      <div className={`w-1 shrink-0 ${accentClass}`} aria-hidden="true" />
+      <div className={`w-1.5 shrink-0 ${accentClass}`} aria-hidden="true" />
 
       {/* Card body */}
       <div className="flex flex-1 flex-col gap-2 p-3">

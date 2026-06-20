@@ -3,22 +3,39 @@
 // Auth chain: guardClassAccess (IDOR) → admin client → loadRosterSignals.
 // NEVER renders risk_score, raw question_text (skill_id), or diagnosis.diagnosis directly.
 // Token-only styling; deep-ink content text (text-fg); no hardcoded hex.
+//
+// Active-class resolution: when ?class= is absent we default to the teacher's
+// first class server-side (firstClassIdForTeacher) and redirect — so the screen
+// never flashes a "pick a class" state before the client switcher writes ?class=.
 
 import React from 'react';
+import { redirect } from 'next/navigation';
+import { requireRole } from '@/lib/auth/requireRole';
+import { firstClassIdForTeacher } from '@/lib/teacher/firstClassIdForTeacher';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { loadRosterSignals } from '@/lib/signals/loadRosterSignals';
 import { sortFocusGroup } from '@/lib/signals/sortFocusGroup';
 import { EmptyState } from '@/components/core/EmptyState';
+import { PageHeader } from '../_components/PageHeader';
+import { SummaryCallout } from '../_components/SummaryCallout';
 import { NeedsYouCard } from './_components/NeedsYouCard';
 import { WinsCard } from './_components/WinsCard';
 import { QuickStartCard } from './_components/QuickStartCard';
 
-const PICK_A_CLASS = (
+const NO_CLASSES = (
   <EmptyState
     variant="just-getting-started"
-    titleOverride="Pick a class to begin"
-    bodyOverride="Use the class selector above to see today's overview."
+    titleOverride="No classes yet"
+    bodyOverride="Once a class is set up for you, your day starts here."
+  />
+);
+
+const CLASS_UNAVAILABLE = (
+  <EmptyState
+    variant="just-getting-started"
+    titleOverride="That class isn't available"
+    bodyOverride="Use the class selector to pick one of your classes."
   />
 );
 
@@ -44,12 +61,17 @@ export default async function TodayPage({
   const { class: classId } = await searchParams;
 
   if (!classId) {
-    return <div className="p-6">{PICK_A_CLASS}</div>;
+    const { userId } = await requireRole(['teacher']);
+    const firstId = await firstClassIdForTeacher(userId);
+    if (!firstId) {
+      return <div className="p-6">{NO_CLASSES}</div>;
+    }
+    redirect(`/today?class=${firstId}`);
   }
 
   const guard = await guardClassAccess(classId);
   if (guard) {
-    return <div className="p-6">{PICK_A_CLASS}</div>;
+    return <div className="p-6">{CLASS_UNAVAILABLE}</div>;
   }
 
   const admin = createAdminSupabaseClient();
@@ -70,10 +92,8 @@ export default async function TodayPage({
 
   return (
     <div className="p-6 flex flex-col gap-6">
-      <div>
-        <h1 className="font-display text-2xl text-fg font-semibold">Today</h1>
-      </div>
-      <p className="text-fg text-sm">{summary}</p>
+      <PageHeader title="Today" kicker="Your class at a glance" accent="brand" />
+      <SummaryCallout>{summary}</SummaryCallout>
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <NeedsYouCard focusGroup={focusSorted} classId={classId} />
         <WinsCard roster={winsRoster} />

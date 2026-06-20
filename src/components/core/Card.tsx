@@ -9,12 +9,19 @@
  * more elevated, brand-tinted shadow without any intensity prop or extra
  * globals.css rule.
  *
- * Card utility classes: bg-surface rounded shadow p-5
+ * Pop-Art chrome: a hard ink edge (border-sidebar-edge) + offset sticker shadow
+ * (shadow-sticker) + chunky corners (rounded-lg) give content cards the same
+ * comic-panel energy as the rail, instead of a flat soft-shadow box. Both tokens
+ * are role-neutral (ink-950 edge), so this reads as Pop-Art on any surface.
+ *
+ * Card utility classes: bg-surface rounded-lg border-2 border-sidebar-edge shadow-sticker p-5
  * StatCard label:       text-fg-muted text-xs font-medium uppercase tracking-wide
  * StatCard value:       text-fg text-2xl font-display font-bold leading-tight
  */
 
 import type { ReactNode } from 'react';
+
+const CARD_BASE = 'bg-surface rounded-lg border-2 border-sidebar-edge shadow-sticker p-5';
 
 interface CardProps {
   children: ReactNode;
@@ -23,7 +30,7 @@ interface CardProps {
 
 export function Card({ children, className }: CardProps) {
   return (
-    <div className={['bg-surface rounded shadow p-5', className].filter(Boolean).join(' ')}>
+    <div className={[CARD_BASE, className].filter(Boolean).join(' ')}>
       {children}
     </div>
   );
@@ -37,7 +44,7 @@ interface StatCardProps {
 
 export function StatCard({ label, value, className }: StatCardProps) {
   return (
-    <div className={['bg-surface rounded shadow p-5', className].filter(Boolean).join(' ')}>
+    <div className={[CARD_BASE, className].filter(Boolean).join(' ')}>
       <p className="text-fg-muted text-xs font-medium uppercase tracking-wide">{label}</p>
       <div className="text-fg text-2xl font-display font-bold leading-tight">{value}</div>
     </div>

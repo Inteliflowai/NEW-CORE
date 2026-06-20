@@ -3,14 +3,23 @@
 // Auth chain: guardClassAccess (IDOR) → admin client → loadRosterSignals.
 // NEVER renders risk_score, raw question_text (skill_id), or pct_incorrect directly.
 // Token-only styling; deep-ink content text (text-fg); no hardcoded hex.
+//
+// Active-class resolution: when ?class= is absent we default to the teacher's
+// first class server-side and redirect — so the roster never flashes a
+// "pick a class" state before the client class switcher writes ?class=.
 
 import React from 'react';
 
+import { redirect } from 'next/navigation';
+import { requireRole } from '@/lib/auth/requireRole';
+import { firstClassIdForTeacher } from '@/lib/teacher/firstClassIdForTeacher';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { loadRosterSignals } from '@/lib/signals/loadRosterSignals';
 import { sortFocusGroup } from '@/lib/signals/sortFocusGroup';
 import { EmptyState } from '@/components/core/EmptyState';
+import { PageHeader } from '../_components/PageHeader';
+import { SummaryCallout } from '../_components/SummaryCallout';
 
 import { RosterTriageCard } from './_components/RosterTriageCard';
 import { ClassPulseStrip } from './_components/ClassPulseStrip';
@@ -19,12 +28,20 @@ import { EveryoneElseDisclosure } from './_components/EveryoneElseDisclosure';
 import { ConceptGapsRail } from './_components/ConceptGapsRail';
 import { SignalLegend } from './_components/SignalLegend';
 
-// ── Pick-a-class fallback (reused in two early returns) ───────────────────────
-const PICK_A_CLASS = (
+// ── Dignified fallbacks (no-classes / bad-param) ──────────────────────────────
+const NO_CLASSES = (
   <EmptyState
     variant="just-getting-started"
-    titleOverride="Pick a class to begin"
-    bodyOverride="Use the class selector above to see your roster."
+    titleOverride="No classes yet"
+    bodyOverride="Once a class is set up for you, your roster appears here."
+  />
+);
+
+const CLASS_UNAVAILABLE = (
+  <EmptyState
+    variant="just-getting-started"
+    titleOverride="That class isn't available"
+    bodyOverride="Use the class selector to pick one of your classes."
   />
 );
 
@@ -55,18 +72,23 @@ export default async function RosterPage({
 }: {
   searchParams: Promise<{ class?: string }>;
 }): Promise<React.JSX.Element> {
-  // 1. Resolve classId from searchParams
+  // 1. Resolve classId — default to the teacher's first class when absent.
   const { class: classId } = await searchParams;
 
   if (!classId) {
-    return <div className="p-6">{PICK_A_CLASS}</div>;
+    const { userId } = await requireRole(['teacher']);
+    const firstId = await firstClassIdForTeacher(userId);
+    if (!firstId) {
+      return <div className="p-6">{NO_CLASSES}</div>;
+    }
+    redirect(`/roster?class=${firstId}`);
   }
 
   // 2. IDOR guard — teacher must own the class
   const guard = await guardClassAccess(classId);
   if (guard) {
-    // Can't return a NextResponse from a page — render the select-a-class state instead
-    return <div className="p-6">{PICK_A_CLASS}</div>;
+    // Can't return a NextResponse from a page — render a dignified state instead
+    return <div className="p-6">{CLASS_UNAVAILABLE}</div>;
   }
 
   // 3. Load signals via admin client (RLS-bypassed; guard above is the backstop)
@@ -104,24 +126,26 @@ export default async function RosterPage({
   return (
     <div className="p-6 flex flex-col gap-6">
       {/* Part 1 — Header */}
-      <div className="flex items-start justify-between gap-4">
-        <h1 className="font-display text-2xl text-fg font-semibold">Roster</h1>
-      </div>
+      <PageHeader title="Roster" kicker="Who needs you today" accent="brand" />
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         {/* Left column — Parts 2–5 */}
         <div className="flex flex-1 flex-col gap-6">
           {/* Part 2 — Calm-glance summary */}
-          <p className="text-fg text-sm">{summary}</p>
+          <SummaryCallout>{summary}</SummaryCallout>
 
           {/* Part 3 — Class pulse strip */}
           <ClassPulseStrip counts={pulseCounts} />
 
           {/* Part 4 — "Needs you today" stack */}
           <section className="flex flex-col gap-3">
-            <h2 className="font-display text-base text-fg font-semibold">
-              Needs you today
-            </h2>
+            <div className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className="size-3 shrink-0 -rotate-6 rounded-sm border-2 border-sidebar-edge bg-warn"
+              />
+              <h2 className="font-display text-lg text-fg font-bold">Needs you today</h2>
+            </div>
 
             {focusVisible.length === 0 ? (
               <p className="text-fg-muted text-sm">No students need immediate attention.</p>
