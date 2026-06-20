@@ -10,6 +10,7 @@ function makeAdmin({
   quizResponses = [] as object[],
   hwAttempts = [] as object[],
   assignments = [] as object[],
+  sparkCompletions = [] as object[],
   upsertError = null as { message: string; code: string } | null,
   studentSchoolId = null as string | null,
 } = {}) {
@@ -64,6 +65,7 @@ function makeAdmin({
       if (tableName === 'quiz_responses') return makeChain(quizResponses);
       if (tableName === 'assignments') return makeChain(assignments);
       if (tableName === 'homework_attempts') return makeChain(hwAttempts);
+      if (tableName === 'spark_completions') return makeChain(sparkCompletions);
       if (tableName === 'users') return usersChain;
       if (tableName === 'skill_learning_state') {
         // Return a chain whose .upsert is the spy
@@ -664,6 +666,40 @@ describe('recomputeSkillStatesForStudent', () => {
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('exception');
     expect(result.skillsRecomputed).toBe(0);
+  });
+
+  // ── SPARK seam: spark_completions reach computeSkillState as evidence ────────
+  it('SPARK completions reach computeSkillState and count as evidence', async () => {
+    const admin = makeAdmin({
+      sparkCompletions: [
+        {
+          transfer_score: 88,
+          content_quality: 'engaged',
+          completed_at: '2026-06-20T00:00:00Z',
+          received_at: '2026-06-20T00:00:00Z',
+          assignments: { skill_ids: ['sk-1'], student_id: 'stu-1' },
+        },
+      ],
+    });
+    const result = await recomputeSkillStatesForStudent(admin as never, {
+      studentId: 'stu-1',
+      schoolId: 'sch-1',
+      skillIds: ['sk-1'],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.skillsRecomputed).toBe(1);
+    // The completion reached computeSkillState: raw contact means the state is
+    // NOT not_attempted, and the engaged scored completion counts as evidence.
+    expect(result.states['sk-1']).toBeDefined();
+    expect(result.states['sk-1']).not.toBe('not_attempted');
+
+    const upsertArg = admin._upsert.mock.calls[0][0];
+    // One engaged, scored SPARK completion = one graded observation.
+    expect(upsertArg.observation_count).toBe(1);
+    // SPARK evidence metrics land in the evidence jsonb (proves it was fused).
+    expect(upsertArg.evidence.metrics.spark_attempts).toBe(1);
+    expect(upsertArg.evidence.metrics.spark_avg_transfer).toBe(88);
+    expect(upsertArg.evidence.metrics.spark_transfer).toBe('strong');
   });
 
   it('skips rows with null skill_id (no skill tag)', async () => {
