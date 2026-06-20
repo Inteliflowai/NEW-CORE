@@ -16,30 +16,30 @@ export function EveryoneElseDisclosure({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="mt-4">
+    <div>
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((prev) => !prev)}
-        className="text-sm text-fg hover:text-brand transition-colors"
+        className="inline-flex items-center gap-1 rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1.5 text-[13px] font-bold text-fg shadow-sticker transition-colors hover:bg-brand hover:text-fg-on-brand"
       >
-        Everyone else ({others.length}) ▾
+        Everyone else ({others.length}) {open ? '▴' : '▾'}
       </button>
 
       {open && (
-        <ul className="mt-2 space-y-1">
+        <ul className="mt-2 divide-y divide-fg-muted/15 overflow-hidden rounded-lg border-2 border-sidebar-edge bg-surface">
           {others.map((r) => (
-            <li key={r.student_id} className="flex items-center gap-2 text-sm">
-              <span className="text-fg font-medium">{r.full_name}</span>
+            <li key={r.student_id} className="flex items-center gap-2 px-3 py-1.5 text-[13px]">
+              <span className="text-fg font-semibold">{r.full_name}</span>
               <MasteryLabel band={r.band} />
               {r.risk.risk_level !== 'low' && (
                 <RiskBadge band={r.risk.risk_level as 'medium' | 'high' | 'critical'} />
               )}
               <Link
                 href={`/students/${r.student_id}?from=roster&class=${classId}`}
-                className="ml-auto text-fg hover:text-brand"
+                className="ml-auto inline-flex items-center rounded border-2 border-sidebar-edge bg-brand-surface px-2 py-0.5 text-xs font-bold text-brand-fg"
               >
-                look closer ›
+                Look closer ›
               </Link>
             </li>
           ))}

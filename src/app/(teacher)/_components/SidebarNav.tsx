@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { NAV_ENTRIES, isGroup, matchActive, type NavItem, type NavIconKey } from './navConfig';
 import {
   IconToday, IconRoster, IconGradebook, IconAlerts, IconHighFive,
@@ -23,11 +23,16 @@ const ICON: Record<NavIconKey, (p: { className?: string }) => React.JSX.Element>
 
 function NavLink({ item }: { item: NavItem }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const active = matchActive(pathname, item.href, item.alsoActiveWhen);
   const Icon = ICON[item.icon];
+  // Carry the active class through navigation so screens never land param-less
+  // (which would flash the server "pick a class" state before the switcher re-adds it).
+  const cls = searchParams.get('class');
+  const href = cls ? `${item.href}?class=${encodeURIComponent(cls)}` : item.href;
   return (
     <Link
-      href={item.href}
+      href={href}
       aria-current={active ? 'page' : undefined}
       className={[
         'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors',

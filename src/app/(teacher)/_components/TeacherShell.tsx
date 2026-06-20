@@ -49,7 +49,7 @@ export function TeacherShell({
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
         <TeacherTopbar userName={userName} onMenuClick={() => setOpen((o) => !o)} />
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="pop-canvas flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

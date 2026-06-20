@@ -20,8 +20,12 @@ export function WinsCard({ roster }: WinsCardProps): React.JSX.Element {
   const studentWord = onTrackCount === 1 ? 'student' : 'students';
 
   return (
-    <Card>
-      <h2 className="font-display text-base font-semibold text-fg mb-3">Wins</h2>
+    <Card tone="ok">
+      <h2 className="mb-3">
+        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-ok px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg shadow-sticker">
+          Wins
+        </span>
+      </h2>
       {strongStudents.length === 0 ? (
         <p className="text-fg-muted text-sm mb-3">
           Everyone&apos;s still building — keep at it.

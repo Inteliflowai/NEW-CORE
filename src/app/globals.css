@@ -305,6 +305,7 @@
   --shadow-DEFAULT: var(--shadow);
   --shadow-pop:     var(--shadow-pop);
   --shadow-sticker: 3px 3px 0 var(--sidebar-edge);
+  --shadow-sticker-lg: 6px 6px 0 var(--sidebar-edge);
 
   /* Fonts (set by layout.tsx via next/font/google) */
   --font-display: var(--font-bricolage);
@@ -342,5 +343,22 @@ body {
     pointer-events: none;
     background: radial-gradient(circle, color-mix(in srgb, var(--lime-400) 40%, transparent), transparent 70%);
   }
+}
+
+/* Pop-art content texture — a faint brand-tinted dot grid for teacher content
+   header zones / otherwise-dull light panels (e.g. the login form side). Echoes
+   the rail's .sidebar-dots on a light surface. Decorative + token-derived (no
+   hardcoded hex); introduces no text/bg pair, so the WCAG-AA gate is unaffected. */
+@utility pop-dots {
+  background-image: radial-gradient(color-mix(in srgb, var(--brand) 20%, transparent) 1.5px, transparent 1.7px);
+  background-size: 16px 16px;
+}
+
+/* Whisper-faint version for a full content CANVAS (the teacher main scroll area).
+   Ties the pale content to the saturated rail without competing with cards/text;
+   the dots tile and sit behind opaque white cards, so only gaps/margins carry it. */
+@utility pop-canvas {
+  background-image: radial-gradient(color-mix(in srgb, var(--brand) 10%, transparent) 1.5px, transparent 1.7px);
+  background-size: 18px 18px;
 }
 

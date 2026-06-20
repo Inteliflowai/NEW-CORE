@@ -60,7 +60,7 @@ export function ClassPulseStrip({ counts }: { counts: PulseCounts }): React.JSX.
       {/* Segmented bar */}
       {total > 0 && (
         <div
-          className="flex h-2 w-full overflow-hidden rounded-full"
+          className="flex h-3 w-full overflow-hidden rounded-full border-2 border-sidebar-edge"
           role="img"
           aria-label="Class mastery mix bar"
         >
@@ -99,7 +99,7 @@ export function ClassPulseStrip({ counts }: { counts: PulseCounts }): React.JSX.
               <span className={`text-xs ${textClass}`}>
                 {label}
               </span>
-              <span className="text-xs text-fg tabular-nums">{count}</span>
+              <span className="text-sm font-bold text-fg tabular-nums">{count}</span>
             </div>
           );
         })}

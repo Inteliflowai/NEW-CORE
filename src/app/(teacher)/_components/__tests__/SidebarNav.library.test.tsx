@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 // Suite: /library/lessons/123 — Lesson Library prefix match
-vi.mock('next/navigation', () => ({ usePathname: () => '/library/lessons/123' }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/library/lessons/123', useSearchParams: () => new URLSearchParams() }));
 import { SidebarNav } from '../SidebarNav';
 
 describe('SidebarNav — /library/lessons/123', () => {

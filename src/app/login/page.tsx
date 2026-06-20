@@ -1,9 +1,11 @@
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserSupabaseClient } from '@/lib/supabase/client';
 import { homeForRole } from '@/lib/auth/roleHome';
+import { IconBolt } from '@/components/core/icons';
 import BackgroundRotator from './_components/BackgroundRotator';
 
 type Mode = 'signin' | 'magic' | 'forgot';
@@ -71,16 +73,61 @@ function LoginInner() {
     : 'Send reset link';
 
   return (
-    <div className="min-h-screen grid md:grid-cols-2 bg-bg">
-      <div className="relative hidden md:block">
-        <BackgroundRotator />
-      </div>
+    <div className="relative min-h-screen overflow-hidden" style={{ backgroundColor: 'var(--ink-950)' }}>
+      {/* Full-bleed rotating pop-art gallery — the hero / first impression */}
+      <BackgroundRotator />
 
-      <div className="flex items-center justify-center p-6 sm:p-10">
-        <div className="w-full max-w-sm rounded-lg bg-surface p-8 shadow-pop">
-          <div className="mb-6">
-            <span className="font-display font-bold text-brand text-2xl tracking-tight">◆ CORE</span>
-            <p className="mt-1 text-sm text-fg">Learning Intelligence</p>
+      {/* Left column: brand billboard + sign-in card, stacked on the left so the
+          full-bleed art fills the rest of the (ultrawide) screen. */}
+      <div className="relative z-10 flex min-h-screen w-full max-w-lg flex-col justify-center gap-7 px-6 py-12 sm:px-10 lg:px-16">
+        {/* Brand billboard (white CORE mark; items-start keeps the logo's aspect) */}
+        <div className="flex flex-col items-start gap-2">
+          <Image
+            src="/images/brand/core-logo.png"
+            alt="CORE"
+            width={1108}
+            height={466}
+            priority
+            className="h-10 w-auto sm:h-12"
+            style={{ filter: 'drop-shadow(0 2px 10px rgb(0 0 0 / 0.6))' }}
+          />
+          <span
+            className="inline-flex items-center gap-1.5 text-sm font-semibold"
+            style={{ color: 'var(--white)', textShadow: '0 1px 8px rgb(0 0 0 / 0.75)' }}
+          >
+            Learning Intelligence · with
+            <Image src="/images/brand/spark.svg" alt="SPARK" width={1071} height={481} className="h-4 w-auto" />
+          </span>
+        </div>
+
+        <div
+          className="relative w-full max-w-sm rounded-xl border-2 border-sidebar-edge p-7 shadow-sticker-lg"
+          style={{
+            // Frosted light-cobalt glass — translucent so the art shows through,
+            // backdrop-blur keeps the dark form text readable. Token-derived.
+            background:
+              'color-mix(in srgb, color-mix(in srgb, var(--brand) 22%, var(--white)) 80%, transparent)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+          }}
+        >
+          {/* Lime bolt sticker tab — the signature, echoes the teacher rail's active sticker */}
+          <span
+            aria-hidden
+            className="absolute -right-3 -top-3 grid size-10 -rotate-12 place-items-center rounded-xl border-2 border-sidebar-edge bg-sidebar-active text-sidebar-active-fg shadow-sticker"
+          >
+            <IconBolt className="size-5" />
+          </span>
+
+          <div className="mb-5">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-fg">
+              {mode === 'forgot' ? 'Reset your password' : 'Welcome back'}
+            </h1>
+            <p className="mt-1 text-sm text-fg">
+              {mode === 'forgot'
+                ? "Enter your email and we'll send you a reset link."
+                : 'Sign in to your CORE account.'}
+            </p>
           </div>
 
           {/* Mode toggle (hidden in forgot) */}
@@ -115,13 +162,7 @@ function LoginInner() {
 
           {mode === 'forgot' && (
             <button type="button" onClick={() => setMode('signin')}
-              className="mb-3 text-sm text-fg-muted hover:text-brand">← Back to sign in</button>
-          )}
-          {mode === 'forgot' && (
-            <div className="mb-2">
-              <h1 className="text-lg font-display text-fg">Reset your password</h1>
-              <p className="mt-1 text-sm text-fg">Enter your email and we&apos;ll send you a reset link.</p>
-            </div>
+              className="mb-3 text-sm text-fg hover:text-brand">← Back to sign in</button>
           )}
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -140,7 +181,7 @@ function LoginInner() {
                 <span className="flex items-center justify-between">
                   <label htmlFor="password">Password</label>
                   <button type="button" onClick={() => setMode('forgot')}
-                    className="text-xs text-fg-muted hover:text-brand">Forgot?</button>
+                    className="text-xs text-fg hover:text-brand">Forgot?</button>
                 </span>
                 <span className="relative">
                   <input id="password" type={showPw ? 'text' : 'password'} required value={password}
@@ -156,7 +197,7 @@ function LoginInner() {
             )}
 
             {mode === 'magic' && (
-              <p className="text-sm text-fg-muted">We&apos;ll email you a one-click link. No password needed.</p>
+              <p className="text-sm text-fg">We&apos;ll email you a one-click link. No password needed.</p>
             )}
 
             <button type="submit" disabled={loading}
@@ -165,7 +206,7 @@ function LoginInner() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs text-fg-muted">CORE · Inteliflow AI · FERPA compliant</p>
+          <p className="mt-6 text-center text-xs text-fg">CORE · Inteliflow AI · FERPA compliant</p>
         </div>
       </div>
     </div>
@@ -174,7 +215,7 @@ function LoginInner() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-bg" />}>
+    <Suspense fallback={<div className="min-h-screen" style={{ backgroundColor: 'var(--ink-950)' }} />}>
       <LoginInner />
     </Suspense>
   );

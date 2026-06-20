@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 // Suite: /today — exact match
-vi.mock('next/navigation', () => ({ usePathname: () => '/today' }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/today', useSearchParams: () => new URLSearchParams() }));
 import { SidebarNav } from '../SidebarNav';
 
 describe('SidebarNav — /today (exact match)', () => {

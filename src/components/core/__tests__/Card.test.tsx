@@ -20,14 +20,15 @@ describe('Card', () => {
     expect(container.firstChild).toHaveClass('bg-surface');
   });
 
-  it('has rounded utility class for token-driven radius', () => {
+  it('has chunky token-driven corners (rounded-lg)', () => {
     const { container } = render(<Card>content</Card>);
-    expect(container.firstChild).toHaveClass('rounded');
+    expect(container.firstChild).toHaveClass('rounded-lg');
   });
 
-  it('has shadow utility class for token-driven shadow', () => {
+  it('has the Pop-Art ink edge + sticker shadow', () => {
     const { container } = render(<Card>content</Card>);
-    expect(container.firstChild).toHaveClass('shadow');
+    expect(container.firstChild).toHaveClass('border-sidebar-edge');
+    expect(container.firstChild).toHaveClass('shadow-sticker');
   });
 
   it('accepts an additional className', () => {

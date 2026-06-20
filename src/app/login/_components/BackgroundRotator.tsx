@@ -1,13 +1,18 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 
+// Full-bleed pop-art gallery, borrowed from SPARK's login — edge-to-edge, with a
+// slow Ken Burns drift + cross-fade. These are the first impression, so they're
+// the hero: object-cover fills the viewport (no letterbox) and next/image keeps the
+// large PNGs optimized.
 const SLIDES = [
-  { src: '/images/login/login-classroom-ai.jpg', caption: 'The future of education is brilliantly personal.' },
-  { src: '/images/login/login-student-before-after.jpg', caption: 'Every student has the potential to transform.' },
-  { src: '/images/login/login-brain-ai.jpg', caption: 'Intelligence flows in every direction.' },
-  { src: '/images/login/login-learning-paths.jpg', caption: 'Every mind is an explosion waiting to happen.' },
-  { src: '/images/login/login-student-discovery.jpg', caption: 'Learning is the most colorful adventure.' },
+  { src: '/images/login/spark-slide-1.png', caption: 'Where curiosity catches fire.' },
+  { src: '/images/login/spark-slide-2.png', caption: 'Every mind is an explosion waiting to happen.' },
+  { src: '/images/login/spark-slide-3.png', caption: 'Learning, in full color.' },
+  { src: '/images/login/spark-slide-4.jpg', caption: 'Bold ideas, brilliantly personal.' },
+  { src: '/images/login/spark-slide-5.png', caption: 'The spark that changes everything.' },
 ];
 const INTERVAL = 7000;
 
@@ -23,27 +28,39 @@ export default function BackgroundRotator() {
   return (
     <div className="absolute inset-0 overflow-hidden" style={{ backgroundColor: 'var(--ink-950)' }}>
       {SLIDES.map((s, i) => (
-        <div
+        <Image
           key={s.src}
+          src={s.src}
+          alt=""
           aria-hidden
-          className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000"
-          style={{ backgroundImage: `url(${s.src})`, opacity: i === current ? 1 : 0 }}
+          fill
+          priority={i === 0}
+          sizes="100vw"
+          className={`object-cover object-center ${i === current ? 'scale-105 opacity-100' : 'scale-100 opacity-0'}`}
+          // Opacity cross-fade + slow Ken Burns zoom on the transform.
+          style={{ transition: 'opacity 1.4s ease, transform 8s ease' }}
         />
       ))}
-      {/* Scrim for caption legibility (Tier-1 primitive — sanctioned per spec G3). */}
+      {/* Diagonal + bottom scrims (token-derived translucent ink) so the white billboard
+          text and caption stay legible over busy art. Sanctioned per spec G3. */}
       <div
         aria-hidden
         className="absolute inset-0"
-        style={{ background: 'linear-gradient(to top, var(--ink-950) 0%, transparent 55%)' }}
+        style={{ background: 'linear-gradient(105deg, color-mix(in srgb, var(--ink-950) 55%, transparent) 0%, color-mix(in srgb, var(--ink-950) 12%, transparent) 38%, transparent 60%)' }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--ink-950) 70%, transparent) 0%, transparent 35%)' }}
       />
       <p
-        className="absolute bottom-16 left-8 right-8 text-lg font-display"
+        className="absolute bottom-12 right-8 hidden max-w-sm text-right font-display text-2xl font-bold sm:right-10 sm:block"
         data-active="true"
-        style={{ color: 'var(--white)', textShadow: '0 1px 8px rgb(0 0 0 / 0.6)' }}
+        style={{ color: 'var(--white)', textShadow: '0 2px 14px rgb(0 0 0 / 0.75)' }}
       >
         {SLIDES[current].caption}
       </p>
-      <div role="tablist" aria-label="Slideshow" className="absolute bottom-8 right-8 flex gap-2">
+      <div role="tablist" aria-label="Slideshow" className="absolute bottom-5 right-8 z-20 flex gap-2 sm:right-10">
         {SLIDES.map((s, i) => (
           <button
             key={s.src}
@@ -54,9 +71,9 @@ export default function BackgroundRotator() {
             onClick={() => setCurrent(i)}
             className="h-1.5 rounded-full transition-all"
             style={{
-              width: i === current ? '20px' : '6px',
+              width: i === current ? '24px' : '7px',
               backgroundColor: 'var(--white)',
-              opacity: i === current ? 0.9 : 0.35,
+              opacity: i === current ? 0.95 : 0.4,
             }}
           />
         ))}

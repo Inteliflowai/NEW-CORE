@@ -33,6 +33,7 @@ import type { EffortLabel } from '@/lib/copy/effortPhrase';
 import { IdentityHeader } from './_components/IdentityHeader';
 import { WholeChildRail } from './_components/WholeChildRail';
 import { SkillMapMatrix, type SkillMapRow } from './_components/SkillMapMatrix';
+import { SectionLabel } from '../../_components/SectionLabel';
 import { priorityCta } from './_lib/priorityCta';
 
 export default async function StudentPage({
@@ -61,7 +62,6 @@ export default async function StudentPage({
   // ── Breadcrumb (from ?from / ?class) ─────────────────────────────────────────
   const backHref = classId ? `/roster?class=${classId}` : '/roster';
   const backLabel = from === 'today' ? 'Today' : 'Roster';
-  const assignmentsHref = `/assignments?student=${studentId}`;
 
   const fullName = identity?.full_name ?? 'Student';
   const gradeLevel = identity?.grade_level ?? null;
@@ -97,48 +97,44 @@ export default async function StudentPage({
   const reteachWins = signals.reteach_outcomes;
 
   return (
-    <div className="p-6 flex flex-col gap-6">
+    <div className="p-5 flex flex-col gap-5">
       <IdentityHeader
         fullName={fullName}
         gradeLevel={gradeLevel}
         classLabel={null}
         backHref={backHref}
         backLabel={backLabel}
-        assignmentsHref={assignmentsHref}
       />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         {/* LEFT — whole-child rail (sticky) */}
         <aside className="w-full lg:w-80 shrink-0">
           <WholeChildRail
             signals={signals}
             storyLine={line}
             cta={cta}
-            assignmentsHref={assignmentsHref}
           />
         </aside>
 
         {/* RIGHT — Skill Map + bottom sections */}
-        <div className="flex flex-1 flex-col gap-6">
-          <section className="flex flex-col gap-3">
-            <h2 className="font-display text-base text-fg font-semibold">Skill Map</h2>
+        <div className="flex flex-1 flex-col gap-5">
+          <section className="flex flex-col gap-2.5">
+            <h2><SectionLabel tone="brand">Skill Map</SectionLabel></h2>
             <SkillMapMatrix rows={skillRows} />
           </section>
 
           {/* A pattern worth knowing — only when divergence is flagged */}
           {showPattern && (
             <section id="pattern" className="flex flex-col gap-2">
-              <h2 className="font-display text-base text-fg font-semibold">
-                A pattern worth knowing
-              </h2>
-              <p className="text-fg text-sm">{divergencePhrase(signals.divergence)}</p>
+              <h2><SectionLabel tone="warn">A pattern worth knowing</SectionLabel></h2>
+              <p className="text-fg text-[13px] leading-snug">{divergencePhrase(signals.divergence)}</p>
             </section>
           )}
 
           {/* Reteach history */}
           {reteachWins.length > 0 && (
             <section className="flex flex-col gap-2">
-              <h2 className="font-display text-base text-fg font-semibold">Reteach history</h2>
+              <h2><SectionLabel tone="ok">Reteach history</SectionLabel></h2>
               <ul className="flex flex-col gap-1">
                 {reteachWins.map((o) => {
                   const win = o.improvement > 0;

@@ -19,8 +19,12 @@ interface NeedsYouCardProps {
 export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.JSX.Element {
   if (focusGroup.length === 0) {
     return (
-      <Card>
-        <h2 className="font-display text-base font-semibold text-fg mb-3">Needs you</h2>
+      <Card tone="warn">
+        <h2 className="mb-3">
+        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg shadow-sticker">
+          Needs you
+        </span>
+      </h2>
         <p className="text-fg-muted text-sm">
           Nothing urgent today — everyone&apos;s tracking along.
         </p>
@@ -31,9 +35,13 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
   const top3 = focusGroup.slice(0, 3);
 
   return (
-    <Card>
-      <h2 className="font-display text-base font-semibold text-fg mb-3">Needs you</h2>
-      <ul className="flex flex-col gap-4">
+    <Card tone="warn">
+      <h2 className="mb-3">
+        <span className="inline-flex items-center rounded-md border-2 border-sidebar-edge bg-warn px-2.5 py-1 font-display text-sm font-extrabold uppercase tracking-wide text-fg shadow-sticker">
+          Needs you
+        </span>
+      </h2>
+      <ul className="flex flex-col gap-2.5">
         {top3.map((item) => {
           const whySentence = triageWhySentence({
             suggestedAction: item.diagnosis.suggestedAction,
@@ -47,14 +55,14 @@ export function NeedsYouCard({ focusGroup, classId }: NeedsYouCardProps): React.
                 <span className="text-fg font-medium text-sm">{item.full_name}</span>
                 <ActionChip action={item.diagnosis.suggestedAction} />
               </div>
-              <p className="text-fg-muted text-sm">{whySentence}</p>
+              <p className="text-fg-muted text-[13px] leading-snug">{whySentence}</p>
             </li>
           );
         })}
       </ul>
       <a
         href={`/roster?class=${classId}`}
-        className="block mt-4 text-brand text-sm hover:underline"
+        className="mt-4 inline-flex items-center gap-1 rounded-md border-2 border-sidebar-edge bg-brand px-3 py-1.5 text-sm font-bold text-fg-on-brand shadow-sticker transition-transform hover:-translate-y-0.5"
       >
         See the full roster ›
       </a>
