@@ -53,11 +53,13 @@ function makeAdminMock(opts: {
   const userChain = makeChain({ school_id: 'sch-1' });
   const idemInsertChain = makeChain(null, opts.idemClaimError ?? null);
   const idemReadChain = makeChain(opts.existingIdem ?? null);
-  const completionsChain = makeChain(null);
+  const completionsUpsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
+  const completionsChain = { ...makeChain(null), upsert: completionsUpsertSpy };
   const eventsChain = makeChain(null);
+  const idemUpdateSpy = vi.fn().mockReturnValue(makeChain(null));
   const idemUpdateChain = makeChain(null);
 
-  return {
+  const mock = {
     from: vi.fn((table: string) => {
       if (table === 'assignments') return assignmentChain;
       if (table === 'users') return userChain;
@@ -70,12 +72,17 @@ function makeAdminMock(opts: {
           select: idemReadChain.select,
           eq: idemReadChain.eq,
           maybeSingle: idemReadChain.maybeSingle,
-          update: vi.fn().mockReturnValue(idemUpdateChain),
+          update: idemUpdateSpy,
         };
       }
       return makeChain(null);
     }),
+    // Exposed spies for assertions
+    _completionsUpsertSpy: completionsUpsertSpy,
+    _idemUpdateSpy: idemUpdateSpy,
+    _idemUpdateChain: idemUpdateChain,
   };
+  return mock;
 }
 
 async function loadRoute(admin: unknown) {
@@ -133,5 +140,91 @@ describe('POST /api/attempts/spark-attempt-complete', () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(recomputeSpy).not.toHaveBeenCalled();
+  });
+
+  it('submit-then-analyzer: second POST with distinct key overwrites same row (upsert called twice, second payload has rubric + transfer_score)', async () => {
+    const rubric = {
+      problem_understanding: 4,
+      reasoning_strategy: 4,
+      use_of_evidence: 3,
+      creativity_application: 4,
+      communication: 3,
+      reflection_metacognition: 3,
+      collaboration: null,
+    };
+
+    // --- First fire: submit-time (no rubric, no score) ---
+    const admin1 = makeAdminMock();
+    const POST1 = await loadRoute(admin1);
+    const res1 = await POST1(
+      makeRequest(
+        { core_homework_id: 'hw-1', student_id: 'stu-1', rubric_dimensions: null, content_quality: null, score: null },
+        { key: 'hw-1_stu-1' },
+      ),
+    );
+    expect(res1.status).toBe(200);
+    const body1 = await res1.json();
+    expect(body1).toMatchObject({ ok: true, received: true });
+
+    // upsert was called with rubric_dimensions:null and transfer_score:null
+    expect(admin1._completionsUpsertSpy).toHaveBeenCalledOnce();
+    const firstUpsertPayload = admin1._completionsUpsertSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(firstUpsertPayload.rubric_dimensions).toBeNull();
+    expect(firstUpsertPayload.transfer_score).toBeNull();
+    // onConflict target is correct
+    expect(admin1._completionsUpsertSpy.mock.calls[0][1]).toMatchObject({ onConflict: 'assignment_id,student_id' });
+
+    // --- Second fire: analyzer pass (distinct key → not deduped; full rubric + content_quality) ---
+    // resetModules happened in beforeEach; we need to reset again between the two loads
+    vi.resetModules();
+    recomputeSpy.mockClear();
+
+    const admin2 = makeAdminMock();
+    const POST2 = await loadRoute(admin2);
+    const res2 = await POST2(
+      makeRequest(
+        { core_homework_id: 'hw-1', student_id: 'stu-1', rubric_dimensions: rubric, content_quality: 'engaged', score: null },
+        { key: 'hw-1_stu-1_scored' },
+      ),
+    );
+    expect(res2.status).toBe(200);
+
+    // upsert was called again; second payload carries rubric + a numeric transfer_score
+    expect(admin2._completionsUpsertSpy).toHaveBeenCalledOnce();
+    const secondUpsertPayload = admin2._completionsUpsertSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(secondUpsertPayload.rubric_dimensions).toEqual(rubric);
+    expect(typeof secondUpsertPayload.transfer_score).toBe('number');
+    expect(secondUpsertPayload.transfer_score as number).toBeGreaterThan(0);
+    expect(secondUpsertPayload.transfer_score as number).toBeCloseTo(88, -1); // ≈88 (within ±10)
+    expect(admin2._completionsUpsertSpy.mock.calls[0][1]).toMatchObject({ onConflict: 'assignment_id,student_id' });
+
+    // recompute ran for the analyzer fire
+    expect(recomputeSpy).toHaveBeenCalledOnce();
+  });
+
+  it('finalize("failed") is called when assignment is unknown/mismatched', async () => {
+    const admin = makeAdminMock({ assignment: { id: 'hw-1', student_id: 'OTHER', class_id: 'c', skill_ids: [] } });
+    const POST = await loadRoute(admin);
+    const res = await POST(makeRequest({ core_homework_id: 'hw-1', student_id: 'stu-1' }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(recomputeSpy).not.toHaveBeenCalled();
+
+    // finalize('failed') must have updated the idempotency row with status:'failed'
+    expect(admin._idemUpdateSpy).toHaveBeenCalledOnce();
+    const updateArg = admin._idemUpdateSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(updateArg.status).toBe('failed');
+  });
+
+  it('non-23505 claim error proceeds best-effort: recompute still runs, returns 200', async () => {
+    const admin = makeAdminMock({ idemClaimError: { code: 'XXYYZ', message: 'transient error' } });
+    const POST = await loadRoute(admin);
+    const res = await POST(
+      makeRequest({ core_homework_id: 'hw-1', student_id: 'stu-1', completed_at: '2026-06-20T00:00:00Z' }),
+    );
+    expect(res.status).toBe(200);
+    // recompute ran once (best-effort processing proceeded)
+    expect(recomputeSpy).toHaveBeenCalledOnce();
   });
 });
