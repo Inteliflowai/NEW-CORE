@@ -12,6 +12,7 @@ import { computeTransferScore, type RubricDimensions } from '@/lib/spark/contrac
 
 const ENDPOINT = '/api/attempts/spark-attempt-complete';
 const IDEMPOTENCY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const CLAIM_TTL_MS = 60_000; // an in_progress claim older than this with no terminal status is presumed dead
 
 interface AttemptCompletePayload {
   core_homework_id?: string;
@@ -68,18 +69,33 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (claim.error) {
     const code = (claim.error as { code?: string }).code;
     if (code === '23505') {
-      // Key already seen → return stored response if terminal, else acknowledge the concurrent run.
+      // Key already seen. Three cases: terminal replay, fresh concurrent run, or a stale (dead) claim.
       const { data: existing } = await admin
         .from('webhook_idempotency_keys')
-        .select('status, response_body')
+        .select('status, response_body, created_at')
         .eq('endpoint', ENDPOINT)
         .eq('idempotency_key', idempotencyKey)
         .maybeSingle();
-      const row = existing as { status?: string; response_body?: unknown } | null;
+      const row = existing as { status?: string; response_body?: unknown; created_at?: string } | null;
       if (row && row.status !== 'in_progress' && row.response_body) {
+        // Terminal replay → return the stored response.
         return NextResponse.json(row.response_body, { status: 200 });
       }
-      return NextResponse.json({ ok: true, received: true, deduped: true }, { status: 200 });
+      const claimIsFresh =
+        !!row?.created_at && Date.now() - new Date(row.created_at).getTime() < CLAIM_TTL_MS;
+      if (row?.status === 'in_progress' && claimIsFresh) {
+        // Genuine concurrent run still in flight → acknowledge, don't double-process.
+        return NextResponse.json({ ok: true, received: true, deduped: true }, { status: 200 });
+      }
+      // Stale in_progress (claimer crashed/timed out) or missing created_at → reclaim and reprocess.
+      // Reset created_at so a second concurrent retry during reprocessing sees a fresh claim.
+      // Safe: the spark_completions upsert and recompute are idempotent.
+      await admin
+        .from('webhook_idempotency_keys')
+        .update({ status: 'in_progress', created_at: new Date().toISOString() })
+        .eq('endpoint', ENDPOINT)
+        .eq('idempotency_key', idempotencyKey);
+      // Fall through to the processing block below.
     }
     // Non-unique claim error (e.g. transient): proceed best-effort (upsert is idempotent), no finalize row to update.
     console.error('[spark-attempt-complete] idempotency claim error (proceeding best-effort):', claim.error);

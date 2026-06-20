@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const SECRET = 'spark-core-secret-2026';
+const SECRET = 'test-spark-secret';
 
 function makeRequest(
   body: Record<string, unknown>,
@@ -129,6 +129,35 @@ describe('POST /api/attempts/spark-attempt-complete', () => {
     const POST = await loadRoute(admin);
     const res = await POST(makeRequest({ core_homework_id: 'hw-1', student_id: 'stu-1' }));
     expect(res.status).toBe(200);
+    expect(recomputeSpy).not.toHaveBeenCalled();
+  });
+
+  it('stale in_progress claim (dead claimer) is reclaimed + reprocessed → recompute runs, 200 {ok,received}', async () => {
+    const admin = makeAdminMock({
+      idemClaimError: { code: '23505', message: 'duplicate key' },
+      // in_progress, no stored body, claimed ~2 minutes ago (≥ CLAIM_TTL_MS) → presumed dead.
+      existingIdem: { status: 'in_progress', response_body: null, created_at: new Date(Date.now() - 120_000).toISOString() },
+    });
+    const POST = await loadRoute(admin);
+    const res = await POST(makeRequest({ core_homework_id: 'hw-1', student_id: 'stu-1', completed_at: '2026-06-20T00:00:00Z' }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: true, received: true });
+    // Reprocessing happened: recompute ran (the completion is NOT silently lost).
+    expect(recomputeSpy).toHaveBeenCalledOnce();
+  });
+
+  it('fresh in_progress claim (genuine concurrent run) → no reprocess, 200 {deduped}', async () => {
+    const admin = makeAdminMock({
+      idemClaimError: { code: '23505', message: 'duplicate key' },
+      existingIdem: { status: 'in_progress', response_body: null, created_at: new Date().toISOString() },
+    });
+    const POST = await loadRoute(admin);
+    const res = await POST(makeRequest({ core_homework_id: 'hw-1', student_id: 'stu-1' }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({ deduped: true });
+    // A concurrent run is still in flight → we must NOT double-process.
     expect(recomputeSpy).not.toHaveBeenCalled();
   });
 
