@@ -27,6 +27,7 @@ import {
   DEMO_ADMIN,
   DEMO_SCHOOL_NAME,
 } from '../src/lib/demo/demoCast';
+import { provisionSparkLink } from '../src/lib/spark/sparkLink';
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
@@ -609,6 +610,63 @@ async function main() {
       }
     }
     console.log('[seed] Misconceptions done');
+  }
+
+  // ── SPARK demo: enabled link + seeded completions (demoable without a live round-trip) ──
+  try {
+    await provisionSparkLink(admin, {
+      schoolId,
+      apiKey: 'demo-spark-key-2026',
+      coreBaseUrl: 'https://newcore.inteliflowai.com',
+      label: 'SPARK (demo)',
+    });
+    const sparkDemo = [
+      {
+        key: 'alex',
+        transfer: 88,
+        quality: 'engaged' as const,
+        rubric: { problem_understanding: 4, reasoning_strategy: 4, use_of_evidence: 3, creativity_application: 4, communication: 3, reflection_metacognition: 3, collaboration: null },
+      },
+      {
+        key: 'sofia',
+        transfer: 60,
+        quality: 'engaged' as const,
+        rubric: { problem_understanding: 3, reasoning_strategy: 2, use_of_evidence: 2, creativity_application: 3, communication: 3, reflection_metacognition: 2, collaboration: null },
+      },
+    ];
+    for (const s of sparkDemo) {
+      const sid = studentIds[s.key];
+      if (!sid || !classId) continue;
+      const { data: a } = await admin
+        .from('assignments')
+        .select('id')
+        .eq('student_id', sid)
+        .eq('class_id', classId)
+        .limit(1)
+        .maybeSingle();
+      if (!a) continue;
+      await admin
+        .from('assignments')
+        .update({ spark_status: 'completed', spark_attempt_id: `demo-${s.key}-attempt` })
+        .eq('id', a.id);
+      await admin.from('spark_completions').upsert(
+        {
+          assignment_id: a.id,
+          student_id: sid,
+          school_id: schoolId,
+          spark_attempt_id: `demo-${s.key}-attempt`,
+          score: s.transfer,
+          content_quality: s.quality,
+          rubric_dimensions: s.rubric,
+          transfer_score: s.transfer,
+          completed_at: now.toISOString(),
+        },
+        { onConflict: 'assignment_id,student_id' },
+      );
+    }
+    console.log('[seed] SPARK demo link + completions done');
+  } catch (e) {
+    console.warn('[seed] SPARK demo seed failed (soft):', (e as Error).message);
   }
 
   console.log('[seed] Demo seed complete.');
