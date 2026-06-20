@@ -7,7 +7,7 @@
 // Exports the result types so downstream tasks can import them by name.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { MasteryBand } from '@/lib/utils/scoring';
+import type { MasteryBand } from '@/types/core';
 import type { RiskResult } from '@/lib/signals/computeRosterRiskIndex';
 import type { DiagnoseResult } from '@/lib/signals/diagnosis';
 

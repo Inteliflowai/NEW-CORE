@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { sortFocusGroup } from '../sortFocusGroup';
+import type { FocusGroupItem } from '../loadRosterSignals';
 
-const mk = (name: string, severity: 1|2|3, action: string) =>
-  ({ student_id: name, full_name: name, diagnosis: { severity, suggestedAction: action, diagnosis: 'x' } } as never);
+const mk = (name: string, severity: 1|2|3, action: string): FocusGroupItem =>
+  ({ student_id: name, full_name: name, diagnosis: { severity, suggestedAction: action, diagnosis: 'x' } } as unknown as FocusGroupItem);
 
 describe('sortFocusGroup', () => {
   it('orders by severity DESC, then action priority, then name; pure', () => {

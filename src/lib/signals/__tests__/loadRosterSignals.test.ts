@@ -209,7 +209,7 @@ describe('loadRosterSignals()', () => {
     expect(result.concept_gaps).toHaveLength(0);
     // skills table should not have been called
     const skillsCalls = (admin.from as ReturnType<typeof vi.fn>).mock.calls.filter(
-      ([t]: [string]) => t === 'skills',
+      (call) => call[0] === 'skills',
     );
     expect(skillsCalls).toHaveLength(0);
   });
