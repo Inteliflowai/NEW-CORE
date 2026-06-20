@@ -123,7 +123,7 @@ function LoginInner() {
             <h1 className="font-display text-2xl font-bold tracking-tight text-fg">
               {mode === 'forgot' ? 'Reset your password' : 'Welcome back'}
             </h1>
-            <p className="mt-1 text-sm text-fg-muted">
+            <p className="mt-1 text-sm text-fg">
               {mode === 'forgot'
                 ? "Enter your email and we'll send you a reset link."
                 : 'Sign in to your CORE account.'}
@@ -162,7 +162,7 @@ function LoginInner() {
 
           {mode === 'forgot' && (
             <button type="button" onClick={() => setMode('signin')}
-              className="mb-3 text-sm text-fg-muted hover:text-brand">← Back to sign in</button>
+              className="mb-3 text-sm text-fg hover:text-brand">← Back to sign in</button>
           )}
 
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -181,7 +181,7 @@ function LoginInner() {
                 <span className="flex items-center justify-between">
                   <label htmlFor="password">Password</label>
                   <button type="button" onClick={() => setMode('forgot')}
-                    className="text-xs text-fg-muted hover:text-brand">Forgot?</button>
+                    className="text-xs text-fg hover:text-brand">Forgot?</button>
                 </span>
                 <span className="relative">
                   <input id="password" type={showPw ? 'text' : 'password'} required value={password}
@@ -197,7 +197,7 @@ function LoginInner() {
             )}
 
             {mode === 'magic' && (
-              <p className="text-sm text-fg-muted">We&apos;ll email you a one-click link. No password needed.</p>
+              <p className="text-sm text-fg">We&apos;ll email you a one-click link. No password needed.</p>
             )}
 
             <button type="submit" disabled={loading}
@@ -206,7 +206,7 @@ function LoginInner() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs text-fg-muted">CORE · Inteliflow AI · FERPA compliant</p>
+          <p className="mt-6 text-center text-xs text-fg">CORE · Inteliflow AI · FERPA compliant</p>
         </div>
       </div>
     </div>
