@@ -65,6 +65,9 @@ const LEAK_FIXTURE: RosterSignals = {
         severity: 3,
         diagnosis: 'Alpha needs another pass at this concept.',
       },
+      divergence_score: 30,
+      hw_avg: 65,
+      quiz_avg: 35,
     },
   ],
   concept_gaps: [
@@ -124,12 +127,16 @@ describe('Roster page — leak discipline', () => {
     expect(hasHigh || hasCritical).toBe(true);
   });
 
-  it('DOES contain the diagnosis.diagnosis verbatim text of the focus card', async () => {
+  it('DOES render the humanized why sentence (teacher-only numbers allowed), not the raw diagnose() string', async () => {
     const { default: RosterPage } = await import('../page');
     const { container } = render(
       await RosterPage({ searchParams: Promise.resolve({ class: 'lk1' }) }),
     );
-    // Teacher-only surface: diagnosis text is allowed verbatim
-    expect(container.innerHTML).toContain('Alpha needs another pass at this concept.');
+    const html = container.innerHTML;
+    // Card renders triageWhySentence (keeps teacher-facing quiz/divergence numbers) ...
+    expect(html).toContain('Quiz average is 35%'); // lk-s1 reteach: quiz_avg 35
+    expect(html.toLowerCase()).toContain('assignment');
+    // ... NOT the raw diagnose() string.
+    expect(html).not.toContain('Alpha needs another pass at this concept.');
   });
 });

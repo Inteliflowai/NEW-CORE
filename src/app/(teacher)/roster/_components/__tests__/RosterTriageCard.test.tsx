@@ -15,8 +15,11 @@ const mockItem: FocusGroupItem = {
   diagnosis: {
     suggestedAction: 'reteach',
     severity: 3,
-    diagnosis: 'Quiz average is 42% — needs another pass.',
+    diagnosis: 'Quiz average is 42% — needs another pass.', // raw diagnose() string — NOT rendered
   },
+  divergence_score: 44,
+  hw_avg: 80,
+  quiz_avg: 42,
 };
 
 const mockRosterEntry: RosterItem = {
@@ -36,11 +39,14 @@ const rosterById: Record<string, RosterItem> = {
 };
 
 describe('RosterTriageCard', () => {
-  it('renders the diagnosis sentence text', () => {
+  it('renders the humanized why sentence (keeps numbers, says Assignment, never HW)', () => {
     const { container } = render(
       <RosterTriageCard item={mockItem} rosterById={rosterById} classId={CLASS_ID} />,
     );
-    expect(container.innerHTML).toContain('Quiz average is 42% — needs another pass.');
+    expect(container.innerHTML).toContain('42%');                       // quiz avg kept
+    expect(container.innerHTML).toContain('44 points');                 // divergence kept + explained
+    expect(container.innerHTML.toLowerCase()).toContain('assignment');  // not "HW"
+    expect(container.innerHTML).not.toMatch(/\bHW\b/);
   });
 
   it('renders the action chip label for suggestedAction', () => {

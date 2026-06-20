@@ -11,6 +11,7 @@ import { MasteryLabel } from '@/components/core/MasteryLabel';
 import { RiskBadge } from '@/components/core/RiskBadge';
 import { ActionChip } from './ActionChip';
 import { riskFactorPhrase } from '@/lib/copy/riskFactorPhrase';
+import { triageWhySentence } from '@/lib/copy/triageWhySentence';
 
 // Left accent bar colour by severity
 const ACCENT_BY_SEVERITY: Record<1 | 2 | 3, string> = {
@@ -62,8 +63,16 @@ export function RosterTriageCard({
           <ActionChip action={item.diagnosis.suggestedAction} />
         </div>
 
-        {/* Diagnosis text (teacher-only; verbatim is allowed here) */}
-        <p className="text-fg text-sm">{item.diagnosis.diagnosis}</p>
+        {/* Humanized "why" (teacher-only; keeps the numbers, explains the divergence,
+            says "Assignment" not "HW" — never renders the raw diagnose() string). */}
+        <p className="text-fg text-sm">
+          {triageWhySentence({
+            suggestedAction: item.diagnosis.suggestedAction,
+            divergence_score: item.divergence_score,
+            hw_avg: item.hw_avg,
+            quiz_avg: item.quiz_avg,
+          })}
+        </p>
 
         {/* Meta row */}
         <div className="flex flex-wrap items-center gap-2 text-sm">

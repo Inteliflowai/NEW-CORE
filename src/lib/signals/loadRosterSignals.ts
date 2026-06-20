@@ -32,6 +32,10 @@ export interface FocusGroupItem {
   student_id: string;
   full_name: string;
   diagnosis: DiagnoseResult;
+  // Structured signals for the humanized "why" sentence (teacher-only — never forward).
+  divergence_score: number;
+  hw_avg: number | null;
+  quiz_avg: number | null;
 }
 
 export interface ConceptGapItem {
@@ -161,6 +165,9 @@ export async function loadRosterSignals(
         volatile,
         risk,
         diagnosis,
+        hw_avg: hwAvg,
+        quiz_avg: quizAvg,
+        divergence_score: divergenceResult.divergence_score,
       };
     }),
   );
@@ -181,6 +188,9 @@ export async function loadRosterSignals(
       student_id: r.student_id,
       full_name: r.full_name,
       diagnosis: r.diagnosis as DiagnoseResult,
+      divergence_score: r.divergence_score,
+      hw_avg: r.hw_avg,
+      quiz_avg: r.quiz_avg,
     }));
 
   // ── Class-wide concept gaps ─────────────────────────────────────────────────

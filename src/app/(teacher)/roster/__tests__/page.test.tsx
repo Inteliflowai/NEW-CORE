@@ -108,6 +108,9 @@ const FIXTURE: RosterSignals = {
         severity: 2,
         diagnosis: 'Anna has a homework-quiz gap.',
       },
+      divergence_score: 25,
+      hw_avg: 45,
+      quiz_avg: 70,
     },
     // s2: severity 1, monitor — lowest priority
     {
@@ -118,6 +121,9 @@ const FIXTURE: RosterSignals = {
         severity: 1,
         diagnosis: 'Bob is slipping slightly.',
       },
+      divergence_score: 22,
+      hw_avg: 60,
+      quiz_avg: 82,
     },
     // s3: severity 3, reteach — highest
     {
@@ -128,6 +134,9 @@ const FIXTURE: RosterSignals = {
         severity: 3,
         diagnosis: 'Carol needs another pass.',
       },
+      divergence_score: 40,
+      hw_avg: 78,
+      quiz_avg: 38,
     },
   ],
   concept_gaps: [
