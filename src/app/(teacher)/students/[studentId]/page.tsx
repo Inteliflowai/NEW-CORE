@@ -61,7 +61,6 @@ export default async function StudentPage({
   // ── Breadcrumb (from ?from / ?class) ─────────────────────────────────────────
   const backHref = classId ? `/roster?class=${classId}` : '/roster';
   const backLabel = from === 'today' ? 'Today' : 'Roster';
-  const assignmentsHref = `/assignments?student=${studentId}`;
 
   const fullName = identity?.full_name ?? 'Student';
   const gradeLevel = identity?.grade_level ?? null;
@@ -104,7 +103,6 @@ export default async function StudentPage({
         classLabel={null}
         backHref={backHref}
         backLabel={backLabel}
-        assignmentsHref={assignmentsHref}
       />
 
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -114,7 +112,6 @@ export default async function StudentPage({
             signals={signals}
             storyLine={line}
             cta={cta}
-            assignmentsHref={assignmentsHref}
           />
         </aside>
 

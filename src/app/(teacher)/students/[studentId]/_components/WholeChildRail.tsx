@@ -25,7 +25,6 @@ interface WholeChildRailProps {
   signals: StudentSignals;
   storyLine: string;
   cta: PriorityCta;
-  assignmentsHref: string;
 }
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
@@ -38,7 +37,6 @@ export function WholeChildRail({
   signals,
   storyLine,
   cta,
-  assignmentsHref,
 }: WholeChildRailProps): React.JSX.Element {
   const riskLevel = signals.risk.roster.risk_level;
   const topFactor = signals.risk.roster.risk_factors[0] ?? null;
@@ -49,7 +47,7 @@ export function WholeChildRail({
       <p className="text-fg text-base">{storyLine}</p>
 
       {/* ONE deterministic priority recommendation (write deferred) */}
-      <PriorityRecommendation cta={cta} assignmentsHref={assignmentsHref} />
+      <PriorityRecommendation cta={cta} />
 
       {/* Mastery */}
       <Card>

@@ -10,23 +10,29 @@ import type { PriorityCta } from '../_lib/priorityCta';
 
 interface PriorityRecommendationProps {
   cta: PriorityCta;
-  assignmentsHref: string;
 }
 
 export function PriorityRecommendation({
   cta,
-  assignmentsHref,
 }: PriorityRecommendationProps): React.JSX.Element {
-  const href = cta.kind === 'open-assignments' ? assignmentsHref : (cta.anchor ?? '#');
+  // Non-anchor "open-assignments" fallback has no teacher route yet, so it renders
+  // as a non-navigating label rather than a dead link that 404s on prefetch.
+  const isOpenAssignments = cta.kind === 'open-assignments';
 
   return (
-    <div className="rounded border border-brand-fg bg-brand-surface p-3">
-      <p className="text-brand-fg text-xs font-medium uppercase tracking-wide mb-1">
+    <div className="rounded-lg border-2 border-sidebar-edge bg-brand-surface p-3 shadow-sticker">
+      <p className="text-brand-fg text-xs font-bold uppercase tracking-wide mb-1">
         Suggested next step
       </p>
-      <Link href={href} className="text-brand-fg font-medium underline">
-        {cta.label} ›
-      </Link>
+      {isOpenAssignments ? (
+        <span className="text-brand-fg font-bold" title="Coming soon">
+          {cta.label} ›
+        </span>
+      ) : (
+        <Link href={cta.anchor ?? '#'} className="text-brand-fg font-bold underline">
+          {cta.label} ›
+        </Link>
+      )}
     </div>
   );
 }

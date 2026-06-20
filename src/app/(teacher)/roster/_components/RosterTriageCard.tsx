@@ -86,9 +86,9 @@ export function RosterTriageCard({
           )}
           <Link
             href={lookCloserHref}
-            className="ml-auto text-brand-fg underline"
+            className="ml-auto inline-flex items-center gap-1 rounded-md border-2 border-sidebar-edge bg-brand px-2.5 py-1 text-xs font-bold text-fg-on-brand shadow-sticker transition-transform hover:-translate-y-0.5"
           >
-            look closer ›
+            Look closer ›
           </Link>
         </div>
       </div>

@@ -3,8 +3,9 @@
 // real full_name, "Grade {grade_level} · {class label}", and the three action
 // buttons (High Five / Add note / Open Assignments).
 //
-// Writes are DEFERRED: High Five / Add note are rendered disabled-looking (no-op);
-// Open Assignments is a plain link. Tokens only.
+// Writes are DEFERRED: High Five / Add note / Open Assignments are rendered
+// disabled-looking (no-op) — there is no teacher assignments route yet, so a live
+// link would 404. Tokens only.
 
 import React from 'react';
 import Link from 'next/link';
@@ -15,7 +16,6 @@ interface IdentityHeaderProps {
   classLabel: string | null;
   backHref: string;
   backLabel: string;
-  assignmentsHref: string;
 }
 
 function initialsOf(name: string): string {
@@ -31,7 +31,6 @@ export function IdentityHeader({
   classLabel,
   backHref,
   backLabel,
-  assignmentsHref,
 }: IdentityHeaderProps): React.JSX.Element {
   const sub = [gradeLevel ? `Grade ${gradeLevel}` : null, classLabel]
     .filter(Boolean)
@@ -58,8 +57,9 @@ export function IdentityHeader({
           {sub && <p className="text-fg-muted text-sm">{sub}</p>}
         </div>
 
-        {/* Actions — High Five / Add note are DEFERRED (no-op, disabled-looking).
-            Open Assignments is a plain link. */}
+        {/* Actions — all DEFERRED (no-op, disabled-looking). The teacher
+            assignments view isn't built yet, so "Open Assignments" is disabled
+            rather than a dead link that 404s. */}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -79,12 +79,15 @@ export function IdentityHeader({
           >
             Add note
           </button>
-          <Link
-            href={assignmentsHref}
-            className="rounded border border-brand-fg px-3 py-1.5 text-sm text-brand-fg"
+          <button
+            type="button"
+            disabled
+            aria-disabled="true"
+            title="Coming soon"
+            className="rounded border border-fg-muted px-3 py-1.5 text-sm text-fg-muted opacity-60"
           >
             Open Assignments ›
-          </Link>
+          </button>
         </div>
       </div>
     </div>

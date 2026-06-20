@@ -36,7 +36,7 @@ export default function BackgroundRotator() {
           fill
           priority={i === 0}
           sizes="100vw"
-          className={`object-cover ${i === current ? 'scale-105 opacity-100' : 'scale-100 opacity-0'}`}
+          className={`object-cover object-center ${i === current ? 'scale-105 opacity-100' : 'scale-100 opacity-0'}`}
           // Opacity cross-fade + slow Ken Burns zoom on the transform.
           style={{ transition: 'opacity 1.4s ease, transform 8s ease' }}
         />

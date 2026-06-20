@@ -77,8 +77,9 @@ function LoginInner() {
       {/* Full-bleed rotating pop-art gallery — the hero / first impression */}
       <BackgroundRotator />
 
-      {/* Brand billboard over the art (white CORE mark for dark backgrounds) */}
-      <div className="pointer-events-none absolute left-6 top-6 z-10 flex flex-col gap-2 sm:left-10 sm:top-9">
+      {/* Brand billboard over the art (white CORE mark for dark backgrounds).
+          items-start so the logo keeps its aspect (a stretch flex-col would widen it). */}
+      <div className="pointer-events-none absolute left-6 top-6 z-10 flex flex-col items-start gap-2 sm:left-10 sm:top-9">
         <Image
           src="/images/brand/core-logo.png"
           alt="CORE"
@@ -99,7 +100,17 @@ function LoginInner() {
 
       {/* Sign-in card — floats to the side so the art stays the hero */}
       <div className="absolute inset-0 z-10 flex items-center justify-center p-6 sm:justify-end sm:p-10 lg:pr-24 xl:pr-40">
-        <div className="relative w-full max-w-sm rounded-xl border-2 border-sidebar-edge bg-surface p-7 shadow-sticker-lg">
+        <div
+          className="relative w-full max-w-sm rounded-xl border-2 border-sidebar-edge p-7 shadow-sticker-lg"
+          style={{
+            // Frosted light-cobalt glass — translucent so the art shows through,
+            // backdrop-blur keeps the dark form text readable. Token-derived.
+            background:
+              'color-mix(in srgb, color-mix(in srgb, var(--brand) 22%, var(--white)) 80%, transparent)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+          }}
+        >
           {/* Lime bolt sticker tab — the signature, echoes the teacher rail's active sticker */}
           <span
             aria-hidden
