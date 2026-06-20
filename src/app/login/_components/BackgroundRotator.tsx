@@ -54,13 +54,13 @@ export default function BackgroundRotator() {
         style={{ background: 'linear-gradient(to top, color-mix(in srgb, var(--ink-950) 70%, transparent) 0%, transparent 35%)' }}
       />
       <p
-        className="absolute bottom-8 left-8 right-8 hidden max-w-md font-display text-2xl font-bold sm:left-10 sm:block"
+        className="absolute bottom-12 right-8 hidden max-w-sm text-right font-display text-2xl font-bold sm:right-10 sm:block"
         data-active="true"
         style={{ color: 'var(--white)', textShadow: '0 2px 14px rgb(0 0 0 / 0.75)' }}
       >
         {SLIDES[current].caption}
       </p>
-      <div role="tablist" aria-label="Slideshow" className="absolute bottom-4 left-8 z-10 flex gap-2 sm:left-10">
+      <div role="tablist" aria-label="Slideshow" className="absolute bottom-5 right-8 z-20 flex gap-2 sm:right-10">
         {SLIDES.map((s, i) => (
           <button
             key={s.src}

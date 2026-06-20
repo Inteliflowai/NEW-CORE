@@ -77,29 +77,29 @@ function LoginInner() {
       {/* Full-bleed rotating pop-art gallery — the hero / first impression */}
       <BackgroundRotator />
 
-      {/* Brand billboard over the art (white CORE mark for dark backgrounds).
-          items-start so the logo keeps its aspect (a stretch flex-col would widen it). */}
-      <div className="pointer-events-none absolute left-6 top-6 z-10 flex flex-col items-start gap-2 sm:left-10 sm:top-9">
-        <Image
-          src="/images/brand/core-logo.png"
-          alt="CORE"
-          width={1108}
-          height={466}
-          priority
-          className="h-10 w-auto sm:h-12"
-          style={{ filter: 'drop-shadow(0 2px 10px rgb(0 0 0 / 0.6))' }}
-        />
-        <span
-          className="inline-flex items-center gap-1.5 text-sm font-semibold"
-          style={{ color: 'var(--white)', textShadow: '0 1px 8px rgb(0 0 0 / 0.75)' }}
-        >
-          Learning Intelligence · with
-          <Image src="/images/brand/spark.svg" alt="SPARK" width={1071} height={481} className="h-4 w-auto" />
-        </span>
-      </div>
+      {/* Left column: brand billboard + sign-in card, stacked on the left so the
+          full-bleed art fills the rest of the (ultrawide) screen. */}
+      <div className="relative z-10 flex min-h-screen w-full max-w-lg flex-col justify-center gap-7 px-6 py-12 sm:px-10 lg:px-16">
+        {/* Brand billboard (white CORE mark; items-start keeps the logo's aspect) */}
+        <div className="flex flex-col items-start gap-2">
+          <Image
+            src="/images/brand/core-logo.png"
+            alt="CORE"
+            width={1108}
+            height={466}
+            priority
+            className="h-10 w-auto sm:h-12"
+            style={{ filter: 'drop-shadow(0 2px 10px rgb(0 0 0 / 0.6))' }}
+          />
+          <span
+            className="inline-flex items-center gap-1.5 text-sm font-semibold"
+            style={{ color: 'var(--white)', textShadow: '0 1px 8px rgb(0 0 0 / 0.75)' }}
+          >
+            Learning Intelligence · with
+            <Image src="/images/brand/spark.svg" alt="SPARK" width={1071} height={481} className="h-4 w-auto" />
+          </span>
+        </div>
 
-      {/* Sign-in card — floats to the side so the art stays the hero */}
-      <div className="absolute inset-0 z-10 flex items-center justify-center p-6 sm:justify-end sm:p-10 lg:pr-24 xl:pr-40">
         <div
           className="relative w-full max-w-sm rounded-xl border-2 border-sidebar-edge p-7 shadow-sticker-lg"
           style={{
