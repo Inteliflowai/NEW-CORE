@@ -67,18 +67,20 @@ export function WholeChildRail({
         <p className="text-fg-muted text-xs mt-2">vs your own past, never classmates</p>
       </Card>
 
-      {/* At risk? */}
-      <Card>
-        <Eyebrow>At risk?</Eyebrow>
-        {riskLevel === 'low' ? (
-          <p className="text-fg text-sm">Nothing flagged.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <RiskBadge band={riskLevel} />
-            {topFactor && <p className="text-fg text-sm">△ {riskFactorPhrase(topFactor)}</p>}
-          </div>
-        )}
-      </Card>
+      {/* At risk? — id is the scroll target for the review-risk priority CTA (#at-risk) */}
+      <div id="at-risk">
+        <Card>
+          <Eyebrow>At risk?</Eyebrow>
+          {riskLevel === 'low' ? (
+            <p className="text-fg text-sm">Nothing flagged.</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <RiskBadge band={riskLevel} />
+              {topFactor && <p className="text-fg text-sm">△ {riskFactorPhrase(topFactor)}</p>}
+            </div>
+          )}
+        </Card>
+      </div>
 
       {/* Effort */}
       <Card>
