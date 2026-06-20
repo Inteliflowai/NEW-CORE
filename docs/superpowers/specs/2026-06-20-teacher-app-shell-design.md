@@ -19,7 +19,7 @@ This is a **visual/structural shell change only** — no new data, no new write 
 - A new left-sidebar shell for the **teacher route group** (`src/app/(teacher)/`).
 - Real CORE logo on a snug white "plate", bigger and centered, at the top of the rail.
 - Sectioned vertical nav (icons + group labels) ported from the current `TeacherNav` data, with the **lime sticker active state**.
-- The class switcher restyled as an "Active class" block in the rail (same behavior).
+- The class switcher restyled as an "Active class" block in the rail (same switch behavior), **plus a truthful sub-line** — `{subject} · {N} students` for the selected class, from a live active-enrollment count (requires extending `/api/teacher/classes`).
 - A slim top bar (page title/breadcrumb left; greeting + help + avatar right; hamburger on mobile).
 - User footer (name + role + initials avatar) and **Sign out** wired to the existing `/logout` route.
 - Responsive: fixed rail on `lg+`, off-canvas drawer + hamburger below `lg`.
@@ -29,7 +29,7 @@ This is a **visual/structural shell change only** — no new data, no new write 
 - Shells for the other roles (student / parent / admin / super-admin) — they keep `RoleLayout` for now. `RoleLayout` and the `◆ CORE` text mark remain in use on auth pages and non-teacher routes; do not delete them.
 - A functional help drawer, profile modal, notifications, or search — the top-bar help (`?`) and avatar are **presentational placeholders** this round.
 - Any write action (high-five, notes, flag-for-reteach).
-- The illustrative "Mathematics · 8 students" sub-line under the class switcher — only render metadata the `/api/teacher/classes` payload actually provides (today: `class_id` + `label`). Do **not** fabricate subject/count.
+- Grade-level display and per-class color-coding in the rail — this round the sub-line shows **subject + live student count only**.
 
 ## 3. Global Constraints (binding — copied from project rules)
 
@@ -46,7 +46,7 @@ Rail width **256px**, full height, `overflow:hidden`, right edge a **3px solid i
 
 - **Background:** `--sidebar` = `cobalt-700` (`#1d4ed8`), overlaid with a **halftone dot texture** (`radial-gradient` dots, `~13px` grid, low-opacity white) via a `globals.css` utility class, plus one soft **lime radial glow** bleed in the top-right corner (decorative, `pointer-events:none`).
 - **Logo:** white **plate** (`bg-sidebar-plate` = white, `rounded`, **snug** padding ~`8px 14px`, **hard offset shadow** `3px 3px 0` in the edge ink), **centered** in the rail header, holding `public/images/brand/core-logo-white.png` (dark-wordmark variant, made for white bg) at **~60px tall**. Use `next/image` with explicit width/height.
-- **"Active class" block:** small uppercase label (`text-sidebar-fg-muted`) + the class `<select>` restyled as a **white sticker** (white bg, ink border, `3px 3px 0` shadow, cobalt text).
+- **"Active class" block:** small uppercase label (`text-sidebar-fg-muted`) + the class `<select>` restyled as a **white sticker** (white bg, ink border, `3px 3px 0` shadow, cobalt text). Below it, a truthful meta line `{subject} · {N} students` for the **selected** class — subject omitted if null, count from live active enrollments, pluralized.
 - **Nav:** vertical list, grouped with uppercase section labels (`text-sidebar-fg-muted`). Each item = icon + label, `rounded-lg`, `text-sidebar-fg`, hover = subtle white wash.
   - **Active item = lime sticker:** `bg-sidebar-active` (`lime-400` `#a3e635`), `text-sidebar-active-fg` (`ink-950`), bold, **hard offset shadow** `3px 3px 0` ink. Icon inherits the dark active color.
   - Alerts item carries a small red count badge when relevant (static `2` in mockup; wire to real count later — for now render only if a count is passed, else omit).
@@ -86,7 +86,8 @@ Plus a decorative utility `.sidebar-dots { background-image: radial-gradient(...
 
 ### Modified files
 - `src/app/(teacher)/layout.tsx` — fetch the teacher's display name (see §6), wrap `children` in `TeacherShell` instead of `RoleLayout`. Keep `requireRole(['teacher'])` first.
-- `src/app/(teacher)/_components/ClassSwitcherPill.tsx` — restyle the `<select>` as the white "sticker" control inside an "Active class" labeled block; **behavior unchanged** (fetch, default-to-first, `?class=` flow). Honest metadata only.
+- `src/app/(teacher)/_components/ClassSwitcherPill.tsx` — restyle the `<select>` as the white "sticker" control inside an "Active class" labeled block; switch **behavior unchanged** (fetch, default-to-first, `?class=` flow). Now also renders the truthful sub-line (`{subject} · {N} students`) for the selected class from the extended payload.
+- `src/app/api/teacher/classes/route.ts` — extend the payload: add `subject` to the `classes` select and a **live active-student count** per class (tally `enrollments` where `is_active = true`), returning `{ class_id, label, subject, student_count }` per class. Keep the existing per-role scoping (teacher / school_admin / sysadmin / platform_admin) + auth + 401/403/500 paths intact. Update its test.
 - `src/app/globals.css` — add the sidebar token block, `@theme` mappings, `.sidebar-dots`, and `--shadow-sticker`.
 - `scripts/a11y/contrast-check.ts` — add the four sidebar pairs above.
 - `src/lib/auth/requireRole.ts` — additively return `fullName` (add `full_name` to the existing profile `select`; extend `AuthedContext`). Non-breaking for other callers. Update its test.
@@ -97,7 +98,7 @@ Plus a decorative utility `.sidebar-dots { background-image: radial-gradient(...
 ## 6. Data flow
 
 - `requireRole` already runs one `users` query; add `full_name` to its `select` and return `fullName` on `AuthedContext`. `(teacher)/layout.tsx` passes `fullName` to `TeacherShell` → topbar greeting + footer name; initials derived from the name (fallback "Teacher" / "T").
-- `ClassSwitcherPill` keeps its own `/api/teacher/classes` fetch and `?class=` URL behavior verbatim.
+- `ClassSwitcherPill` keeps its own `/api/teacher/classes` fetch and `?class=` URL behavior verbatim. The endpoint now also returns `subject` + `student_count` (active enrollments tallied per class); the pill shows `{subject} · {N} students` for the selected class.
 - Sign out: confirm `/logout` method during plan grounding; render the correct control (link for GET, or a `<form method="post" action="/logout">` button for POST).
 
 ## 7. Responsive behavior
@@ -110,7 +111,8 @@ Plus a decorative utility `.sidebar-dots { background-image: radial-gradient(...
 
 - **SidebarNav** (jsdom): active item gets `aria-current="page"` and the active classes for `/roster` and for an `alsoActiveWhen` alias (`/students/...`); inactive items do not.
 - **TeacherShell** (jsdom): drawer starts closed; hamburger opens it; backdrop click closes; a `usePathname` change closes it.
-- **ClassSwitcherPill** (jsdom): existing behavior intact (renders options, defaults `?class=` to first, `onChange` replaces URL) — keep/adapt current tests.
+- **ClassSwitcherPill** (jsdom): existing behavior intact (renders options, defaults `?class=` to first, `onChange` replaces URL) — keep/adapt current tests; plus the sub-line shows `{subject} · {N} students` for the selected class and pluralizes ("1 student").
+- **/api/teacher/classes** (node): payload now includes `subject` + `student_count`; the count reflects only `is_active` enrollments; per-role scoping + 401/403/500 paths unchanged.
 - **requireRole** (node): updated for the additive `fullName` field; redirect paths unchanged.
 - **a11y gate:** `npm run a11y` passes with the four new sidebar pairs.
 - **Full suite + types:** existing 1204 tests stay green; `npx tsc --noEmit` clean; `npm run build` succeeds (prebuild runs the a11y gate).
