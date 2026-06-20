@@ -16,7 +16,7 @@ Stand up the **teacher-bookended SPARK loop** in V2, wired to the live SPARK pla
 **In scope (Phase 1)**
 - **Provisioning & foundation:** `spark_completions` table; assignment↔SPARK binding columns; `SPARK_API_URL` config; `platform_links` SPARK-key provisioning (seed for the demo school + a minimal admin path); `spark_experiences` license gate; an `external_identities` resolver.
 - **CORE→SPARK create-notify:** fire SPARK's `/api/integration/webhooks/core` when a teacher generates a SPARK-enabled assignment; persist the returned `spark_attempt_id` / `synthetic_experiment_id`.
-- **SPARK→CORE completion ingestion:** implement `POST /api/integrations/core` (auth + idempotency + identity resolution → write `spark_completions`) → feed `recomputeSkillStates`; implement the `idempotency-sweep` cron; **un-stub `spark-platform`'s completion callback** to POST V2.
+- **SPARK→CORE completion ingestion:** implement `POST /api/attempts/spark-attempt-complete` — the exact path SPARK already calls (auth + idempotency + CORE-native identity → write `spark_completions`) → feed `recomputeSkillStates`; implement the `idempotency-sweep` cron. **No SPARK code change** — routing the demo school to V2 is a `core_spark_links.core_base_url` DB row on SPARK's side.
 - **Teacher "Spark Challenges" screen** (the S3 target): class-level per-student assigned / in-progress / completed + 7-dim rubric & transfer score (teacher-only).
 - **Shell:** S2 (SPARK sticker under the CORE plate) + S3 (Spark Challenges nav → the screen) folded into `TeacherSidebar`/`navConfig`; then **merge `feat/teacher-app-shell`** → deploy.
 - **Demo seed:** seed `spark_completions` for demo students so the screen + skill enrichment are demoable without a live round-trip.
@@ -34,9 +34,9 @@ Stand up the **teacher-bookended SPARK loop** in V2, wired to the live SPARK pla
   - `grade_band` ∈ `'3-5'|'6-8'|'9-12'` (SPARK rejects K-2). `student_band` ∈ `mastery|developing|struggling` (map from CORE `advanced|grade_level|reteach`). `rubric_rolling_averages` sent ONLY when the student has SPARK history.
 - Returns: `{ success, session_id, spark_attempt_id, spark_user_id, synthetic_experiment_id, generation_status }`. Never 5xx — `{success:false,error}` on failure.
 
-**SPARK → CORE (complete):** `POST /api/integrations/core` (V2's endpoint to implement)
-- Headers: `Authorization: Bearer {CORE_SPARK_API_SECRET}`, `X-Idempotency-Key` (`{core_homework_id}_{student_id}` for submit; `_scored` suffix for the analyzer pass).
-- Body: `{ core_homework_id, student_id (or external_student_id), completed_at, score (0-100|null), effort_label?, revision_count?, teli_hint_count?, signal_summary?, rubric_dimensions:{problem_understanding,reasoning_strategy,use_of_evidence,creativity_application,communication,reflection_metacognition,collaboration} (1-4 ints, collaboration nullable; whole object null on submit-time webhook), content_quality:'engaged'|'minimal'|'non_engaged'|null }`
+**SPARK → CORE (complete):** `POST {core_base_url}/api/attempts/spark-attempt-complete` — V2 implements **this exact path** (it's where SPARK's `lib/integration/core-client.ts` already posts; `core_base_url` is resolved per-school from SPARK's `core_spark_links`, so we point the demo school at `https://newcore.inteliflowai.com`).
+- Headers: `Authorization: Bearer {CORE_SPARK_API_SECRET}`, `X-Idempotency-Key` (`{core_homework_id}_{student_id}` for submit; `..._scored` for the analyzer pass).
+- Body (`AttemptCompletePayload`): `{ core_homework_id (= CORE assignments.id), student_id (CORE users.id — SPARK resolves it from spark_users.core_user_id; NO external_identities lookup needed), completed_at, score (0-100|null), effort_label|null, revision_count, teli_hint_count, signal_summary, rubric_dimensions:{problem_understanding,reasoning_strategy,use_of_evidence,creativity_application,communication,reflection_metacognition,collaboration} (1-4 ints, collaboration nullable; whole object null at submit-time), content_quality:'engaged'|'minimal'|'non_engaged'|null, bncc_codes?, bncc_competencias_gerais? (PT-only — V2 ignores) }`
 - Arrival pattern: **submit-time** webhook (rubric/content_quality null) then a **delayed analyzer** webhook (`_scored` key) carrying rubric + engagement. Respond 200 always (`{ok:true,received:true}` / `{ok:true,deduped:true}`); 401 on bad auth; 400 on missing student.
 - `transfer_score` = `avg(non-null rubric dims) × 25`, else fall back to `score`.
 
@@ -62,11 +62,11 @@ Stand up the **teacher-bookended SPARK loop** in V2, wired to the live SPARK pla
 - **Hook point:** in `POST /api/teacher/assignments/generate` (after the assignment row is persisted, line ~125-137), **if** `sparkEnabled` AND `licenseHasSpark` AND a provisioned `platform_links` SPARK key exists → call `notifyAssignmentCreated`; persist `spark_attempt_id`/`spark_experiment_id`/`spark_status='created'` on the assignment. **Non-blocking:** a SPARK failure logs + sets `spark_status='notify_failed'` but never fails assignment generation.
 - Add a teacher-facing `sparkEnabled` toggle on the generate path (or default per license) — minimal; the screen is the payoff.
 
-### SP-3 — Completion ingestion (SPARK→CORE) + cron + spark-platform callback
-- Implement `POST /api/integrations/core`: constant-time Bearer check; parse + validate; **idempotency** via `webhook_idempotency_keys` (in_progress→completed/failed; replay returns the stored response); resolve student (`student_id` direct, else `external_identities`); resolve `assignment_id` via `(core_homework_id)`; compute `transfer_score`; **upsert** `spark_completions` (submit-time row, then analyzer pass updates rubric/content_quality/transfer); write a `platform_events` audit row (`source='spark'`); then `await recomputeSkillStatesForStudent(admin, {studentId, schoolId, skillIds})` where `skillIds` = the assignment's `skill_ids`.
+### SP-3 — Completion ingestion (SPARK→CORE) + cron
+- Implement `POST /api/attempts/spark-attempt-complete` (the path SPARK calls): constant-time Bearer check vs `CORE_SPARK_API_SECRET`; parse + validate; **idempotency** via `webhook_idempotency_keys` keyed on `(endpoint, X-Idempotency-Key)` (in_progress→completed/failed; replay returns the stored response — submit-time and `_scored` are distinct keys, last-writer-wins on the row); resolve **directly** by `student_id` (CORE `users.id`) + `core_homework_id` (= `assignments.id`) — no `external_identities` needed (SPARK echoes CORE-native ids); compute `transfer_score` = avg(non-null rubric dims) × 25 else `score`; **upsert** `spark_completions` (submit-time row created, analyzer pass updates rubric/content_quality/transfer); write a `platform_events` audit row (`source='spark'`); then `await recomputeSkillStatesForStudent(admin, {studentId, schoolId, skillIds})` where `skillIds` = the assignment's `skill_ids`. **Respond 200 always** for business outcomes (`{ok:true,received:true}` / `{ok:true,deduped:true}`); only 401 (bad Bearer) / 400 (missing ids) are non-200 (SPARK does not retry 4xx).
 - **Feed the engine:** in `recomputeSkillStates.ts`, replace the hardcoded `spark: []` (line ~325) with a fetch of `spark_completions` for the student joined to the skill's assignments → map to `SkillSparkObservation[]` (`transferScore`, `contentQuality`, `completed`, `occurredAt`), filtering `content_quality ∈ {non_engaged,minimal}` OUT (engagement guard). `computeSkillState` already consumes this — no engine change.
 - Implement `idempotency-sweep` cron: delete `webhook_idempotency_keys` past `expires_at`; return a summary.
-- **spark-platform side:** un-stub its completion callback (`C:/Users/Inteliflow/spark-platform` — the skeleton "pending CORE's database integration") to POST V2's `/api/integrations/core` at `core_base_url` (from `platform_links`) with the contract payload + Bearer + idempotency key. (Small, necessary; its own commit in that repo.)
+- **spark-platform side — NO code change.** SPARK's completion callback is already implemented (`lib/integration/core-client.ts` → `{core_base_url}/api/attempts/spark-attempt-complete`, Bearer + idempotency + retries). Routing the demo school to V2 is a **DB row** on SPARK's Supabase: a `core_spark_links` row for the demo school = `{ core_school_id: <V2 demo school id>, spark_school_id: <a SPARK school>, core_base_url: 'https://newcore.inteliflowai.com' }`. That row ALSO lets SPARK accept the inbound create webhook (school must be linked). This is an ops/provisioning step (SQL on SPARK's DB), not a code deploy. **Phase-2 note:** SPARK's `isValidReturnUrl` allow-list must add `newcore.inteliflowai.com` for the launch back-button.
 
 ### SP-4 — Teacher "Spark Challenges" screen + shell S2/S3
 - **Route:** `src/app/(teacher)/challenges/page.tsx` (server component, `?class=`), full auth+IDOR chain. Load: assignments for the class with `spark_status != 'none'` joined to `spark_completions`; derive per-student status (`assigned`=created/notified, `in_progress`, `completed`/`scored`). 
@@ -75,8 +75,14 @@ Stand up the **teacher-bookended SPARK loop** in V2, wired to the live SPARK pla
 - **Shell S3:** add a `CHALLENGES` nav entry "Spark Challenges" → `/challenges` in `navConfig` (with a bolt icon), gated/badged as appropriate.
 - **Merge:** after SP-4 + full gates green, run finishing-a-development-branch → merge `feat/teacher-app-shell` → deploy.
 
-## 6. Live-wiring switch (needs creds from user)
-Build SP-1..SP-4 against the contract + demo seed. To go live: set `SPARK_API_URL`, provision the demo school's `platform_links` SPARK key, enable `spark_experiences` on its license, and point the deployed SPARK's callback at `https://newcore.inteliflowai.com/api/integrations/core`. Until then the screen runs on seeded `spark_completions` (demoable) and create-notify is feature-gated off (no key → skip).
+## 6. Live-wiring switch (precise — from spark-platform + V1 config)
+The shared secret already matches (`CORE_SPARK_API_SECRET=spark-core-secret-2026` on both repos' `.env.local`). To go live:
+1. **V2 Vercel env:** `SPARK_API_URL=https://spark.inteliflowai.com`; ensure `CORE_SPARK_API_SECRET=spark-core-secret-2026` (the prod Vercel value must equal SPARK's).
+2. **V2 DB:** a `platform_links` row for the demo school (`product='spark'`, `enabled=true`) — V2's "is this school SPARK-enabled" gate. (Seedable.)
+3. **SPARK DB (ops):** a `core_spark_links` row for the demo school (`core_school_id` = V2 demo school id, `spark_school_id`, `core_base_url='https://newcore.inteliflowai.com'`) — links the school AND routes its completions to V2. Provide the SQL for the user/ops to run on SPARK's Supabase.
+4. **License:** `spark_experiences` enabled for the demo school (confirm V2 has a license system; else gate on the `platform_links` row).
+
+Build SP-1..SP-4 against the contract + **demo-seed `spark_completions`** so the screen + skill enrichment demo immediately. With (1)-(4) set, real round-trips flow end-to-end (teacher generates → SPARK creates → student completes in SPARK → SPARK posts to V2). No SPARK code deploy needed.
 
 ## 7. Testing
 - **Pure helpers (node):** band→spark-band map; `transfer_score` compute (avg×25, fallbacks); idempotency-key format; payload builder (rubric omitted when no history; grade_band mapping; locale en-US).
@@ -88,6 +94,6 @@ Build SP-1..SP-4 against the contract + demo seed. To go live: set `SPARK_API_UR
 
 ## 8. Risks / notes
 - **No student SPARK history columns in V2** (`spark_dim_*` on a student_model) — V2 may lack these; if so, omit `rubric_rolling_averages` from the create payload (the contract allows absence; cold-start parity). Confirm during plan grounding.
-- **Two-repo change:** the `spark-platform` callback un-stub is in a separate repo — its own branch/commit/test there; coordinate the `core_base_url`.
+- **No spark-platform code change** for Phase 1 — SPARK's callback is implemented; the only SPARK-side action is the `core_spark_links` DB row (ops). (A code change — adding `newcore.inteliflowai.com` to SPARK's `isValidReturnUrl` allow-list — is a Phase-2 item for the launch back-button.)
 - **Live dependency:** end-to-end live demo needs SPARK provisioned; the seed path keeps the screen demoable meanwhile.
 - **Don't fabricate:** the screen shows only real (or demo-seeded) completions; cold-start otherwise.
