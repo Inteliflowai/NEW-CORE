@@ -52,14 +52,6 @@ const BANDS: BandConfig[] = [
   },
 ];
 
-// Segment background colors for the bar (distinct from legend swatch colors)
-const BAR_BG: Record<keyof PulseCounts, string> = {
-  reteach: 'bg-warn-surface',
-  grade_level: 'bg-brand-surface',
-  advanced: 'bg-ok-surface',
-  not_assessed: 'bg-fg-muted',
-};
-
 export function ClassPulseStrip({ counts }: { counts: PulseCounts }): React.JSX.Element {
   const total = counts.reteach + counts.grade_level + counts.advanced + counts.not_assessed;
 
@@ -79,7 +71,7 @@ export function ClassPulseStrip({ counts }: { counts: PulseCounts }): React.JSX.
             return (
               <div
                 key={key}
-                className={BAR_BG[key]}
+                className={swatchClass}
                 style={{ width: `${pct}%` }}
                 aria-hidden="true"
               />
