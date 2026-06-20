@@ -11,7 +11,7 @@ describe('safeEqual', () => {
 });
 
 describe('bearerMatches', () => {
-  const secret = 'spark-core-secret-2026';
+  const secret = 'test-spark-secret';
   it('true only for an exact "Bearer <secret>" header', () => {
     expect(bearerMatches(`Bearer ${secret}`, secret)).toBe(true);
     expect(bearerMatches(`Bearer wrong`, secret)).toBe(false);

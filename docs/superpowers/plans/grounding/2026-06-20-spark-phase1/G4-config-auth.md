@@ -36,7 +36,7 @@ The repo-wide convention to add `SPARK_API_URL` "the same way" = add the NAME to
 CORE_SPARK_API_SECRET=
 ```
 `.env.local` (gitignored, real values) currently has:
-- `CORE_SPARK_API_SECRET=spark-core-secret-2026` (line 41)
+- `CORE_SPARK_API_SECRET=<redacted>` (line 41)
 - `CRON_SECRET=core-cron-2026-secret` (line 19)
 - **no `SPARK_API_URL`**
 

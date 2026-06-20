@@ -461,7 +461,7 @@ describe('safeEqual', () => {
 });
 
 describe('bearerMatches', () => {
-  const secret = 'spark-core-secret-2026';
+  const secret = 'test-spark-secret';
   it('true only for an exact "Bearer <secret>" header', () => {
     expect(bearerMatches(`Bearer ${secret}`, secret)).toBe(true);
     expect(bearerMatches(`Bearer wrong`, secret)).toBe(false);
@@ -1038,7 +1038,7 @@ Create `src/app/api/attempts/spark-attempt-complete/__tests__/route.test.ts`. Us
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const SECRET = 'spark-core-secret-2026';
+const SECRET = 'test-spark-secret';
 
 function makeRequest(
   body: Record<string, unknown>,
@@ -2204,12 +2204,12 @@ Create `docs/superpowers/specs/spark-phase1-ops-handoff.md`:
 ```markdown
 # SPARK Phase 1 — Ops handoff (go-live switch)
 
-The shared secret already matches both repos (`CORE_SPARK_API_SECRET=spark-core-secret-2026`).
+The shared secret already matches both repos (`CORE_SPARK_API_SECRET=<redacted>`).
 No SPARK code deploy is needed — only env + two DB rows.
 
 ## 1. V2 Vercel env (project `new-core`)
 - `SPARK_API_URL=https://spark.inteliflowai.com`
-- `CORE_SPARK_API_SECRET=spark-core-secret-2026` (must equal SPARK's value)
+- `CORE_SPARK_API_SECRET=<redacted>` (must equal SPARK's value)
 Promote the deploy after setting (preview→production).
 
 ## 2. V2 DB — demo school SPARK link

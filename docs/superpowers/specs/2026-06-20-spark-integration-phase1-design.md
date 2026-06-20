@@ -76,8 +76,8 @@ Stand up the **teacher-bookended SPARK loop** in V2, wired to the live SPARK pla
 - **Merge:** after SP-4 + full gates green, run finishing-a-development-branch → merge `feat/teacher-app-shell` → deploy.
 
 ## 6. Live-wiring switch (precise — from spark-platform + V1 config)
-The shared secret already matches (`CORE_SPARK_API_SECRET=spark-core-secret-2026` on both repos' `.env.local`). To go live:
-1. **V2 Vercel env:** `SPARK_API_URL=https://spark.inteliflowai.com`; ensure `CORE_SPARK_API_SECRET=spark-core-secret-2026` (the prod Vercel value must equal SPARK's).
+The shared secret already matches (`CORE_SPARK_API_SECRET=<redacted>` on both repos' `.env.local`). To go live:
+1. **V2 Vercel env:** `SPARK_API_URL=https://spark.inteliflowai.com`; ensure `CORE_SPARK_API_SECRET=<redacted>` (the prod Vercel value must equal SPARK's).
 2. **V2 DB:** a `platform_links` row for the demo school (`product='spark'`, `enabled=true`) — V2's "is this school SPARK-enabled" gate. (Seedable.)
 3. **SPARK DB (ops):** a `core_spark_links` row for the demo school (`core_school_id` = V2 demo school id, `spark_school_id`, `core_base_url='https://newcore.inteliflowai.com'`) — links the school AND routes its completions to V2. Provide the SQL for the user/ops to run on SPARK's Supabase.
 4. **License:** `spark_experiences` enabled for the demo school (confirm V2 has a license system; else gate on the `platform_links` row).
