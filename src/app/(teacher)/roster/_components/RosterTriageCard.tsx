@@ -67,7 +67,7 @@ export function RosterTriageCard({
         {/* Meta row */}
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {r && <MasteryLabel band={r.band} />}
-          {r && <RiskBadge band={r.risk.risk_level} />}
+          {r && r.risk.risk_level !== 'low' && <RiskBadge band={r.risk.risk_level as 'medium' | 'high' | 'critical'} />}
           {r?.volatile && (
             <span className="text-warn-fg">∿ moving around lately</span>
           )}

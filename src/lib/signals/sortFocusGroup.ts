@@ -4,12 +4,13 @@
 // Returns a new sorted array; input is never mutated.
 
 import type { FocusGroupItem } from '@/lib/signals/loadRosterSignals';
+import type { SuggestedAction } from '@/lib/copy/diagnosisToFeedSentence';
 
 /**
  * Get the priority of a suggestedAction for sorting.
  * Lower number = higher priority (sorts earlier).
  */
-function actionPriority(action: string): number {
+function actionPriority(action: SuggestedAction): number {
   // reteach = 0 (highest priority)
   // verbal_check = 1
   // practice = 1
@@ -24,8 +25,6 @@ function actionPriority(action: string): number {
     case 'profile':
     case 'monitor':
       return 2;
-    default:
-      return 3; // fallback for unknown actions
   }
 }
 
