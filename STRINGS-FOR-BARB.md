@@ -210,3 +210,21 @@ The V1-ported Teli post-quiz messages (`src/lib/quiz/scoreMessage.ts`) are shown
 | "Reteach mode" / "Reteach scope" | "Reteach" is a teacher diagnosis | warm, forward-looking ("let's revisit…") |
 
 **Recommendation:** Barb to rewrite these variants in plain coach voice; consider extending `leakGuard` to catch banned *words* (band/reteach/divergence/…), not only numbers, so the diagnostic-wall is enforced on register too.
+
+---
+
+## Coach-Read ("Worth a look?") — drafts (Barb sign-off required)
+
+Teacher-only, drill-in. The EMA behavioral model → ONE plain observation. `{name}`
+= student first name (falls back to "This student"). Passes assertNoLeak + assertNoBannedWord.
+
+| State / trigger | Eyebrow | Line | Suggestion |
+|---|---|---|---|
+| Quiet (cold-start) | Still settling in | "Still getting to know how {name} works — a few more quizzes will tell." | — |
+| Watch · rushing/frustrated | Worth a look | "{name}'s been rushing and second-guessing answers the last few quizzes." | "A quick check-in might help." |
+| Watch · drifting | Worth a look | "{name} keeps drifting off mid-quiz." | "Shorter sessions may land better." |
+| Watch · coasting | Worth a look | "{name}'s been coasting through quizzes lately." | "Might be worth re-engaging them." |
+| Watch · careless/impulsive | Worth a look | "{name}'s racing through and slipping on careless mistakes." | "Worth nudging them to slow down." |
+| Watch · general concern | Worth a look | "Something's been off in how {name}'s been working lately." | "Worth a closer look." |
+| Watch · scores dipped | Worth a look | "{name}'s recent quizzes have dipped." | "Worth a closer look at what changed." |
+| Calm | Settling in | "{name}'s working at a steady, focused pace right now." | — |
