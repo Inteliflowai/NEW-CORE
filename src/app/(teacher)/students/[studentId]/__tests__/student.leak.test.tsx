@@ -90,6 +90,7 @@ const LEAK_FIXTURE: StudentSignals = {
     trajectory: 'improving',
   },
   growth_history: [11, 22, 33, 44],
+  coach_read: { state: 'watch', eyebrow: 'Worth a look', line: "Jordan's recent quizzes have dipped.", suggestion: 'Worth a closer look at what changed.', tone: 'risk' },
 };
 
 async function renderPage() {

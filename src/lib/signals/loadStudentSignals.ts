@@ -11,6 +11,8 @@
 // them by name.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { coachObservation, type CoachObservation } from '@/lib/copy/coachObservation';
+import type { ComputedSignals } from '@/lib/signals/behavioralTypes';
 import { CL_VERB_BY_STATE } from '@/lib/skills/clVerbs';
 import type { SkillLearningState } from '@/lib/skills/clVerbs';
 import { currentMasteryBand } from '@/lib/utils/scoring';
@@ -73,6 +75,7 @@ export interface StudentSignals {
   reteach_outcomes: ReteachCycleRecord[];
   trajectory: ConsistencyResult & TrajectoryResult;
   growth_history: number[];
+  coach_read: CoachObservation;
 }
 
 // ── Main function ─────────────────────────────────────────────────────────────
@@ -264,6 +267,32 @@ export async function loadStudentSignals(
   // ── Consistency from recent quiz scores ──────────────────────────────────────
   const consistency = computeConsistency(quizScores);
 
+  // ── Coach read: the EMA behavioral model → ONE plain observation ──────────────
+  // Server-side (Option-D): the raw model is translated to words here; only the
+  // word-level CoachObservation crosses to the client.
+  const { data: bsRow } = await admin
+    .from('behavioral_signals')
+    .select('computed, observation_count')
+    .eq('student_id', studentId)
+    .maybeSingle();
+
+  const { data: nameRow } = await admin
+    .from('users')
+    .select('full_name')
+    .eq('id', studentId)
+    .maybeSingle();
+  const firstName =
+    ((nameRow as { full_name?: string | null } | null)?.full_name ?? '')
+      .trim()
+      .split(/\s+/)[0] || null;
+
+  const coach_read = coachObservation({
+    computed: (bsRow as { computed?: ComputedSignals | null } | null)?.computed ?? null,
+    observationCount: (bsRow as { observation_count?: number } | null)?.observation_count ?? 0,
+    firstName,
+    rosterRisk: { risk_level: roster_risk.risk_level, risk_factors: roster_risk.risk_factors },
+  });
+
   return {
     student_id: studentId,
     current_band,
@@ -285,5 +314,6 @@ export async function loadStudentSignals(
       ...trajectoryResult,
     },
     growth_history: snapshotScores,
+    coach_read,
   };
 }

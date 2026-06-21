@@ -50,6 +50,7 @@ function baseSignals(overrides: Partial<StudentSignals> = {}): StudentSignals {
     reteach_outcomes: [],
     trajectory: { consistency_score: 80, consistency_label: 'consistent', trajectory: 'stable' },
     growth_history: [],
+    coach_read: { state: 'quiet', eyebrow: 'Still settling in', line: 'Still getting to know how Sam works.', suggestion: null, tone: 'ok' },
     ...overrides,
   };
 }

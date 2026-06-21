@@ -52,6 +52,7 @@ function makeAdmin(tableData: Record<string, unknown[]>) {
       eq: () => chain,
       in: () => result,
       single: async () => ({ data: rows[0] ?? null, error: null }),
+      maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
     };
     return chain;
   };
@@ -116,5 +117,35 @@ describe('loadStudentSignals', () => {
     expect(out.per_skill_cl[0].cl_verb).toBe('On Track');
     expect(out.per_skill_cl[0].confidence_label).toBe('consistent');
     expect(out.per_skill_cl[0].confidence_label).not.toMatch(/\d/);
+  });
+
+  it('exposes coach_read and stays quiet with no behavioral row', async () => {
+    const admin = makeAdmin({});
+    const out = await loadStudentSignals(admin, 'stu-1');
+    expect(out).toHaveProperty('coach_read');
+    expect(out.coach_read.state).toBe('quiet');
+  });
+
+  it('coach_read goes to watch from a hot EMA model, uses the student first name, leaks nothing', async () => {
+    const admin = makeAdmin({
+      behavioral_signals: [{
+        computed: {
+          learningVelocity: 1, velocityTrend: 'stable',
+          frustrationScore: 0.8, frustrationIndicators: [],
+          attentionScore: 0.9, attentionGaps: 0,
+          errorPatternType: 'procedural', errorFrequency: 0.2,
+          confidenceScore: 0.5, confidenceAccuracy: 0.5,
+          engagementScore: 0.8, engagementStyle: 'methodical',
+          predictiveRiskScore: 0.1, riskFactors: [],
+          sessionDurationMs: 600000,
+        },
+        observation_count: 3,
+      }],
+      users: [{ full_name: 'Maya Lopez' }],
+    });
+    const out = await loadStudentSignals(admin, 'stu-1');
+    expect(out.coach_read.state).toBe('watch');
+    expect(out.coach_read.line).toContain('Maya');
+    expect(out.coach_read.line).not.toMatch(/\d/);
   });
 });
