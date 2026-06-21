@@ -306,8 +306,11 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     expect(typeof body.result.needsStudyGuide).toBe('boolean');
     expect(body.score_pct).toBeUndefined();
     expect(body.mastery_band).toBeUndefined();
+    // raw_score (count of correct answers) must NOT be in the student-facing response (Option-D)
+    expect(body.raw_score).toBeUndefined();
     // No raw percentage / band enum anywhere in the serialized body
     const raw = JSON.stringify(body);
+    expect(raw).not.toMatch(/"raw_score"/);
     expect(raw).not.toMatch(/"score_pct"/);
     expect(raw).not.toMatch(/"mastery_band"/);
     expect(raw).not.toContain('grade_level');  // raw mastery enum must not leak

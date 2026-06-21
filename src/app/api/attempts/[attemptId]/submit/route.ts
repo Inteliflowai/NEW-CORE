@@ -27,18 +27,7 @@ import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 import { recomputeSkillStatesForStudent } from '@/lib/skills/recomputeSkillStates';
 import type { QuestionAttemptData, SessionAggregates, RawSessionData } from '@/lib/signals/behavioralTypes';
 import { studentResultBundle } from '@/lib/quiz/studentResultBundle';
-import type { Tier } from '@/lib/quiz/scoreMessage';
-
-// grade_level is TEXT on public.users (migration 0001). Parse the leading
-// integer; map K–5 → elementary, 6–8 → middle, 9–12 → high. Unparseable → middle.
-function gradeTextToTier(gradeLevel: string | null): Tier {
-  if (!gradeLevel) return 'middle';
-  const n = parseInt(gradeLevel.replace(/[^0-9]/g, ''), 10);
-  if (Number.isNaN(n)) return 'middle';
-  if (n <= 5) return 'elementary';
-  if (n <= 8) return 'middle';
-  return 'high';
-}
+import { gradeTextToTier } from '@/lib/quiz/gradeTextToTier';
 
 export async function POST(
   _req: NextRequest,
@@ -486,7 +475,6 @@ export async function POST(
 
     return NextResponse.json({
       attempt_id: attemptId,
-      raw_score: rawScore,
       grades: oeqResults.map(r => ({
         position: r.task.position,
         score: (r as { grade: NonNullable<OeqResult['grade']> }).grade.score,
