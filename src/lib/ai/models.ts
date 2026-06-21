@@ -46,6 +46,21 @@ export const MODELS = {
   voice: OPENAI_VOICE_MODEL,
 } as const;
 
+/**
+ * Anthropic model for Teli — the Socratic tutor in the Assignment Player.
+ * NEVER reveals the answer; fail-closed reveal-check runs on every reply.
+ * Env-overridable so staging can swap without a deploy.
+ */
+export const CLAUDE_TUTOR_MODEL =
+  process.env.ANTHROPIC_TUTOR_MODEL || 'claude-opus-4-8';
+
+/**
+ * Cheap Anthropic model for the output-boundary reveal classifier.
+ * Failure/unavailability causes fail-closed fallback (never certifies without a response).
+ */
+export const CLAUDE_TUTOR_CHECK_MODEL =
+  process.env.ANTHROPIC_TUTOR_CHECK_MODEL || 'claude-haiku-4-5';
+
 /** Bumped whenever a calibration-locked prompt changes (eval drift trigger). */
 export const PROMPT_VERSION = '1.0.0';
 /** Bumped whenever a calibration-locked model ID changes (eval drift trigger). */
