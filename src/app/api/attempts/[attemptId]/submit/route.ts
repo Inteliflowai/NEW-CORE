@@ -25,6 +25,7 @@ import { scoreMCQ, computeFinalScore, computeMasteryBand } from '@/lib/utils/sco
 import { checkNumericAnswer } from '@/lib/math/checkNumericAnswer';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 import { recomputeSkillStatesForStudent } from '@/lib/skills/recomputeSkillStates';
+import type { QuestionAttemptData, SessionAggregates, RawSessionData } from '@/lib/signals/behavioralTypes';
 
 export async function POST(
   _req: NextRequest,
@@ -44,7 +45,7 @@ export async function POST(
     const admin = createAdminSupabaseClient();
     const { data: attempt } = await admin
       .from('quiz_attempts')
-      .select('id, student_id, is_complete, adapted_questions, quizzes(quiz_questions(*))')
+      .select('id, student_id, is_complete, adapted_questions, started_at, submitted_at, session_aggregates, quizzes(quiz_questions(*))')
       .eq('id', attemptId)
       .eq('student_id', user.id)
       .single();
@@ -70,7 +71,7 @@ export async function POST(
 
     const { data: allResponses } = await admin
       .from('quiz_responses')
-      .select('position, response_text, is_correct')
+      .select('question_id, position, response_text, is_correct, response_time_ms, answer_changes, hints_used')
       .eq('attempt_id', attemptId);
 
     const responses = allResponses ?? [];
@@ -359,6 +360,94 @@ export async function POST(
         await recordMisconceptions(admin, { schoolId, perResponse });
       } catch (err) {
         console.warn('[submit] recordMisconceptions hook failed (non-fatal):', err);
+      }
+    })();
+
+    // ── Behavioral signal store hook (fail-isolated; Plan 3 Task 7) ──────────
+    // Fired on the all-clean path only (grading_status:'complete' written above).
+    // Builds QuestionAttemptData[] + SessionAggregates + RawSessionData, calls
+    // computeSignals, then upserts the EMA-merged result into behavioral_signals.
+    // A signal failure logs but NEVER fails the submit response — the student's
+    // grade is already committed. Mirrors the misconceptions hook (fire-and-forget).
+    void (async () => {
+      try {
+        const { computeSignals } = await import('@/lib/signals/computeSignals');
+        const { upsertBehavioralSignals } = await import('@/lib/signals/behavioralModel');
+
+        // Build correctness map from grading results (positions 1–3: mcqScores; 4–5: oeqResults)
+        const correctByPosition = new Map<number, boolean>();
+        frontQuestions.forEach((q, i) => {
+          correctByPosition.set(q.position, mcqScores[i] === 1);
+        });
+        for (const r of (oeqResults as Array<{ task: OeqTask; grade: NonNullable<OeqResult['grade']> }>)) {
+          correctByPosition.set(r.task.position, r.grade.score >= 0.5);
+        }
+
+        // Build QuestionAttemptData[] from the graded quiz_responses
+        type ResponseRow = {
+          question_id?: string | null;
+          position: number;
+          response_time_ms?: number | null;
+          answer_changes?: number | null;
+          hints_used?: number | null;
+        };
+        const questionAttempts: QuestionAttemptData[] = responses.map((row): QuestionAttemptData => {
+          const r = row as ResponseRow;
+          return {
+            questionId: r.question_id ?? '',
+            questionIndex: r.position,
+            isCorrect: correctByPosition.get(r.position) ?? false,
+            timeTakenMs: r.response_time_ms ?? 0,
+            changeCount: r.answer_changes ?? 0,
+            hintsUsed: r.hints_used ?? 0,
+          };
+        });
+
+        // Build SessionAggregates from quiz_attempts.session_aggregates jsonb — default each field
+        const sa = ((attempt as { session_aggregates?: Record<string, unknown> | null }).session_aggregates ?? {}) as Record<string, unknown>;
+        const aggregates: SessionAggregates = {
+          focusLossCount:    typeof sa.focusLossCount    === 'number' ? sa.focusLossCount    : 0,
+          pasteCount:        typeof sa.pasteCount        === 'number' ? sa.pasteCount        : 0,
+          pauseCount:        typeof sa.pauseCount        === 'number' ? sa.pauseCount        : 0,
+          totalPauseMs:      typeof sa.totalPauseMs      === 'number' ? sa.totalPauseMs      : 0,
+          totalFocusLossMs:  typeof sa.totalFocusLossMs  === 'number' ? sa.totalFocusLossMs  : 0,
+          backspaceCount:    typeof sa.backspaceCount    === 'number' ? sa.backspaceCount    : 0,
+          keypressCount:     typeof sa.keypressCount     === 'number' ? sa.keypressCount     : 0,
+          ttsPlayCount:      typeof sa.ttsPlayCount      === 'number' ? sa.ttsPlayCount      : 0,
+          canvasUsed:        typeof sa.canvasUsed        === 'boolean'? sa.canvasUsed        : false,
+          stuckEraseCount:   typeof sa.stuckEraseCount   === 'number' ? sa.stuckEraseCount   : 0,
+        };
+
+        // sessionStartMs / sessionEndMs from ISO timestamps on quiz_attempts
+        const attemptRow = attempt as { started_at?: string | null; submitted_at?: string | null };
+        const sessionStartMs = attemptRow.started_at ? new Date(attemptRow.started_at).getTime() : 0;
+        const sessionEndMs   = attemptRow.submitted_at ? new Date(attemptRow.submitted_at).getTime() : Date.now();
+
+        // Resolve schoolId from the student's users row (same pattern as misconceptions hook)
+        const { data: sigUserRow } = await admin
+          .from('users')
+          .select('school_id')
+          .eq('id', attempt.student_id)
+          .single();
+        const signalSchoolId: string | null = (sigUserRow as { school_id?: string | null } | null)?.school_id ?? null;
+
+        // Assemble RawSessionData
+        const rawSession: RawSessionData = {
+          studentId: attempt.student_id,
+          sessionId: attemptId,
+          context: 'quiz',
+          schoolId: signalSchoolId,
+          questionAttempts,
+          aggregates,
+          sessionStartMs,
+          sessionEndMs,
+        };
+
+        // Compute + store
+        const next = computeSignals(rawSession);
+        await upsertBehavioralSignals(admin, { studentId: attempt.student_id, schoolId: signalSchoolId, next });
+      } catch (err) {
+        console.warn('[submit] behavioral signal hook failed (non-fatal):', err);
       }
     })();
 
