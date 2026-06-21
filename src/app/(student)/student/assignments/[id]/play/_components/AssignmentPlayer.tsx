@@ -66,13 +66,31 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
 
   // ── Player state ─────────────────────────────────────────────────────────
   const [state, setState] = useState<PlayerState>('read');
-  const [responses, setResponses] = useState<ResponsesShape>(initialResponses ?? { tasks: {} });
+  // Lazy initialiser: prefer a newer localStorage draft over the server-provided
+  // initialResponses. The mirror is written on every keystroke-debounce, so it is
+  // always at least as fresh. Resolving this at mount (not via an effect+setState)
+  // keeps the first render correct and avoids a cascading render.
+  const [responses, setResponses] = useState<ResponsesShape>(() => {
+    const fallback = initialResponses ?? { tasks: {} };
+    if (typeof window === 'undefined') return fallback;
+    try {
+      const raw = window.localStorage.getItem(draftKey(attemptId));
+      if (!raw) return fallback;
+      const parsed = JSON.parse(raw) as { responses?: ResponsesShape; savedAt?: number };
+      if (parsed?.responses?.tasks) return parsed.responses;
+    } catch {
+      // Corrupt/absent draft — ignore; server initialResponses stand.
+    }
+    return fallback;
+  });
   const [currentIndex, setCurrentIndex] = useState(0);
   const [result, setResult] = useState<AssignmentResultBundle | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | undefined>();
 
   // ── Behavioral capture refs (mirror QuizRunner) ──────────────────────────
-  const sessStartMs        = useRef<number>(Date.now());
+  // Timers are lazily initialised (0 → stamped in handleStart) so render stays
+  // pure — Date.now() is never called during render (react-hooks/purity).
+  const sessStartMs        = useRef<number>(0);
   const sessFocusLossCount = useRef<number>(0);
   const sessTotalFocusLossMs = useRef<number>(0);
   const sessPasteCount     = useRef<number>(0);
@@ -86,33 +104,21 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
   const pauseStartMs   = useRef<number | null>(null);
   const focusLostAt    = useRef<number | null>(null);
 
-  // Per-task metrics
-  const taskStartTime  = useRef<number>(Date.now());
+  // Per-task metrics — taskStartTime is stamped in handleStart before the tasks
+  // phase opens, so a 0 placeholder never reaches a read (keeps render pure).
+  const taskStartTime  = useRef<number>(0);
   const changeCounts   = useRef<Record<number, number>>({});
   const taskTimeMs     = useRef<Record<number, number>>({});
 
   // Autosave bookkeeping
   const autosaveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const responsesRef   = useRef<ResponsesShape>(responses);
-  responsesRef.current = responses;
 
-  // ── Restore a newer localStorage draft on mount ──────────────────────────
+  // Mirror the latest responses into a ref for event handlers (handleTaskChange /
+  // handleSubmit) — synced in an effect so render never writes to a ref.
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(draftKey(attemptId));
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as { responses?: ResponsesShape; savedAt?: number };
-      if (parsed?.responses?.tasks) {
-        // The stored mirror is always at least as fresh as the server-provided
-        // initialResponses (we write it on every keystroke-debounce), so prefer it.
-        setResponses(parsed.responses);
-      }
-    } catch {
-      // Corrupt/absent draft — ignore; server initialResponses stand.
-    }
-    // attemptId is stable for the lifetime of this player instance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    responsesRef.current = responses;
+  }, [responses]);
 
   // ── Global behavioral listeners (only while working through tasks) ────────
   useEffect(() => {
