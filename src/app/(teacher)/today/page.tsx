@@ -22,6 +22,7 @@ import { SummaryCallout } from '../_components/SummaryCallout';
 import { NeedsYouCard } from './_components/NeedsYouCard';
 import { WinsCard } from './_components/WinsCard';
 import { QuickStartCard } from './_components/QuickStartCard';
+import { ConceptGapsRail } from '../roster/_components/ConceptGapsRail';
 
 const NO_CLASSES = (
   <EmptyState
@@ -99,6 +100,7 @@ export default async function TodayPage({
         <WinsCard roster={winsRoster} />
         <QuickStartCard classId={classId} />
       </div>
+        <ConceptGapsRail gaps={data.concept_gaps} />
     </div>
   );
 }

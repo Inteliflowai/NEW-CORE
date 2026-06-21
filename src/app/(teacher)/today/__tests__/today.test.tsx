@@ -237,4 +237,12 @@ describe('TodayPage', () => {
     );
     expect(container.innerHTML).toContain('Today');
   });
+
+  it('renders concept_gaps skill names from the roster data', async () => {
+    const { default: TodayPage } = await import('../page');
+    const { container } = render(
+      await TodayPage({ searchParams: Promise.resolve({ class: 'c1' }) }),
+    );
+    expect(container.innerHTML).toContain('Adding fractions');
+  });
 });
