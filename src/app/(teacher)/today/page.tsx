@@ -100,7 +100,9 @@ export default async function TodayPage({
         <WinsCard roster={winsRoster} />
         <QuickStartCard classId={classId} />
       </div>
-      <ConceptGapsRail gaps={data.concept_gaps} />
+      {/* Quiet on good days: only surface class-wide gaps when there are any.
+          Roster keeps its own always-present rail as the dedicated triage surface. */}
+      {data.concept_gaps.length > 0 && <ConceptGapsRail gaps={data.concept_gaps} />}
     </div>
   );
 }

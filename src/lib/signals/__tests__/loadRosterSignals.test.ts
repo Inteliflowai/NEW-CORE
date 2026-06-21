@@ -26,9 +26,12 @@ vi.mock('@/lib/signals/computeHwQuizDivergence', () => ({
   }),
 }));
 
-vi.mock('@/lib/signals/diagnosis', () => ({
-  diagnose: vi.fn().mockReturnValue(null),
-}));
+// Partial mock: keep the REAL findRecurringError + RECURRING_ERROR_THRESHOLD (loadRosterSignals
+// now uses findRecurringError for per-skill recurrence); only diagnose is stubbed by default.
+vi.mock('@/lib/signals/diagnosis', async (importActual) => {
+  const actual = await importActual<typeof import('@/lib/signals/diagnosis')>();
+  return { ...actual, diagnose: vi.fn().mockReturnValue(null) };
+});
 
 vi.mock('@/lib/signals/conceptGapDetector', () => ({
   detectConceptGaps: vi.fn().mockReturnValue([]),
@@ -50,7 +53,11 @@ import { diagnose } from '@/lib/signals/diagnosis';
  *    (5 rows so detectConceptGaps — if real — would flag it; but we mock that)
  *  - skills → [{ id: 'sk1', name: 'Adding fractions' }]
  */
-function makeMockAdmin(skillRows: { id: string; name: string }[] = [{ id: 'sk1', name: 'Adding fractions' }]) {
+function makeMockAdmin(
+  skillRows: { id: string; name: string }[] = [{ id: 'sk1', name: 'Adding fractions' }],
+  misconceptionRows: { student_id: string; skill_id: string; error_type: string }[] =
+    Array(5).fill({ student_id: 'stu1', skill_id: 'sk1', error_type: 'wrong_op' }),
+) {
   return {
     from: vi.fn((table: string) => {
       if (table === 'enrollments') {
@@ -110,11 +117,10 @@ function makeMockAdmin(skillRows: { id: string; name: string }[] = [{ id: 'sk1',
         };
       }
       if (table === 'misconception_observations') {
-        // 5 rows so detectConceptGaps (if real) would meet MIN_STUDENTS
         return {
           select: () => ({
             in: () => ({
-              data: Array(5).fill({ student_id: 'stu1', skill_id: 'sk1', error_type: 'wrong_op' }),
+              data: misconceptionRows,
               error: null,
             }),
           }),
@@ -239,5 +245,33 @@ describe('loadRosterSignals()', () => {
     const stuCall = calls.find((c) => (c[0].error_types?.length ?? 0) > 0);
     expect(stuCall).toBeDefined();
     expect(stuCall![0].error_types).toContain('wrong_op');
+  });
+
+  // End-to-end through the REAL diagnose + findRecurringError (no homework → only the
+  // recurring-error branch is reachable): proves the headline "lights up from quizzes" path.
+  it('lights up focus_group: >=3 same-error_type on ONE skill yields a practice diagnosis', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/signals/diagnosis')>('@/lib/signals/diagnosis');
+    vi.mocked(diagnose).mockImplementation(actual.diagnose);
+    // 3 identical errors on a SINGLE skill (RECURRING_ERROR_THRESHOLD = 3).
+    const rows = Array(3).fill({ student_id: 'stu1', skill_id: 'sk1', error_type: 'wrong_op' });
+    const admin = makeMockAdmin(undefined, rows) as unknown as Parameters<typeof loadRosterSignals>[0];
+    const result = await loadRosterSignals(admin, 'class-1');
+    const inGroup = result.focus_group.find((f) => f.student_id === 'stu1');
+    expect(inGroup).toBeDefined();
+    expect(inGroup!.diagnosis.suggestedAction).toBe('practice');
+  });
+
+  it('does NOT light up: the SAME error_type once across 3 DIFFERENT skills stays out of focus_group', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/signals/diagnosis')>('@/lib/signals/diagnosis');
+    vi.mocked(diagnose).mockImplementation(actual.diagnose);
+    // Three one-off 'wrong_op' errors, each on a DIFFERENT skill — no single skill recurs.
+    const rows = [
+      { student_id: 'stu1', skill_id: 'sk1', error_type: 'wrong_op' },
+      { student_id: 'stu1', skill_id: 'sk2', error_type: 'wrong_op' },
+      { student_id: 'stu1', skill_id: 'sk3', error_type: 'wrong_op' },
+    ];
+    const admin = makeMockAdmin(undefined, rows) as unknown as Parameters<typeof loadRosterSignals>[0];
+    const result = await loadRosterSignals(admin, 'class-1');
+    expect(result.focus_group.find((f) => f.student_id === 'stu1')).toBeUndefined();
   });
 });

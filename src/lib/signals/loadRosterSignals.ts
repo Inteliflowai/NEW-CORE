@@ -13,7 +13,7 @@ import type { DiagnoseResult } from '@/lib/signals/diagnosis';
 
 import { currentMasteryBand, bandIsVolatile } from '@/lib/utils/scoring';
 import { computeRosterRiskIndex } from '@/lib/signals/computeRosterRiskIndex';
-import { diagnose } from '@/lib/signals/diagnosis';
+import { diagnose, findRecurringError } from '@/lib/signals/diagnosis';
 import type { DiagnoseInput } from '@/lib/signals/diagnosis';
 import { detectConceptGaps } from '@/lib/signals/conceptGapDetector';
 import { computeHwQuizDivergence } from '@/lib/signals/computeHwQuizDivergence';
@@ -93,13 +93,37 @@ export async function loadRosterSignals(
     .select('student_id, skill_id, error_type')
     .in('student_id', studentIds.length > 0 ? studentIds : ['__none__']);
 
-  const errorTypesByStudent = new Map<string, string[]>();
+  // Group by (student, skill): recurrence MUST be measured within ONE skill. diagnose()'s
+  // contract is per-(student, skill) and findRecurringError counts identical error_type
+  // strings skill-agnostically — so flattening a student's errors across all skills would
+  // let the SAME generic error_type appearing once in three different skills read as a
+  // false recurrence and manufacture a "Needs you today" entry. Mirrors loadStudentSignals.
+  const errorTypesBySkillByStudent = new Map<string, Map<string, string[]>>();
   for (const m of misconceptions ?? []) {
-    const row = m as { student_id: string; error_type: string };
-    const list = errorTypesByStudent.get(row.student_id) ?? [];
+    const row = m as { student_id: string; skill_id: string; error_type: string };
+    let bySkill = errorTypesBySkillByStudent.get(row.student_id);
+    if (!bySkill) {
+      bySkill = new Map<string, string[]>();
+      errorTypesBySkillByStudent.set(row.student_id, bySkill);
+    }
+    const list = bySkill.get(row.skill_id) ?? [];
     list.push(row.error_type);
-    errorTypesByStudent.set(row.student_id, list);
+    bySkill.set(row.skill_id, list);
   }
+
+  // The error_types of the single skill whose recurring error is strongest (>= threshold),
+  // or [] when no skill recurs — so diagnose()'s branch-4 recurring-error path fires only on
+  // a genuine within-skill pattern, never on cross-skill coincidence.
+  const recurringErrorTypesFor = (sid: string): string[] => {
+    const bySkill = errorTypesBySkillByStudent.get(sid);
+    if (!bySkill) return [];
+    let best: { errorTypes: string[]; count: number } | null = null;
+    for (const errorTypes of bySkill.values()) {
+      const rec = findRecurringError(errorTypes);
+      if (rec && (!best || rec.count > best.count)) best = { errorTypes, count: rec.count };
+    }
+    return best ? best.errorTypes : [];
+  };
 
   // ── Per-student signals ─────────────────────────────────────────────────────
   const rosterRaw = await Promise.all(
@@ -169,7 +193,7 @@ export async function loadRosterSignals(
         divergence_score: divergenceResult.divergence_score,
         hw_avg: hwAvg,
         quiz_avg: quizAvg,
-        error_types: errorTypesByStudent.get(student_id) ?? [],
+        error_types: recurringErrorTypesFor(student_id),
       };
 
       const diagnosis = diagnose(diagnoseInput);

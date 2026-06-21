@@ -245,4 +245,13 @@ describe('TodayPage', () => {
     );
     expect(container.innerHTML).toContain('Adding fractions');
   });
+
+  it('stays quiet on a good day: no concept-gaps card when there are no gaps', async () => {
+    mockLoadRosterSignals.mockResolvedValueOnce({ ...FIXTURE, concept_gaps: [] });
+    const { default: TodayPage } = await import('../page');
+    const { container } = render(
+      await TodayPage({ searchParams: Promise.resolve({ class: 'c1' }) }),
+    );
+    expect(container.innerHTML).not.toContain('Worth revisiting together');
+  });
 });

@@ -3,8 +3,15 @@ import '@/test/setup-dom';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { WholeChildRail } from '../WholeChildRail';
+import { hasLeak, hasBannedWord } from '@/lib/copy/leakGuard';
 import type { StudentSignals } from '@/lib/signals/loadStudentSignals';
 import type { CoachObservation } from '@/lib/copy/coachObservation';
+
+/** Spec-promised DOM audit: no number and no banned word may reach the teacher DOM. */
+function expectCleanDom(text: string) {
+  expect(hasLeak(text)).toBe(false);
+  expect(hasBannedWord(text)).toBe(false);
+}
 
 function signalsWith(coach_read: CoachObservation): StudentSignals {
   return {
@@ -20,21 +27,23 @@ function signalsWith(coach_read: CoachObservation): StudentSignals {
 const cta = { kind: 'open-assignments', label: 'Open Assignments' } as const;
 
 describe('WholeChildRail — Worth a look? (coach_read)', () => {
-  it('renders a watch observation with its suggestion', () => {
-    render(<WholeChildRail signals={signalsWith({ state: 'watch', eyebrow: 'Worth a look', line: "Maya's been rushing lately.", suggestion: 'A quick check-in might help.', tone: 'risk' })} storyLine="x" cta={cta} />);
+  it('renders a watch observation with its suggestion (no number/banned word in DOM)', () => {
+    const { container } = render(<WholeChildRail signals={signalsWith({ state: 'watch', eyebrow: 'Worth a look', line: "Maya's been rushing lately.", suggestion: 'A quick check-in might help.', tone: 'risk' })} storyLine="x" cta={cta} />);
     expect(screen.getByText('Worth a look')).toBeInTheDocument();
     expect(screen.getByText("Maya's been rushing lately.")).toBeInTheDocument();
     expect(screen.getByText('A quick check-in might help.')).toBeInTheDocument();
+    expectCleanDom(container.textContent ?? '');
   });
 
-  it('renders a calm state without a suggestion and leaks no digit', () => {
+  it('renders a calm state without a suggestion (no number/banned word in DOM)', () => {
     const { container } = render(<WholeChildRail signals={signalsWith({ state: 'calm', eyebrow: 'Settling in', line: "Maya's working at a steady pace right now.", suggestion: null, tone: 'ok' })} storyLine="x" cta={cta} />);
     expect(screen.getByText('Settling in')).toBeInTheDocument();
-    expect(container.textContent ?? '').not.toMatch(/\d/);
+    expectCleanDom(container.textContent ?? '');
   });
 
-  it('keeps the #at-risk anchor (priority CTA scroll target)', () => {
+  it('keeps the #at-risk anchor (priority CTA scroll target) and stays leak-clean when quiet', () => {
     const { container } = render(<WholeChildRail signals={signalsWith({ state: 'quiet', eyebrow: 'Still settling in', line: 'Still getting to know how Maya works.', suggestion: null, tone: 'ok' })} storyLine="x" cta={cta} />);
     expect(container.querySelector('#at-risk')).not.toBeNull();
+    expectCleanDom(container.textContent ?? '');
   });
 });

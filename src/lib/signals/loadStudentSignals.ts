@@ -293,7 +293,7 @@ export async function loadStudentSignals(
     computed: (bsRow as { computed?: ComputedSignals | null } | null)?.computed ?? null,
     observationCount: (bsRow as { observation_count?: number } | null)?.observation_count ?? 0,
     firstName,
-    rosterRisk: { risk_level: roster_risk.risk_level, risk_factors: roster_risk.risk_factors },
+    rosterRisk: { risk_level: roster_risk.risk_level },
   });
 
   return {

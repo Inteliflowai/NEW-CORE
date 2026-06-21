@@ -228,3 +228,14 @@ Teacher-only, drill-in. The EMA behavioral model → ONE plain observation. `{na
 | Watch · general concern | Worth a look | "Something's been off in how {name}'s been working lately." | "Worth a closer look." |
 | Watch · scores dipped | Worth a look | "{name}'s recent quizzes have dipped." | "Worth a closer look at what changed." |
 | Calm | Settling in | "{name}'s working at a steady, focused pace right now." | — |
+
+---
+
+## Note — "flag" as a verb (Phase 4 banned-words scope)
+
+Phase 4 added a `leakGuard` banned-words check (`score, percentile, index, divergence,
+threshold, signal, model, algorithm, flag`) — enforced **only on the new coach-read
+strings**. Pre-existing teacher copy still uses **"Flag {skill} for reteach"** in
+`priorityCta` (a teacher *action* verb, not the stat-jargon "flag"). It is unaffected by
+the guard and was not changed in this pass. **Barb to decide:** keep "Flag … for reteach"
+as the action verb (and treat the banned list as register-for-observations only), or reword.

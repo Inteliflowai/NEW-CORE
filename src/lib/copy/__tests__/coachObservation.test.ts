@@ -17,7 +17,7 @@ function baseModel(over: Partial<ComputedSignals> = {}): ComputedSignals {
     ...over,
   };
 }
-const lowRisk = { risk_level: 'low', risk_factors: [] as string[] };
+const lowRisk = { risk_level: 'low' };
 
 describe('coachObservation', () => {
   it('quiet cold-start: no model', () => {
@@ -48,8 +48,17 @@ describe('coachObservation', () => {
   });
 
   it('falls back to score-based concern when the model is calm but roster risk is not low', () => {
-    const o = coachObservation({ computed: baseModel(), observationCount: 3, firstName: 'Maya', rosterRisk: { risk_level: 'high', risk_factors: ['x'] } });
+    const o = coachObservation({ computed: baseModel(), observationCount: 3, firstName: 'Maya', rosterRisk: { risk_level: 'high' } });
     expect(o.state).toBe('watch');
+  });
+
+  it('a flagged (high/critical) roster risk beats cold-start — never reads "nothing to see"', () => {
+    // computed null / <2 obs / insufficient_data would normally be quiet; a flagged risk must
+    // surface a watch so the priority CTA ("Review what's going on" → #at-risk) stays coherent.
+    const coldHigh = coachObservation({ computed: null, observationCount: 0, firstName: 'Maya', rosterRisk: { risk_level: 'high' } });
+    expect(coldHigh.state).toBe('watch');
+    const critInsufficient = coachObservation({ computed: baseModel({ errorPatternType: 'insufficient_data' }), observationCount: 5, firstName: 'Maya', rosterRisk: { risk_level: 'critical' } });
+    expect(critInsufficient.state).toBe('watch');
   });
 
   it('calm when model and roster risk are both clean', () => {
@@ -78,7 +87,7 @@ describe('coachObservation', () => {
       for (const oc of [0, 1, 3]) {
         for (const fn of ['Maya', null]) {
           for (const rl of ['low', 'high']) {
-            const o = coachObservation({ computed: m, observationCount: oc, firstName: fn, rosterRisk: { risk_level: rl, risk_factors: ['a'] } });
+            const o = coachObservation({ computed: m, observationCount: oc, firstName: fn, rosterRisk: { risk_level: rl } });
             [o.eyebrow, o.line, o.suggestion ?? ''].forEach((s) => {
               expect(() => assertNoLeak(s)).not.toThrow();
               expect(() => assertNoBannedWord(s)).not.toThrow();

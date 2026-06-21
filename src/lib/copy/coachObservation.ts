@@ -11,6 +11,7 @@
 // DRAFTS (see STRINGS-FOR-BARB.md) — Barb gates final copy.
 
 import type { ComputedSignals } from '@/lib/signals/behavioralTypes';
+import { hasLeak, hasBannedWord } from './leakGuard';
 
 export interface CoachObservation {
   state: 'watch' | 'calm' | 'quiet';
@@ -24,7 +25,9 @@ export interface CoachObservationInput {
   computed: ComputedSignals | null;
   observationCount: number;
   firstName: string | null;
-  rosterRisk: { risk_level: string; risk_factors: string[] };
+  // Only the band matters here — we never render a raw factor (riskFactorPhrase
+  // would emit the banned word "score"), so risk_factors is deliberately not consumed.
+  rosterRisk: { risk_level: string };
 }
 
 // Conservative first-pass thresholds — speak rarely. Tunable; Barb/Marvin may adjust.
@@ -35,15 +38,29 @@ const ENGAGEMENT_LOW = 0.4;
 const PREDICTIVE_HOT = 0.6;
 
 export function coachObservation(input: CoachObservationInput): CoachObservation {
-  const { computed, observationCount, firstName, rosterRisk } = input;
-  const subject = (firstName ?? '').trim() || 'This student';
+  const { computed, observationCount, rosterRisk } = input;
+  const subject = sanitizeFirstName(input.firstName);
+  const flaggedRisk = rosterRisk.risk_level === 'high' || rosterRisk.risk_level === 'critical';
 
-  // 1. Not enough yet → quiet (cold-start).
-  if (
-    computed == null ||
-    observationCount < MIN_OBSERVATIONS ||
-    computed.errorPatternType === 'insufficient_data'
-  ) {
+  // 1. A sustained behavioral pattern (only with >= 2 sessions of usable data) — most specific.
+  const usable =
+    computed != null &&
+    observationCount >= MIN_OBSERVATIONS &&
+    computed.errorPatternType !== 'insufficient_data';
+  if (usable) {
+    const behavioral = behavioralWatch(computed, subject);
+    if (behavioral) return behavioral;
+  }
+
+  // 2. A FLAGGED score-based concern (high/critical) beats cold-start: priorityCta scrolls a
+  //    flagged student to this #at-risk card saying "Review what's going on", so the card must
+  //    never read "nothing to see" for the same student. (CTA <-> card coherence.)
+  if (flaggedRisk) {
+    return watch('risk', `${subject}'s recent quizzes have dipped.`, 'Worth a closer look at what changed.');
+  }
+
+  // 3. Not enough yet → quiet (cold-start).
+  if (!usable) {
     return {
       state: 'quiet',
       eyebrow: 'Still settling in',
@@ -53,8 +70,23 @@ export function coachObservation(input: CoachObservationInput): CoachObservation
     };
   }
 
-  // 2. A sustained behavioral pattern worth mentioning (first match wins).
-  const c = computed;
+  // 4. A milder (medium) score-based concern.
+  if (rosterRisk.risk_level !== 'low') {
+    return watch('risk', `${subject}'s recent quizzes have dipped.`, 'Worth a closer look at what changed.');
+  }
+
+  // 5. Else → calm.
+  return {
+    state: 'calm',
+    eyebrow: 'Settling in',
+    line: `${subject}'s working at a steady, focused pace right now.`,
+    suggestion: null,
+    tone: 'ok',
+  };
+}
+
+/** The first matching behavioral pattern as a watch, or null if the model is calm. */
+function behavioralWatch(c: ComputedSignals, subject: string): CoachObservation | null {
   if (c.frustrationScore >= FRUSTRATION_HOT) {
     return watch('risk', `${subject}'s been rushing and second-guessing answers the last few quizzes.`, 'A quick check-in might help.');
   }
@@ -70,20 +102,15 @@ export function coachObservation(input: CoachObservationInput): CoachObservation
   if (c.predictiveRiskScore >= PREDICTIVE_HOT) {
     return watch('warn', `Something's been off in how ${subject}'s been working lately.`, 'Worth a closer look.');
   }
+  return null;
+}
 
-  // 3. Else, the existing score-based concern (plain words — never reuse riskFactorPhrase, which says "score").
-  if (rosterRisk.risk_level !== 'low') {
-    return watch('risk', `${subject}'s recent quizzes have dipped.`, 'Worth a closer look at what changed.');
-  }
-
-  // 4. Else → calm.
-  return {
-    state: 'calm',
-    eyebrow: 'Settling in',
-    line: `${subject}'s working at a steady, focused pace right now.`,
-    suggestion: null,
-    tone: 'ok',
-  };
+/** First name for interpolation — falls back to a neutral subject if absent or itself unsafe
+ *  (a name carrying a digit or a banned word must never reach the teacher DOM). */
+function sanitizeFirstName(firstName: string | null): string {
+  const name = (firstName ?? '').trim();
+  if (!name || hasLeak(name) || hasBannedWord(name)) return 'This student';
+  return name;
 }
 
 function watch(tone: 'risk' | 'warn', line: string, suggestion: string): CoachObservation {

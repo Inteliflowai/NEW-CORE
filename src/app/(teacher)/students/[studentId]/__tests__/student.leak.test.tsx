@@ -3,6 +3,7 @@ import '@/test/setup-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import React from 'react';
+import { coachObservation } from '@/lib/copy/coachObservation';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 vi.mock('next/navigation', () => ({
@@ -90,7 +91,10 @@ const LEAK_FIXTURE: StudentSignals = {
     trajectory: 'improving',
   },
   growth_history: [11, 22, 33, 44],
-  coach_read: { state: 'watch', eyebrow: 'Worth a look', line: "Jordan's recent quizzes have dipped.", suggestion: 'Worth a closer look at what changed.', tone: 'risk' },
+  // Drive the REAL coachObservation for this high-risk student so the high-roster-risk
+  // DOM path is exercised by production code (not a hand-clean fixture): with risk_level
+  // 'high' and a cold-start model it returns the leak-safe "recent quizzes have dipped" watch.
+  coach_read: coachObservation({ computed: null, observationCount: 0, firstName: 'Jordan', rosterRisk: { risk_level: 'high' } }),
 };
 
 async function renderPage() {
@@ -150,9 +154,10 @@ describe('One-Student page — leak discipline', () => {
     expect(container.innerHTML).not.toContain('48%');
   });
 
-  it('renders the coach-read observation (teacher-facing words)', async () => {
+  it('renders the coach-read observation (real helper) and never the raw risk factor', async () => {
     const { container } = await renderPage();
-    expect(container.innerHTML).toContain('dipped');
+    expect(container.innerHTML).toContain('dipped');           // the leak-safe fallback line
+    expect(container.innerHTML).not.toContain('Low average quiz score'); // factor words never rendered
   });
 
   it('renders the skill_name and the CL verb (teacher-facing)', async () => {
