@@ -11,6 +11,17 @@
 import { getScoreMessage, type Tier } from '@/lib/quiz/scoreMessage';
 import { masteryDisplayLabel } from '@/lib/utils/masteryLabel';
 
+// grade_level is TEXT on public.users (migration 0001). Parse the leading
+// integer; K–5 → elementary, 6–8 → middle, 9–12 → high. Unparseable → middle.
+export function gradeTextToTier(gradeLevel: string | null): Tier {
+  if (!gradeLevel) return 'middle';
+  const n = parseInt(gradeLevel.replace(/[^0-9]/g, ''), 10);
+  if (Number.isNaN(n)) return 'middle';
+  if (n <= 5) return 'elementary';
+  if (n <= 8) return 'middle';
+  return 'high';
+}
+
 export interface StudentResultBundleInput {
   scorePct: number;
   masteryBand: string | null;
