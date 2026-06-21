@@ -13,9 +13,7 @@ import React from 'react';
 import { Card } from '@/components/core/Card';
 import { MasteryLabel } from '@/components/core/MasteryLabel';
 import { GrowthMotif } from '@/components/core/GrowthMotif';
-import { RiskBadge } from '@/components/core/RiskBadge';
 import { effortPhrase } from '@/lib/copy/effortPhrase';
-import { riskFactorPhrase } from '@/lib/copy/riskFactorPhrase';
 import { trajectoryPhrase } from '@/lib/copy/trajectoryPhrase';
 import type { StudentSignals } from '@/lib/signals/loadStudentSignals';
 import type { PriorityCta } from '../_lib/priorityCta';
@@ -43,9 +41,6 @@ export function WholeChildRail({
   storyLine,
   cta,
 }: WholeChildRailProps): React.JSX.Element {
-  const riskLevel = signals.risk.roster.risk_level;
-  const topFactor = signals.risk.roster.risk_factors[0] ?? null;
-  const atRiskTone: EyebrowTone = riskLevel === 'low' ? 'ok' : 'risk';
 
   return (
     <div className="flex flex-col gap-3 lg:sticky lg:top-5">
@@ -71,18 +66,16 @@ export function WholeChildRail({
         <p className="text-fg-muted text-xs mt-2">vs your own past, never classmates</p>
       </Card>
 
-      {/* At risk? — id is the scroll target for the review-risk priority CTA (#at-risk) */}
+      {/* Worth a look? — EMA coach-read; #at-risk anchor stays (priority CTA target) */}
       <div id="at-risk">
-        <Card tone={atRiskTone}>
-          <Eyebrow tone={atRiskTone}>At risk?</Eyebrow>
-          {riskLevel === 'low' ? (
-            <p className="text-fg text-[13px]">Nothing flagged.</p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <RiskBadge band={riskLevel} />
-              {topFactor && <p className="text-fg text-[13px]">△ {riskFactorPhrase(topFactor)}</p>}
-            </div>
-          )}
+        <Card tone={signals.coach_read.tone}>
+          <Eyebrow tone={signals.coach_read.tone}>{signals.coach_read.eyebrow}</Eyebrow>
+          <div className="flex flex-col gap-1.5">
+            <p className="text-fg text-[13px]">{signals.coach_read.line}</p>
+            {signals.coach_read.suggestion && (
+              <p className="text-fg text-[13px]">{signals.coach_read.suggestion}</p>
+            )}
+          </div>
         </Card>
       </div>
 

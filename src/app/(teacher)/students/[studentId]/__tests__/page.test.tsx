@@ -167,9 +167,9 @@ describe('One-Student page', () => {
     expect(container.innerHTML).toContain('A pattern worth knowing');
   });
 
-  it('shows "Nothing flagged." in the At-risk card when risk is low', async () => {
+  it('shows the coach-read in the Worth-a-look card when nothing is notable', async () => {
     const { container } = await renderPage();
-    expect(container.innerHTML).toContain('Nothing flagged');
+    expect(container.innerHTML).toContain('Still settling in');
   });
 
   it('renders the Skill Map heading', async () => {

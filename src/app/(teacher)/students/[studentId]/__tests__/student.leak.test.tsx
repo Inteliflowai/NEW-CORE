@@ -150,9 +150,9 @@ describe('One-Student page — leak discipline', () => {
     expect(container.innerHTML).not.toContain('48%');
   });
 
-  it('renders the risk BAND word (high), not the number', async () => {
+  it('renders the coach-read observation (teacher-facing words)', async () => {
     const { container } = await renderPage();
-    expect(container.innerHTML.toLowerCase()).toContain('high');
+    expect(container.innerHTML).toContain('dipped');
   });
 
   it('renders the skill_name and the CL verb (teacher-facing)', async () => {
