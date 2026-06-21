@@ -116,3 +116,83 @@ chair. Exact figures can live behind a detail view if a teacher wants them.
 ---
 
 *End of drafts. Barb gates all of the above before any of it ships.*
+
+---
+
+## Quiz Runner Phase 3 — Draft Strings (Barb sign-off required)
+
+> All strings below are net-new. None are shipped without Barb's approval.
+> `assertNoLeak` must pass on every string before merge.
+
+### #QR1 — Timer labels (taking screen, no visible text — aria-label only)
+
+| Context | Draft string | Rule |
+|---|---|---|
+| Normal timer | `"{M}:{SS} remaining"` (aria-label) | Rule 5 (quiet) |
+| Warning (≤3 min) | `"{M}:{SS} remaining — finish up"` (aria-label) | Rule 1 |
+| Danger (≤1 min) | `"{M}:{SS} remaining — time is almost up"` (aria-label) | Rule 1 |
+
+### #QR2 — Recovery banner
+
+| Context | Draft string | Rule |
+|---|---|---|
+| Banner title | `"You were away for {N} seconds / {N} minutes"` | Rule 3 |
+| Banner body (time left) | `"The timer kept running. You have {N} minutes before this quiz closes — keep going!"` | Rule 3 |
+| Banner body (closing soon) | `"The timer kept running. This quiz is about to close — submit what you have."` | Rule 3 |
+
+### #QR3 — Auto-submit overlay
+
+| Context | Draft string | Rule |
+|---|---|---|
+| Overlay heading | `"Time's up"` | Rule 3 |
+| Overlay body | `"Submitting your answers…"` | Rule 3 |
+
+### #QR4 — Forfeit screen
+
+| Context | Draft string | Rule |
+|---|---|---|
+| Eyebrow label | `"Quiz Closed"` | Rule 3 |
+| Reason (closure) | `"The quiz closed while you were away."` | Rule 3 |
+| Reason (time_up) | `"Time ran out before you finished."` | Rule 3 |
+| Body | `"Your teacher can see your progress — this quiz will still shape what you work on next."` | Rule 4 |
+| CTA | `"Back to dashboard"` | Rule 1 |
+
+### #QR5 — Grading-pending screen
+
+| Context | Draft string | Rule |
+|---|---|---|
+| Heading | `"Your quiz is being graded"` | Rule 3 |
+| Body | `"Your written answers are being reviewed. Check back in a few minutes — we'll save everything."` | Rule 3 |
+| CTA | `"Back to dashboard"` | Rule 1 |
+
+### #QR6 — Done screen
+
+| Context | Draft string | Rule |
+|---|---|---|
+| Heading | `"You finished the quiz! ✨"` | Rule 3 |
+| What-happens-next label | `"What happens next"` | Rule 1 |
+| Assignment-ready step | `"A personalized set of practice questions is ready for you."` | Rule 1 |
+
+### #QR7 — Per-question review accordion
+
+| Context | Draft string | Rule |
+|---|---|---|
+| Accordion label | `"How did you do?"` | Rule 3 |
+| Correct answer label | `"Correct ✓"` | Rule 3 |
+| Wrong answer label | `"Let's look at this one"` | Rule 3 (not "Incorrect", not "Wrong") |
+
+### #QR8 — Study guide accordion
+
+| Context | Draft string | Rule |
+|---|---|---|
+| Accordion label | `"Revision notes"` | Rule 3 |
+| Loading copy | `"Pulling together your revision notes…"` | Rule 3 |
+| Load failed copy | `"Notes aren't ready yet — come back after your next practice session."` | Rule 5 |
+| Strong performance (≥80) | `"You got most of these right — solid work. Your next practice will push you further."` | Rule 4 |
+
+### #QR9 — No-quiz empty state
+
+| Context | Draft string | Rule |
+|---|---|---|
+| Title | `"No quiz right now"` | Rule 5 |
+| Body | `"Your teacher will let you know when a quiz is ready. Head to your assignments in the meantime."` | Rule 1 |
