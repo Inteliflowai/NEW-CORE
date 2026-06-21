@@ -8,7 +8,7 @@
 import React from 'react';
 import { requireRole } from '@/lib/auth/requireRole';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
-import { gradeTextToTier } from '@/lib/quiz/studentResultBundle';
+import { gradeTextToTier } from '@/lib/quiz/gradeTextToTier';
 import { QuizRunner } from './_components/QuizRunner';
 
 export default async function StudentQuizPage(): Promise<React.JSX.Element> {
