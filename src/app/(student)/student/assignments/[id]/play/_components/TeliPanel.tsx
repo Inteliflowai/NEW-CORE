@@ -139,7 +139,7 @@ export function TeliPanel({ attemptId, step, taskDescription }: TeliPanelProps) 
   return (
     <div
       data-testid="teli-panel"
-      className="rounded-2xl border border-surface bg-surface-2 p-4 flex flex-col gap-3"
+      className="rounded-2xl border border-surface bg-surface p-4 flex flex-col gap-3"
     >
       {/* Intro bubble — always visible */}
       <p className="text-fg text-sm">{INTRO_TEXT}</p>
@@ -152,7 +152,7 @@ export function TeliPanel({ attemptId, step, taskDescription }: TeliPanelProps) 
               key={i}
               className={
                 msg.role === 'student'
-                  ? 'self-end bg-cobalt-subtle rounded-xl px-3 py-2 text-fg text-sm max-w-[80%]'
+                  ? 'self-end bg-brand-surface rounded-xl px-3 py-2 text-fg text-sm max-w-[80%]'
                   : 'self-start bg-surface rounded-xl px-3 py-2 text-fg text-sm max-w-[80%]'
               }
             >
@@ -201,7 +201,7 @@ export function TeliPanel({ attemptId, step, taskDescription }: TeliPanelProps) 
             type="button"
             onClick={() => void send(false)}
             disabled={thinking || !input.trim()}
-            className="btn-secondary text-sm px-4 py-2 rounded-lg"
+            className="bg-surface border border-surface text-fg hover:bg-brand-surface text-sm px-4 py-2 rounded-lg disabled:opacity-50"
           >
             Ask Teli
           </button>
@@ -209,7 +209,7 @@ export function TeliPanel({ attemptId, step, taskDescription }: TeliPanelProps) 
             type="button"
             onClick={() => void send(true)}
             disabled={thinking || !input.trim()}
-            className="btn-primary text-sm px-4 py-2 rounded-lg"
+            className="bg-brand text-fg-on-brand hover:opacity-90 text-sm px-4 py-2 rounded-lg disabled:opacity-50"
           >
             {/* DRAFT → Barb */}
             {`I'm stuck — get a hint`}
