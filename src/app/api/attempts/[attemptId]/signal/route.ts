@@ -142,9 +142,14 @@ export async function POST(
       question_type_scored: r.question_type_scored ?? null,
     }));
 
-    await admin
+    const { error: upsertError } = await admin
       .from('quiz_responses')
       .upsert(upsertRows, { onConflict: 'attempt_id,question_id' });
+
+    if (upsertError) {
+      console.error('[signal] quiz_responses upsert failed', upsertError);
+      return NextResponse.json({ error: 'Failed to save responses' }, { status: 500 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

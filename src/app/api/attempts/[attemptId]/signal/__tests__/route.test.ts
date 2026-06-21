@@ -353,6 +353,44 @@ describe('POST /api/attempts/[attemptId]/signal', () => {
     expect(sessionAggWritten).toBe(true);
   });
 
+  // ── quiz_responses upsert failure → 500 ──────────────────────────────────────
+
+  it('returns 500 when quiz_responses upsert returns a DB error', async () => {
+    const upsertSpy = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: 'duplicate key value violates unique constraint', code: '23505' },
+    });
+    const adminMock = makeAdminMock({ upsertFn: upsertSpy });
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      adminMock as unknown as ReturnType<typeof createAdminSupabaseClient>,
+    );
+
+    const responses = [
+      {
+        question_id: QUESTION_ID,
+        position: 1,
+        response_text: 'answer',
+        response_time_ms: 1000,
+        hesitation_ms: 0,
+        answer_changes: 0,
+        navigation_backs: 0,
+        pause_count: 0,
+        total_pause_ms: 0,
+        word_count: 1,
+        focus_loss_count: 0,
+        paste_count: 0,
+        hints_used: 0,
+        question_type_scored: 'mcq',
+      },
+    ];
+
+    const res = await POST(makeReq({ responses }), makeParams());
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.ok).toBeUndefined();
+    expect(body.error).toBeTruthy();
+  });
+
   it('writes sessionAggregates alongside a response upsert', async () => {
     const updateSpy = vi.fn().mockReturnValue(makeChain({ data: null }));
     const upsertSpy = vi.fn().mockResolvedValue({ data: null, error: null });
