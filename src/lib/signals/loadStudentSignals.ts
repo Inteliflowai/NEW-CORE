@@ -208,6 +208,9 @@ export async function loadStudentSignals(
     new Date(),
   );
 
+  // session_risk is computed but intentionally NOT rendered — the EMA coach_read
+  // supersedes the single-session read on the drill-in. See
+  // docs/superpowers/specs/decisions/2026-06-21-session-risk-internal.md
   // ── Session risk — LIVE from latest attempt's quiz_responses (C3) ───────────
   const latestAttemptId = ((quizAttempts ?? []) as Array<{ id?: string }>)[0]?.id ?? '';
   let session_risk: SessionRiskResult = { score: 0, factors: [] };
