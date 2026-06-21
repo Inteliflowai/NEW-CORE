@@ -345,6 +345,7 @@ describe('GET /api/attempts/student-quiz', () => {
     // the list path) since the selection block is skipped entirely.
     const directMock = {
       from: vi.fn((table: string) => {
+        if (table === 'enrollments') return makeChain({ data: [FAKE_ENROLLMENT] });
         if (table === 'quiz_attempts') return makeChain({ data: [FAKE_ATTEMPT] });
         if (table === 'quizzes') return makeChain({ data: directQuiz });
         if (table === 'classes') return makeChain({ data: FAKE_CLASS });
@@ -360,5 +361,42 @@ describe('GET /api/attempts/student-quiz', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.quiz.id).toBe(DIRECT_QUIZ_ID);
+  });
+
+  // ── ?quizId= IDOR: student NOT enrolled in quiz's class → quiz: null ─────────
+
+  it('returns { quiz: null } when ?quizId= is for a quiz in a class the student is NOT enrolled in', async () => {
+    const OTHER_CLASS_QUIZ_ID = 'aaaabbbb-cccc-dddd-eeee-ffffffffffff';
+    const otherClassQuiz = {
+      ...FAKE_QUIZ_FULL,
+      id: OTHER_CLASS_QUIZ_ID,
+      class_id: 'other-class-id-999',
+    };
+
+    // The route must check enrollments for the quiz's class_id.
+    // Enrollment query returns empty (student is not in other-class-id-999).
+    const idorMock = {
+      from: vi.fn((table: string) => {
+        if (table === 'quizzes') return makeChain({ data: otherClassQuiz });
+        // Enrollment check: no active enrollment in other-class-id-999
+        if (table === 'enrollments') return makeChain({ data: [] });
+        if (table === 'quiz_attempts') return makeChain({ data: [FAKE_ATTEMPT] });
+        if (table === 'classes') return makeChain({ data: FAKE_CLASS });
+        if (table === 'users') return makeChain({ data: FAKE_TEACHER });
+        return makeChain({ data: null });
+      }),
+    };
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      idorMock as unknown as ReturnType<typeof createAdminSupabaseClient>,
+    );
+
+    const res = await GET(makeReq(`http://localhost/api/attempts/student-quiz?quizId=${OTHER_CLASS_QUIZ_ID}`));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Must NOT leak the quiz or its questions
+    expect(body.quiz).toBeNull();
+    expect(body.existing_attempt).toBeNull();
+    // Must not include quiz_questions from the other class
+    expect(body).not.toHaveProperty('quiz.quiz_questions');
   });
 });

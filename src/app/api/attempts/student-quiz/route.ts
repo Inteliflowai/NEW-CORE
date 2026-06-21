@@ -42,9 +42,67 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const rawQuizId = req.nextUrl.searchParams.get('quizId');
     const quizIdParam = rawQuizId && UUID_RE.test(rawQuizId) ? rawQuizId : null;
 
-    let resolvedQuizId: string | null = quizIdParam;
+    let resolvedQuizId: string | null = null;
 
-    // ── 3. Selection via enrollments (when no explicit quizId) ────────────────
+    // ── 3a. ?quizId= branch: resolve + eligibility guard (IDOR) ─────────────
+    // When the caller supplies an explicit quiz ID we must verify the student
+    // is actively enrolled in that quiz's class AND the quiz is available to
+    // them — the same eligibility the default-selection path enforces.
+    if (quizIdParam) {
+      // Load the quiz row to discover its class_id.
+      const { data: quizRow } = await admin
+        .from('quizzes')
+        .select('id, class_id, published_at')
+        .eq('id', quizIdParam)
+        .single();
+
+      if (quizRow) {
+        const qr = quizRow as { id: string; class_id: string | null; published_at: string | null };
+
+        // Check the student has an active enrollment in the quiz's class.
+        const { data: enrollmentRows } = await admin
+          .from('enrollments')
+          .select('class_id, enrolled_at')
+          .eq('class_id', qr.class_id ?? '')
+          .eq('student_id', user.id)
+          .eq('is_active', true);
+
+        const enrollment = (enrollmentRows as { class_id: string; enrolled_at: string | null }[] | null)?.[0] ?? null;
+
+        if (enrollment) {
+          // Determine attempt state for this specific quiz.
+          const { data: studentAttempts } = await admin
+            .from('quiz_attempts')
+            .select('quiz_id, submitted_at, is_complete')
+            .eq('student_id', user.id)
+            .eq('quiz_id', qr.id);
+
+          const hasAnyAttempt = (studentAttempts?.length ?? 0) > 0;
+          const hasCompletedAttempt = (studentAttempts as { submitted_at: string | null; is_complete: boolean }[] | null)
+            ?.some(a => a.submitted_at != null || a.is_complete) ?? false;
+
+          const eligible = isQuizAvailableForStudent({
+            publishedAt: qr.published_at,
+            enrolledAt: enrollment.enrolled_at ?? null,
+            hasAnyAttempt,
+            hasCompletedAttempt,
+            now: new Date(),
+          });
+
+          if (eligible) {
+            resolvedQuizId = qr.id;
+          }
+        }
+      }
+
+      // If not eligible (no active enrollment or isQuizAvailableForStudent false),
+      // return the same "no quiz available" shape — do NOT leak the quiz.
+      if (!resolvedQuizId) {
+        return NextResponse.json({ quiz: null, existing_attempt: null, teacher_name: '', class_name: '', reason: 'not_eligible' });
+      }
+    }
+
+    // ── 3b. Selection via enrollments (when no explicit quizId) ─────────────
     if (!resolvedQuizId) {
       const { data: enrollments } = await admin
         .from('enrollments')
