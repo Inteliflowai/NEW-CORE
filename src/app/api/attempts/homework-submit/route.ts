@@ -31,6 +31,15 @@ export async function POST(req: Request) {
       .eq('id', body.attempt_id).eq('student_id', user.id).maybeSingle();
     const attempt = attemptRow as { id: string; student_id: string; assignment_id: string; status: string; teli_hint_count: number | null; created_at: string; allow_redo: boolean | null } | null;
     if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
+
+    // Load the one active (or most-recent) Teli session for this attempt.
+    // The partial-unique index in migration 0016 guarantees at most one ACTIVE session;
+    // limit(1) handles a prior completed one. Falls back to 0 hints if Teli was never used.
+    const { data: tutorSession } = await admin.from('tutor_sessions')
+      .select('id, hint_count').eq('attempt_id', attempt.id).eq('student_id', user.id)
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const sessionId = (tutorSession as { id?: string } | null)?.id ?? null;
+    const teliHintCount = (tutorSession as { hint_count?: number } | null)?.hint_count ?? 0;
     // Never re-grade/overwrite a graded row. A teacher-granted redo opens a NEW in_progress
     // row (via loadAssignmentForPlay); the player submits THAT row, not this graded one — so
     // this guard blocks ANY graded attempt unconditionally (redo keeps history, never overwrites).
@@ -63,7 +72,6 @@ export async function POST(req: Request) {
 
     const scorePct = Math.round(grade.overall_grade);
     const masteryBand = computeMasteryBand(scorePct);
-    const teliHintCount = attempt.teli_hint_count ?? 0;
     const effortLabel = computeEffortLabel({ score: scorePct, teliHintCount }); // existing object-signature fn
     const submittedAt = new Date();
     const hoursToSubmit = Math.round(((submittedAt.getTime() - new Date(attempt.created_at).getTime()) / 3_600_000) * 10) / 10;
@@ -73,12 +81,23 @@ export async function POST(req: Request) {
       status: 'graded', score_pct: scorePct,
       ai_feedback: { overall: grade.overall_feedback, tasks: grade.task_grades },
       task_grades: grade.task_grades, effort_label: effortLabel,
+      teli_hint_count: teliHintCount,
       submitted_at: submittedAt.toISOString(), graded_at: submittedAt.toISOString(),
       submitted_on_time: onTime, hours_to_submit: hoursToSubmit, review_required: false,
     }).eq('id', attempt.id).eq('student_id', user.id);
     if (writeErr) {
       await admin.from('homework_attempts').update({ status: 'pending_grade', review_required: true, submitted_at: submittedAt.toISOString() }).eq('id', attempt.id).eq('student_id', user.id);
       return PENDING(attempt.id);
+    }
+
+    // ── Per-task hint counts from the Teli session (feeds hintsUsed in the moat) ──
+    const perTaskHints = new Map<number, number>();
+    if (sessionId) {
+      const { data: helpRows } = await admin.from('tutor_messages')
+        .select('task_step').eq('session_id', sessionId).eq('role', 'student').eq('is_help_request', true);
+      for (const r of (helpRows ?? []) as { task_step: number | null }[]) {
+        if (r.task_step != null) perTaskHints.set(r.task_step, (perTaskHints.get(r.task_step) ?? 0) + 1);
+      }
     }
 
     // ── Behavioral-signals hook (the MOAT) — context:'homework' ──
@@ -95,7 +114,7 @@ export async function POST(req: Request) {
           isCorrect: (gradeByStep.get(t.step) ?? 0) >= 50,
           timeTakenMs: metrics.get(t.step)?.timeTakenMs ?? 0,
           changeCount: metrics.get(t.step)?.changeCount ?? 0,
-          hintsUsed: 0,
+          hintsUsed: perTaskHints.get(t.step) ?? 0,
         }));
         const sa = body.sessionAggregates ?? {};
         const aggregates: SessionAggregates = {
