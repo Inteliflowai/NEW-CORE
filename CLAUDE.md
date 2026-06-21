@@ -48,6 +48,7 @@ Standard Next.js App Router scaffold; the structure is conventional, so only the
 - **Standing recommendation:** ROTATE `CORE_SPARK_API_SECRET` (the literal lived in private-repo git history); now also affects the launch JWT.
 
 **Binding disciplines (non-negotiable on every surface):**
+- **Coach posture (the moat):** every surface obeys [`COACH-POSTURE.md`](COACH-POSTURE.md) — speaks first (observation, not a metric), one thing at a time, plain human language (no geek/raw stats), notices→suggests→confirms (never decides), quiet on good days, **not a chatbot**. User-facing strings go to `STRINGS-FOR-BARB.md` as drafts; Barb gates all copy.
 - **Four-audience discipline:** student/parent surfaces never show the mastery-band enum or a raw risk number (band label only); CL verbs / diagnoses / divergence / misconceptions are **teacher-only**; growth is "you vs your own past" (never peer-relative, never fabricated — cold-start instead); observational, not diagnostic. Enforced at the string boundary in `src/lib/copy/` (pure helpers + `leakGuard`).
 - **"Assignments", never "Homework"** in any UI/copy (legacy term survives only in DB identifiers like `homework_attempts`).
 - **WCAG-AA + deep-ink:** no hardcoded hex / arbitrary `[var(--..)]` in components — Tier-2 token classes only; content text is deep-ink (`text-fg`), not `text-fg-muted`.
