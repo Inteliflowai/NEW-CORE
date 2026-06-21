@@ -37,6 +37,10 @@ export interface QuestionAttemptData {
  *   keypressCount*    — denominator for backspaceRate in frustration + engagement.
  *   ttsPlayCount*     — needed by computeEngagement() exploratory style detection.
  *   canvasUsed*       — needed by computeEngagement() exploratory style detection.
+ *   stuckEraseCount*  — needed by computeFrustration() stuck-and-erase sub-signal.
+ *                       Runner computes it client-side: count of times a pause
+ *                       >3000 ms is immediately followed by a backspace keystroke.
+ *                       Default 0 until Phase 2/3 instrumentation lands.
  */
 export interface SessionAggregates {
   focusLossCount: number;      // # of focus_loss events
@@ -49,6 +53,7 @@ export interface SessionAggregates {
   keypressCount: number;       // # of total keypress events (incl. backspace)
   ttsPlayCount: number;        // # of TTS play events
   canvasUsed: boolean;         // whether the scratch-canvas was opened at all
+  stuckEraseCount: number;     // # of pause>3000ms immediately followed by backspace (runner-captured; default 0)
 }
 
 /** Full session data passed to computeSignals(). Pure value — no DB access. */

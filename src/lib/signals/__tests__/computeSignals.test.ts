@@ -27,6 +27,7 @@ function makeAggregates(overrides: Partial<SessionAggregates> = {}): SessionAggr
     keypressCount: 0,
     ttsPlayCount: 0,
     canvasUsed: false,
+    stuckEraseCount: 0,
     ...overrides,
   };
 }
@@ -311,7 +312,7 @@ describe('confidence', () => {
     expect(result.confidenceAccuracy).toBeLessThanOrEqual(1);
   });
 
-  it('confidenceAccuracy is 0.5 for insufficient data (< 3 graded attempts)', () => {
+  it('confidenceAccuracy is 0 for insufficient data (< 3 graded attempts)', () => {
     const session = makeSession({
       questionAttempts: [
         makeAttempt({ isCorrect: true }),
@@ -319,7 +320,7 @@ describe('confidence', () => {
       ],
     });
     const result = computeSignals(session);
-    expect(result.confidenceAccuracy).toBe(0.5);
+    expect(result.confidenceAccuracy).toBe(0);
   });
 });
 
@@ -379,6 +380,22 @@ describe('frustration', () => {
     });
     const result = computeSignals(session);
     expect(result.frustrationIndicators).toContain('Repeated loss of focus');
+  });
+
+  it('frustrationIndicators contains "Stuck-and-erase pattern" when stuckEraseCount >= 3', () => {
+    const session = makeSession({
+      aggregates: makeAggregates({ stuckEraseCount: 3 }),
+    });
+    const result = computeSignals(session);
+    expect(result.frustrationIndicators).toContain('Stuck-and-erase pattern');
+  });
+
+  it('frustrationIndicators does NOT contain "Stuck-and-erase pattern" when stuckEraseCount < 3', () => {
+    const session = makeSession({
+      aggregates: makeAggregates({ stuckEraseCount: 2 }),
+    });
+    const result = computeSignals(session);
+    expect(result.frustrationIndicators).not.toContain('Stuck-and-erase pattern');
   });
 
   it('frustrationScore is clamped to [0,1] even with extreme inputs', () => {

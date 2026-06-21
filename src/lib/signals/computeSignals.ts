@@ -21,7 +21,7 @@
  * │                    │ attempts.changeCount (multi-attempt)  │ questionAttempts[].changeCount — direct                    │
  * │                    │ attempts.changeCount ≥ 3 (thrashing)  │ questionAttempts[].changeCount — direct                    │
  * │                    │ focus_loss count                      │ aggregates.focusLossCount — direct                         │
- * │                    │ pause_end→backspace sequence          │ DROPPED: requires event ordering; no count proxy           │
+ * │                    │ pause_end→backspace sequence          │ aggregates.stuckEraseCount [ADD] — runner captures count   │
  * │                    │ hint_request count                    │ sum(questionAttempts[].hintsUsed) — computable             │
  * ├────────────────────┼───────────────────────────────────────┼────────────────────────────────────────────────────────────┤
  * │ attentionScore     │ focus_loss count → gaps               │ aggregates.focusLossCount — direct                         │
@@ -50,10 +50,8 @@
  *   keypressCount     — required as denominator for backspaceRate
  *   ttsPlayCount      — required by engagement exploratory-style detection
  *   canvasUsed        — required by engagement exploratory-style detection
- *
- * DROPPED signals (require event ordering, no count proxy available):
- *   pause_end→backspace "stuck-and-erase" pattern (frustration sub-signal 5)
- *   → Not capturable as a pure aggregate; silently omitted; low weight in V1.
+ *   stuckEraseCount   — required by frustration stuck-and-erase sub-signal (pause>3s → backspace)
+ *                       Default 0 until Phase 2/3 runner instrumentation; signal fires at ≥ 3.
  */
 
 import type {
@@ -135,7 +133,7 @@ function computeVelocity(
 //   focus_loss count→ aggregates.focusLossCount
 //   changeCount     → questionAttempts[].changeCount (unchanged)
 //   hints           → sum(questionAttempts[].hintsUsed)
-//   pause→backspace → DROPPED (requires event ordering)
+//   pause→backspace → aggregates.stuckEraseCount (runner captures count; default 0 until Phase 2/3)
 
 function computeFrustration(
   aggregates: SessionAggregates,
@@ -179,15 +177,20 @@ function computeFrustration(
     indicators.push('Repeated loss of focus');
   }
 
-  // 5. Hint requests — V2: sum hintsUsed across attempts
+  // 5. Stuck-and-erase pattern — V2: aggregates.stuckEraseCount
+  //    V1 counted pause_end→backspace sequences where the pause was >3000ms;
+  //    V2 runner captures this as a count (default 0 until Phase 2/3 instrumentation).
+  if (aggregates.stuckEraseCount >= 3) {
+    score += 0.1;
+    indicators.push('Stuck-and-erase pattern');
+  }
+
+  // 6. Hint requests — V2: sum hintsUsed across attempts
   const hintCount = attempts.reduce((s, a) => s + a.hintsUsed, 0);
   if (hintCount >= 3) {
     score += Math.min(hintCount * 0.05, 0.15);
     indicators.push('Frequent hint requests');
   }
-
-  // NOTE: V1 sub-signal 5 (pause_end→backspace "stuck-and-erase" pattern)
-  // is DROPPED — it requires event ordering that is not capturable as a count.
 
   return { score: clamp01(score), indicators };
 }
@@ -272,7 +275,7 @@ function computeErrorPattern(
 function computeConfidence(
   attempts: QuestionAttemptData[],
 ): { score: number; accuracy: number } {
-  if (attempts.length < 3) return { score: 0.5, accuracy: 0.5 };
+  if (attempts.length < 3) return { score: 0.5, accuracy: 0 };
 
   const times = attempts.map((a) => a.timeTakenMs);
   const maxTime = Math.max(...times);
