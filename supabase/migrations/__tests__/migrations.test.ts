@@ -628,3 +628,22 @@ describe('0014_quiz_session_aggregates.sql', () => {
     expect(s()).toMatch(/DEFAULT\s+'{}'::jsonb/i);
   });
 });
+
+describe('0015 assignment_player', () => {
+  const s = () => sql('0015_assignment_player.sql');
+
+  it('adds the four player columns idempotently with the chosen nullability', () => {
+    expect(s()).toMatch(/ADD COLUMN IF NOT EXISTS task_grades\s+jsonb/i);
+    expect(s()).toMatch(/ADD COLUMN IF NOT EXISTS hours_to_submit\s+numeric/i);
+    expect(s()).toMatch(/ADD COLUMN IF NOT EXISTS review_required\s+boolean\s+NOT NULL\s+DEFAULT\s+false/i);
+    expect(s()).toMatch(/ADD COLUMN IF NOT EXISTS attempt_no\s+int\s+NOT NULL\s+DEFAULT\s+1/i);
+  });
+
+  it('adds an idempotent named status CHECK covering the lifecycle vocabulary', () => {
+    expect(s()).toMatch(/homework_attempts_status_check/);
+    expect(s()).toMatch(/DROP CONSTRAINT[^;]*homework_attempts_status_check|conname = 'homework_attempts_status_check'/);
+    for (const v of ['in_progress', 'submitted', 'grading', 'graded', 'pending_grade']) {
+      expect(s()).toContain(`'${v}'`);
+    }
+  });
+});

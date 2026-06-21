@@ -3,6 +3,7 @@
 // Four-audience: student sees ONLY title + instructions + soft Spark status / launch card.
 // NO transfer scores, rubric dims, mastery enums, CL verbs, or risk numbers.
 import React from 'react';
+import Link from 'next/link';
 import { requireRole } from '@/lib/auth/requireRole';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { EmptyState } from '@/components/core/EmptyState';
@@ -47,7 +48,14 @@ export default async function StudentAssignmentDetail({
       {content.instructions && (
         <p className="text-fg text-sm leading-relaxed">{content.instructions}</p>
       )}
-      {sparkStatus !== 'none' && (
+      {sparkStatus === 'none' ? (
+        <Link
+          href={`/student/assignments/${row.id as string}/play`}
+          className="self-start rounded-lg border border-surface bg-brand px-5 py-2.5 text-sm font-bold text-fg-on-brand"
+        >
+          Start assignment
+        </Link>
+      ) : (
         <SparkLaunchCard assignmentId={row.id as string} sparkStatus={sparkStatus} />
       )}
     </div>
