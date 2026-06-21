@@ -55,10 +55,15 @@ export async function resilientClaudeChat(
         controller.abort();
       }, timeoutMs);
 
+      const model = params.model || CLAUDE_GRADING_MODEL;
+      // `temperature` is DEPRECATED (400 "temperature is deprecated for this model.") on the
+      // newest reasoning models (opus 4.x, fable). Older grading/gen models (sonnet 4.6, haiku 4.5)
+      // still accept it. Omit it where unsupported — the SDK drops an undefined field from the body.
+      const TEMPERATURE_DEPRECATED = /^claude-(opus-4|fable)/i;
       const response = await getAnthropic().messages.create({
-        model: params.model || CLAUDE_GRADING_MODEL,
+        model,
         max_tokens: params.max_tokens || 1024,
-        temperature: params.temperature ?? 0.3,
+        temperature: TEMPERATURE_DEPRECATED.test(model) ? undefined : (params.temperature ?? 0.3),
         system: params.system,
         messages: params.messages.map(m => ({ role: m.role, content: m.content })),
       }, { signal: controller.signal });
