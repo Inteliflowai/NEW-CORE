@@ -337,17 +337,24 @@ describe('GET /api/attempts/student-quiz', () => {
 
   it('uses ?quizId= when a valid UUID is provided, skipping enrollment-based selection', async () => {
     const DIRECT_QUIZ_ID = '12345678-1234-1234-1234-123456789abc';
-    const directQuiz = { ...FAKE_QUIZ_FULL, id: DIRECT_QUIZ_ID };
+    // Quiz must have status: 'published' for the new gate to pass.
+    const directQuizRow = { id: DIRECT_QUIZ_ID, class_id: CLASS_ID, status: 'published' };
+    const directQuizFull = { ...FAKE_QUIZ_FULL, id: DIRECT_QUIZ_ID };
 
-    // When quizId is provided the route skips enrollments and goes straight to:
-    //   quiz_attempts (call 1) → quizzes.single() (call 1) → classes (call 1) → users (call 1)
-    // Build a dedicated mock that serves quizFull on the FIRST quizzes call (not
-    // the list path) since the selection block is skipped entirely.
+    // The ?quizId= branch calls quizzes once (lookup by id), then later once more
+    // (quiz+questions). Use a call-count dispatcher.
+    const quizCallIndex = { n: 0 };
     const directMock = {
       from: vi.fn((table: string) => {
         if (table === 'enrollments') return makeChain({ data: [FAKE_ENROLLMENT] });
         if (table === 'quiz_attempts') return makeChain({ data: [FAKE_ATTEMPT] });
-        if (table === 'quizzes') return makeChain({ data: directQuiz });
+        if (table === 'quizzes') {
+          quizCallIndex.n += 1;
+          // First call: row lookup (id, class_id, status)
+          if (quizCallIndex.n === 1) return makeChain({ data: directQuizRow });
+          // Second call: full quiz + questions
+          return makeChain({ data: directQuizFull });
+        }
         if (table === 'classes') return makeChain({ data: FAKE_CLASS });
         if (table === 'users') return makeChain({ data: FAKE_TEACHER });
         return makeChain({ data: null });
@@ -361,6 +368,88 @@ describe('GET /api/attempts/student-quiz', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.quiz.id).toBe(DIRECT_QUIZ_ID);
+  });
+
+  // ── ?quizId= completed quiz: enrolled student can review ─────────────────────
+
+  it('returns quiz + completed attempt when enrolled student deep-links to a completed quiz', async () => {
+    // The student already completed this quiz; the old code wrongly returned null.
+    // New behavior: enrolled + published → pass; surface the completed attempt.
+    // Must be a real UUID so the UUID_RE guard admits it.
+    const COMPLETED_QUIZ_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+    const COMPLETED_ATTEMPT = {
+      ...FAKE_ATTEMPT,
+      id: 'attempt-completed-999',
+      is_complete: true,
+      score_pct: 88,
+      submitted_at: '2026-06-19T11:00:00Z',
+    };
+    const completedQuizFull = { ...FAKE_QUIZ_FULL, id: COMPLETED_QUIZ_ID };
+
+    const quizRowPublished = { id: COMPLETED_QUIZ_ID, class_id: CLASS_ID, status: 'published' };
+    const quizCallIndex = { n: 0 };
+
+    const reviewMock = {
+      from: vi.fn((table: string) => {
+        if (table === 'quizzes') {
+          quizCallIndex.n += 1;
+          // First call: row lookup (id, class_id, status) in ?quizId= branch
+          if (quizCallIndex.n === 1) return makeChain({ data: quizRowPublished });
+          // Second call: full quiz + questions after resolvedQuizId is set
+          return makeChain({ data: completedQuizFull });
+        }
+        if (table === 'enrollments') return makeChain({ data: [FAKE_ENROLLMENT] });
+        if (table === 'quiz_attempts') return makeChain({ data: [COMPLETED_ATTEMPT] });
+        if (table === 'classes') return makeChain({ data: FAKE_CLASS });
+        if (table === 'users') return makeChain({ data: FAKE_TEACHER });
+        return makeChain({ data: null });
+      }),
+    };
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      reviewMock as unknown as ReturnType<typeof createAdminSupabaseClient>,
+    );
+
+    const res = await GET(makeReq(`http://localhost/api/attempts/student-quiz?quizId=${COMPLETED_QUIZ_ID}`));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Quiz must be returned (not null) for review
+    expect(body.quiz).not.toBeNull();
+    expect(body.quiz.id).toBe(COMPLETED_QUIZ_ID);
+    expect(Array.isArray(body.quiz.quiz_questions)).toBe(true);
+    // Completed attempt must be surfaced
+    expect(body.existing_attempt).not.toBeNull();
+    expect(body.existing_attempt.id).toBe('attempt-completed-999');
+    expect(body.existing_attempt.is_complete).toBe(true);
+    expect(body.existing_attempt.score_pct).toBe(88);
+  });
+
+  // ── ?quizId= draft quiz: must NOT be surfaced to student ─────────────────────
+
+  it('returns { quiz: null } when enrolled student passes ?quizId= for a draft quiz', async () => {
+    // Must be a real UUID so the UUID_RE guard admits it.
+    const DRAFT_QUIZ_ID = '11111111-2222-3333-4444-555555555555';
+    const draftQuizRow = { id: DRAFT_QUIZ_ID, class_id: CLASS_ID, status: 'draft' };
+
+    const draftMock = {
+      from: vi.fn((table: string) => {
+        if (table === 'quizzes') return makeChain({ data: draftQuizRow });
+        if (table === 'enrollments') return makeChain({ data: [FAKE_ENROLLMENT] });
+        if (table === 'quiz_attempts') return makeChain({ data: [] });
+        if (table === 'classes') return makeChain({ data: FAKE_CLASS });
+        if (table === 'users') return makeChain({ data: FAKE_TEACHER });
+        return makeChain({ data: null });
+      }),
+    };
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(
+      draftMock as unknown as ReturnType<typeof createAdminSupabaseClient>,
+    );
+
+    const res = await GET(makeReq(`http://localhost/api/attempts/student-quiz?quizId=${DRAFT_QUIZ_ID}`));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.quiz).toBeNull();
+    expect(body.existing_attempt).toBeNull();
+    expect(body.reason).toBe('not_eligible');
   });
 
   // ── ?quizId= IDOR: student NOT enrolled in quiz's class → quiz: null ─────────
