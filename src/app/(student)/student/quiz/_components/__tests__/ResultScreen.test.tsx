@@ -161,8 +161,7 @@ describe('ResultScreen — done', () => {
     expect(container.querySelector('script')).toBeNull();
     expect(container.querySelector('img')).toBeNull();
 
-    // The angle brackets must be escaped (not rendered as live tags)
-    const guideDiv = container.querySelector('[dangerouslySetInnerHTML]') ?? container;
+    // The angle brackets must be escaped (not rendered as live tags).
     // The innerHTML of the accordion content area should contain &lt; not raw <script>
     const accordionContent = container.querySelector('.px-4.pb-4');
     expect(accordionContent?.innerHTML).toContain('&lt;script&gt;');

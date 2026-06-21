@@ -148,7 +148,7 @@ export function QuizRunner({
   const [reviewItems, setReviewItems] = useState<QuestionReviewItem[]>([]);
   const [studyGuide, setStudyGuide] = useState<string | null>(null);
   const [studyGuideLoading, setStudyGuideLoading] = useState(false);
-  const [adaptCalled, setAdaptCalled] = useState(false);
+  const adaptCalledRef = useRef(false);
 
   // ── Behavioral capture refs ────────────────────────────────────────────
   // Per-question refs (reset on each advance/prev)
@@ -326,12 +326,12 @@ export function QuizRunner({
     qPasteCount.current       = 0;
   }
 
-  async function postSignal(
+  const postSignal = useCallback(async (
     id: string,
     responseItems: ReturnType<typeof snapshotPerQuestion>[],
     sessionAggregates?: SessionAggregates,
     heartbeat = false,
-  ) {
+  ) => {
     try {
       await fetch(`/api/attempts/${id}/signal`, {
         method: 'POST',
@@ -345,7 +345,7 @@ export function QuizRunner({
     } catch {
       // Best-effort: never let signal failure break the runner
     }
-  }
+  }, []);
 
   // ── Load quiz on mount ─────────────────────────────────────────────────
   useEffect(() => {
@@ -469,7 +469,7 @@ export function QuizRunner({
     }, HEARTBEAT_INTERVAL_MS);
 
     return () => clearInterval(hb);
-  }, [runnerState, attemptId]);
+  }, [runnerState, attemptId, postSignal]);
 
   // ── Adaptive Q4/Q5 after Q3 ───────────────────────────────────────────
   useEffect(() => {
@@ -477,10 +477,10 @@ export function QuizRunner({
       runnerState === 'taking' &&
       attemptId &&
       currentIndex === 3 &&
-      !adaptCalled
+      !adaptCalledRef.current
     ) {
-      setAdaptCalled(true);
       void (async () => {
+        adaptCalledRef.current = true;
         try {
           // The /adapt route recomputes from Q1–Q3 responses server-side.
           const res = await fetch(`/api/attempts/${attemptId}/adapt`, {
@@ -547,8 +547,7 @@ export function QuizRunner({
         }
       })();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentIndex, runnerState, attemptId, adaptCalled]);
+  }, [currentIndex, runnerState, attemptId]);
 
   // ── Response handler ───────────────────────────────────────────────────
   function handleResponse(value: string) {
