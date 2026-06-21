@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ResultScreen } from '../ResultScreen';
 import type { StudentResultBundle } from '@/lib/quiz/studentResultBundle';
 
@@ -45,7 +45,10 @@ describe('ResultScreen — done', () => {
         onBack={vi.fn()}
       />,
     );
-    expect(screen.getByText(/Solid work, Alex/)).toBeTruthy();
+    // message = plain coaching headline (unique: "A couple of spots to revisit")
+    expect(screen.getByText(/A couple of spots to revisit/)).toBeTruthy();
+    // teliMsg = Teli card copy (unique: "Let us look at a couple of spots in your assignments")
+    expect(screen.getByText(/Let us look at a couple of spots in your assignments/)).toBeTruthy();
     expect(screen.getByText('On Track')).toBeTruthy();
   });
 
@@ -133,6 +136,40 @@ describe('ResultScreen — done', () => {
     );
     // Should not show the study guide accordion label
     expect(screen.queryByText(/revision notes/i)).toBeNull();
+  });
+
+  it('XSS: study guide with injected tags renders escaped — no live script/img in DOM', () => {
+    const maliciousGuide =
+      '<script>alert(1)</script>\n<img src=x onerror=alert(1)>\n**Bold term** is safe.';
+    const { container } = render(
+      <ResultScreen
+        variant="done"
+        scoreMessage={TOUGH_MSG}
+        masteryLabel="Building"
+        needsStudyGuide
+        reviewItems={[]}
+        studyGuide={maliciousGuide}
+        onBack={vi.fn()}
+      />,
+    );
+
+    // Open the study guide accordion
+    const accordionBtn = screen.getByRole('button', { name: /revision notes/i });
+    fireEvent.click(accordionBtn);
+
+    // No live <script> or <img> elements injected into the DOM
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+
+    // The angle brackets must be escaped (not rendered as live tags)
+    const guideDiv = container.querySelector('[dangerouslySetInnerHTML]') ?? container;
+    // The innerHTML of the accordion content area should contain &lt; not raw <script>
+    const accordionContent = container.querySelector('.px-4.pb-4');
+    expect(accordionContent?.innerHTML).toContain('&lt;script&gt;');
+    expect(accordionContent?.innerHTML).toContain('&lt;img');
+
+    // **bold** should still produce a <strong> tag
+    expect(container.querySelector('strong')?.textContent).toBe('Bold term');
   });
 });
 

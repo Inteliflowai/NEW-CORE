@@ -58,6 +58,21 @@ export interface ResultScreenProps {
   onStartAssignment?: () => void;
 }
 
+/**
+ * Escapes HTML entities first, then applies safe markdown transforms.
+ * This prevents injected HTML tags (e.g. from prompt-injected LLM output)
+ * from rendering as live DOM elements — XSS mitigation.
+ */
+function renderGuideHtml(guide: string): string {
+  const escaped = guide
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return escaped
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br />');
+}
+
 function StudyGuideAccordion({
   loading,
   guide,
@@ -88,9 +103,7 @@ function StudyGuideAccordion({
           {!loading && guide && (
             <div
               dangerouslySetInnerHTML={{
-                __html: guide
-                  .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                  .replace(/\n/g, '<br />'),
+                __html: renderGuideHtml(guide),
               }}
             />
           )}
@@ -220,6 +233,7 @@ export function ResultScreen({
 
   // assertNoLeak on all rendered copy strings (belt-and-suspenders; the server
   // helper already leak-guards, but the render boundary is the last line of defense).
+  if (msg.message) assertNoLeak(msg.message, 'ResultScreen/done/message');
   if (msg.teliMsg) assertNoLeak(msg.teliMsg, 'ResultScreen/done/teliMsg');
   if (masteryLabel) assertNoLeak(masteryLabel, 'ResultScreen/done/masteryLabel');
 
@@ -232,6 +246,10 @@ export function ResultScreen({
         <h1 className="font-display text-2xl text-fg font-bold">
           You finished the quiz! ✨
         </h1>
+        {/* Coaching headline — distinct from the Teli card below */}
+        {msg.message && (
+          <p className="text-fg text-base leading-relaxed">{msg.message}</p>
+        )}
       </div>
 
       {/* Teli coaching message */}
