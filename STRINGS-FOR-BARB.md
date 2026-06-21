@@ -196,3 +196,17 @@ chair. Exact figures can live behind a detail view if a teacher wants them.
 |---|---|---|
 | Title | `"No quiz right now"` | Rule 5 |
 | Body | `"Your teacher will let you know when a quiz is ready. Head to your assignments in the meantime."` | Rule 1 |
+
+---
+
+## Quiz Runner — Teli score-message register (FLAG for Barb, from Phase-3 review)
+
+The V1-ported Teli post-quiz messages (`src/lib/quiz/scoreMessage.ts`) are shown to STUDENTS on the done screen. Several variants carry band/diagnosis register that passes the numeric leak-guard but leans against the coach-posture language standard ("Mastery" not "Band"; plain words, no diagnosis):
+
+| Current (draft, student-facing) | Concern | Direction |
+|---|---|---|
+| "Top-band score" / "Mid-band score" | "Band" is a banned word | plain encouragement, no "band" |
+| "Above grade level" | grade-relative framing | "you vs your own past", growth-framed |
+| "Reteach mode" / "Reteach scope" | "Reteach" is a teacher diagnosis | warm, forward-looking ("let's revisit…") |
+
+**Recommendation:** Barb to rewrite these variants in plain coach voice; consider extending `leakGuard` to catch banned *words* (band/reteach/divergence/…), not only numbers, so the diagnostic-wall is enforced on register too.
