@@ -386,10 +386,14 @@ describe('POST /api/attempts/start', () => {
 
     // Need a special admin mock where quiz_attempts n===1 returns fresh attempt
     // and the update path on quiz_attempts works correctly.
+    const updateEqFn = vi.fn().mockReturnValue(Promise.resolve({ data: null, error: null }));
     const updateChain: Record<string, unknown> = {};
-    for (const m of ['select', 'eq', 'neq', 'in', 'order', 'limit', 'update', 'insert']) {
+    for (const m of ['select', 'eq', 'neq', 'in', 'order', 'limit', 'insert']) {
       updateChain[m] = vi.fn().mockReturnValue(updateChain);
     }
+    // update() must return an object with .eq() that resolves
+    const updateFn = vi.fn().mockReturnValue({ eq: updateEqFn });
+    updateChain['update'] = updateFn;
     const updateResolved = Promise.resolve({ data: null, error: null });
     updateChain['single'] = vi.fn().mockResolvedValue({ data: null, error: null });
     updateChain['maybeSingle'] = vi.fn().mockResolvedValue({ data: freshAttempt, error: null });
@@ -421,11 +425,16 @@ describe('POST /api/attempts/start', () => {
 
     const body = await res.json();
     expect(body.attempt_id).toBe(ATTEMPT_ID);
-    expect(body.state).toBe('fresh');
+    // Finding A: fresh-start path must emit state:'active', not 'fresh'
+    expect(body.state).toBe('active');
     // started_at should be a stamped ISO string (non-null after update)
-    // The route sets effectiveStartedAt to the nowIso it writes
     expect(typeof body.started_at).toBe('string');
     expect(body.started_at).not.toBeNull();
+    // The stamped value should be a valid ISO date
+    expect(() => new Date(body.started_at as string).toISOString()).not.toThrow();
+    // update() must have been called to stamp started_at (Finding A / C)
+    expect(updateFn).toHaveBeenCalledOnce();
+    expect(updateFn).toHaveBeenCalledWith(expect.objectContaining({ started_at: expect.any(String) }));
   });
 
   // ── new attempt insert path ──────────────────────────────────────────────────

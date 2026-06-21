@@ -77,11 +77,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     // ── 5. Find most-recent existing attempt for this quiz + student ──────────
+    // ORDER + LIMIT ensures deterministic resolution when multiple incomplete
+    // rows exist (no unique constraint on quiz_id + student_id).
     const { data: existing } = await admin
       .from('quiz_attempts')
       .select('id, is_complete, started_at, last_active_at, forfeit_reason, score_pct, mastery_band')
       .eq('quiz_id', quiz_id)
       .eq('student_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     type ExistingAttempt = {
@@ -133,7 +137,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
       // Fresh: teacher-granted row, wall-clock hasn't started yet.
       // Stamp started_at so the timer begins on this first touch.
+      // After stamping, the attempt IS active — emit state:'active' to the client.
       let effectiveStartedAt: string | null = row.started_at ?? null;
+      let effectiveState: string = state;
       if (state === 'fresh') {
         const nowIso = new Date().toISOString();
         try {
@@ -142,9 +148,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             .update({ started_at: nowIso })
             .eq('id', row.id);
           effectiveStartedAt = nowIso;
-        } catch {
+        } catch (err) {
           // non-blocking — client uses the stamped value if successful
+          console.warn('[start] failed to stamp started_at', err);
         }
+        // Normalise: fresh-start becomes 'active' from the client's perspective
+        effectiveState = 'active';
       }
 
       // active / resuming_after_gap → resume.
@@ -159,7 +168,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({
         attempt_id: row.id,
         started_at: effectiveStartedAt,
-        state,
+        state: effectiveState,
         resumed_after_seconds,
         closure_forfeit_minutes: CLOSURE_FORFEIT_MINUTES,
         resume_banner_threshold_seconds: RESUME_BANNER_THRESHOLD_SECONDS,
