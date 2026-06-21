@@ -85,6 +85,22 @@ export async function loadRosterSignals(
     };
   });
 
+  // Fetch class misconceptions ONCE, up front — feeds BOTH per-student diagnosis
+  // and the concept-gaps rail (no double query).
+  const studentIds = students.map((s) => s.student_id);
+  const { data: misconceptions } = await admin
+    .from('misconception_observations')
+    .select('student_id, skill_id, error_type')
+    .in('student_id', studentIds.length > 0 ? studentIds : ['__none__']);
+
+  const errorTypesByStudent = new Map<string, string[]>();
+  for (const m of misconceptions ?? []) {
+    const row = m as { student_id: string; error_type: string };
+    const list = errorTypesByStudent.get(row.student_id) ?? [];
+    list.push(row.error_type);
+    errorTypesByStudent.set(row.student_id, list);
+  }
+
   // ── Per-student signals ─────────────────────────────────────────────────────
   const rosterRaw = await Promise.all(
     students.map(async ({ student_id, full_name }) => {
@@ -153,7 +169,7 @@ export async function loadRosterSignals(
         divergence_score: divergenceResult.divergence_score,
         hw_avg: hwAvg,
         quiz_avg: quizAvg,
-        error_types: [],
+        error_types: errorTypesByStudent.get(student_id) ?? [],
       };
 
       const diagnosis = diagnose(diagnoseInput);
@@ -194,12 +210,7 @@ export async function loadRosterSignals(
     }));
 
   // ── Class-wide concept gaps ─────────────────────────────────────────────────
-  const studentIds = students.map((s) => s.student_id);
-  const { data: misconceptions } = await admin
-    .from('misconception_observations')
-    .select('student_id, skill_id, error_type')
-    .in('student_id', studentIds.length > 0 ? studentIds : ['__none__']);
-
+  // `misconceptions` was already fetched above (before the per-student loop).
   const skillSet = new Set<string>();
   for (const m of (misconceptions ?? [])) {
     skillSet.add((m as { skill_id: string }).skill_id);

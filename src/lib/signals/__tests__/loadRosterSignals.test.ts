@@ -37,6 +37,7 @@ vi.mock('@/lib/signals/conceptGapDetector', () => ({
 // ── Lazy imports ──────────────────────────────────────────────────────────────
 import { loadRosterSignals } from '../loadRosterSignals';
 import { detectConceptGaps } from '@/lib/signals/conceptGapDetector';
+import { diagnose } from '@/lib/signals/diagnosis';
 
 // ── Mock admin builders ───────────────────────────────────────────────────────
 
@@ -215,8 +216,8 @@ describe('loadRosterSignals()', () => {
   });
 
   it('focus_group contains students with non-null diagnosis', async () => {
-    const { diagnose } = await import('@/lib/signals/diagnosis');
-    vi.mocked(diagnose).mockReturnValueOnce({
+    const { diagnose: diagnoseFn } = await import('@/lib/signals/diagnosis');
+    vi.mocked(diagnoseFn).mockReturnValueOnce({
       suggestedAction: 'monitor',
       severity: 1,
       diagnosis: 'Small gap',
@@ -228,5 +229,15 @@ describe('loadRosterSignals()', () => {
     expect(result.focus_group).toHaveLength(1);
     expect(result.focus_group[0].student_id).toBe('stu1');
     expect(result.focus_group[0].diagnosis.suggestedAction).toBe('monitor');
+  });
+
+  it('threads each student\'s misconception error_types into diagnose() (was hardcoded [])', async () => {
+    const admin = makeMockAdmin() as unknown as Parameters<typeof loadRosterSignals>[0];
+    await loadRosterSignals(admin, 'class-1');
+    const calls = vi.mocked(diagnose).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const stuCall = calls.find((c) => (c[0].error_types?.length ?? 0) > 0);
+    expect(stuCall).toBeDefined();
+    expect(stuCall![0].error_types).toContain('wrong_op');
   });
 });
