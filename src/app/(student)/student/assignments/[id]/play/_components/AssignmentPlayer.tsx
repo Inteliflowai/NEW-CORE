@@ -30,6 +30,7 @@ import type { AssignmentContent, ResponsesShape } from '@/lib/assignments/loadAs
 import type { AssignmentResultBundle } from '@/lib/assignments/assignmentResultBundle';
 import { ReadPhase } from './ReadPhase';
 import { TaskCard } from './TaskCard';
+import { TeliPanel } from './TeliPanel';
 import { TaskRail } from './TaskRail';
 import { SubmitPanel } from './SubmitPanel';
 import { AssignmentResultScreen } from './AssignmentResultScreen';
@@ -358,6 +359,7 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
           onChange={(v) => handleTaskChange(currentTask.step, v)}
           onFirstInput={handleFirstInput}
         />
+        <TeliPanel attemptId={attemptId} step={currentTask.step} taskDescription={currentTask.description} />
       </div>
 
       <SubmitPanel
