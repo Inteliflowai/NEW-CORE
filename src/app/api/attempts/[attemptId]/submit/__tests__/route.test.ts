@@ -141,8 +141,14 @@ function makeAdminMock(opts: {
   attemptsUpdateChain['then'] = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data: null, error: finalUpdateError }).then(resolve);
 
-  // users chain — returns school_id for the misconceptions hook (C2)
-  const usersChain = makeChain(usersSchoolId != null ? { school_id: usersSchoolId } : null);
+  // users chain — returns school_id + grade_level + full_name.
+  // The sync profile read (Option-D bundle build) and the async hooks (misconceptions,
+  // signals) all hit the same 'users' chain. Returning all three fields satisfies both.
+  const usersChain = makeChain(
+    usersSchoolId != null
+      ? { school_id: usersSchoolId, grade_level: '7', full_name: 'Test Student' }
+      : { school_id: null, grade_level: '7', full_name: 'Test Student' },
+  );
 
   return {
     from: vi.fn((table: string) => {
@@ -287,12 +293,27 @@ describe('POST /api/attempts/[attemptId]/submit', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     // Must return grades
-    expect(body.grades).toBeDefined();
     expect(body.attempt_id).toBe('attempt-1');
     // grading_delayed must NOT be true on the happy path
     expect(body.grading_delayed).toBeFalsy();
     // Both OEQs should be graded
     expect(body.grades).toHaveLength(2);
+
+    // Bundle present, raw score/band ABSENT (Option-D server boundary)
+    expect(body.result).toBeDefined();
+    expect(typeof body.result.scoreMessage.message).toBe('string');
+    expect(typeof body.result.masteryLabel).toBe('string');
+    expect(typeof body.result.needsStudyGuide).toBe('boolean');
+    expect(body.score_pct).toBeUndefined();
+    expect(body.mastery_band).toBeUndefined();
+    // No raw percentage / band enum anywhere in the serialized body
+    const raw = JSON.stringify(body);
+    expect(raw).not.toMatch(/"score_pct"/);
+    expect(raw).not.toMatch(/"mastery_band"/);
+    expect(raw).not.toContain('grade_level');  // raw mastery enum must not leak
+    expect(raw).not.toContain('advanced');
+    expect(raw).not.toContain('reteach');
+    expect(raw).not.toMatch(/%/);
 
     // gradeOpenResponse was called twice (positions 4 and 5)
     expect(mockGradeOpenResponse).toHaveBeenCalledTimes(2);

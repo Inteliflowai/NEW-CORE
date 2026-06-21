@@ -148,7 +148,14 @@ function makeAdminMock(opts: {
   attemptsUpdateChain['then'] = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data: null, error: finalUpdateError }).then(resolve);
 
-  const usersChain = makeChain(usersSchoolId != null ? { school_id: usersSchoolId } : null);
+  // users chain — returns school_id + grade_level + full_name.
+  // The sync profile read (Option-D bundle build) and the async hooks (misconceptions,
+  // signals) all hit the same 'users' chain.
+  const usersChain = makeChain(
+    usersSchoolId != null
+      ? { school_id: usersSchoolId, grade_level: '7', full_name: 'Test Student' }
+      : { school_id: null, grade_level: '7', full_name: 'Test Student' },
+  );
 
   // behavioral_signals chain for upsertBehavioralSignals (maybeSingle returns null = no prior row)
   const behavioralChain: Record<string, unknown> = {};
@@ -364,7 +371,9 @@ describe('submit route — behavioral signal hook (Task 7)', () => {
     const body = await res.json();
     expect(body.grading_delayed).toBeFalsy();
     expect(body.grades).toBeDefined();
-    expect(body.mastery_band).toBeDefined();
+    // Bundle present, raw score/band absent (Option-D)
+    expect(body.result).toBeDefined();
+    expect(body.mastery_band).toBeUndefined();
   });
 
   // ── (c) Fail-isolation: upsertBehavioralSignals throws → route still 200 ───

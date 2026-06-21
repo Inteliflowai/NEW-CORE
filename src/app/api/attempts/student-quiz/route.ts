@@ -24,6 +24,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { isQuizAvailableForStudent } from '@/lib/quiz/isQuizAvailableForStudent';
+import { studentResultBundle } from '@/lib/quiz/studentResultBundle';
+import type { Tier } from '@/lib/quiz/scoreMessage';
+
+// grade_level is TEXT on public.users (migration 0001). Parse the leading
+// integer; map K–5 → elementary, 6–8 → middle, 9–12 → high. Unparseable → middle.
+function gradeTextToTier(gradeLevel: string | null): Tier {
+  if (!gradeLevel) return 'middle';
+  const n = parseInt(gradeLevel.replace(/[^0-9]/g, ''), 10);
+  if (Number.isNaN(n)) return 'middle';
+  if (n <= 5) return 'elementary';
+  if (n <= 8) return 'middle';
+  return 'high';
+}
 
 // UUID guard — rejects the literal string "undefined" that a router.push with
 // an unresolved id produces (e.g. `?quizId=${obj.id}` where obj.id was undefined).
@@ -173,7 +186,52 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       .order('started_at', { ascending: false })
       .limit(1);
 
-    const existingAttempt = (latestAttempts as unknown[])?.[0] ?? null;
+    type LatestAttemptRow = {
+      id: string;
+      is_complete: boolean;
+      score_pct: number | null;
+      mastery_band: string | null;
+      adapted_questions: unknown;
+      started_at: string | null;
+      last_active_at: string | null;
+      forfeit_reason: string | null;
+    };
+    const latestRow = (latestAttempts as LatestAttemptRow[] | null)?.[0] ?? null;
+
+    let existingAttempt:
+      | (Omit<LatestAttemptRow, 'score_pct' | 'mastery_band'> & { result?: ReturnType<typeof studentResultBundle> })
+      | null = null;
+
+    if (latestRow) {
+      // Option-D: build field-by-field; score_pct / mastery_band are NEVER copied out.
+      existingAttempt = {
+        id: latestRow.id,
+        is_complete: latestRow.is_complete,
+        adapted_questions: latestRow.adapted_questions,
+        started_at: latestRow.started_at,
+        last_active_at: latestRow.last_active_at,
+        forfeit_reason: latestRow.forfeit_reason,
+      };
+
+      // Completed attempt with a real score → attach the student-safe bundle.
+      if (latestRow.is_complete && latestRow.score_pct !== null) {
+        const { data: studentProfile } = await admin
+          .from('users')
+          .select('grade_level, full_name')
+          .eq('id', user.id)
+          .single();
+        const tier = gradeTextToTier((studentProfile as { grade_level?: string | null } | null)?.grade_level ?? null);
+        const firstName = ((studentProfile as { full_name?: string | null } | null)?.full_name ?? '')
+          .trim().split(/\s+/)[0] || null;
+        existingAttempt.result = studentResultBundle({
+          scorePct: latestRow.score_pct,
+          masteryBand: latestRow.mastery_band,
+          tier,
+          firstName,
+          attemptId: latestRow.id,
+        });
+      }
+    }
 
     // ── 5. Quiz with questions ────────────────────────────────────────────────
     const { data: quiz } = await admin

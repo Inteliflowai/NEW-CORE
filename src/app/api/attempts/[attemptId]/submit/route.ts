@@ -26,6 +26,19 @@ import { checkNumericAnswer } from '@/lib/math/checkNumericAnswer';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 import { recomputeSkillStatesForStudent } from '@/lib/skills/recomputeSkillStates';
 import type { QuestionAttemptData, SessionAggregates, RawSessionData } from '@/lib/signals/behavioralTypes';
+import { studentResultBundle } from '@/lib/quiz/studentResultBundle';
+import type { Tier } from '@/lib/quiz/scoreMessage';
+
+// grade_level is TEXT on public.users (migration 0001). Parse the leading
+// integer; map K–5 → elementary, 6–8 → middle, 9–12 → high. Unparseable → middle.
+function gradeTextToTier(gradeLevel: string | null): Tier {
+  if (!gradeLevel) return 'middle';
+  const n = parseInt(gradeLevel.replace(/[^0-9]/g, ''), 10);
+  if (Number.isNaN(n)) return 'middle';
+  if (n <= 5) return 'elementary';
+  if (n <= 8) return 'middle';
+  return 'high';
+}
 
 export async function POST(
   _req: NextRequest,
@@ -451,15 +464,34 @@ export async function POST(
       }
     });
 
+    // ── Build the student-safe result bundle (Option-D server boundary) ──────
+    // Fetch tier + firstName for the message; reuse the same users table the
+    // hooks read. score_pct / mastery_band are NEVER returned over the wire.
+    const { data: profileRow } = await admin
+      .from('users')
+      .select('grade_level, full_name')
+      .eq('id', attempt.student_id)
+      .single();
+    const tier = gradeTextToTier((profileRow as { grade_level?: string | null } | null)?.grade_level ?? null);
+    const firstName = ((profileRow as { full_name?: string | null } | null)?.full_name ?? '')
+      .trim().split(/\s+/)[0] || null;
+
+    const result = studentResultBundle({
+      scorePct,
+      masteryBand,
+      tier,
+      firstName,
+      attemptId,
+    });
+
     return NextResponse.json({
       attempt_id: attemptId,
       raw_score: rawScore,
-      score_pct: scorePct,
-      mastery_band: masteryBand,
       grades: oeqResults.map(r => ({
         position: r.task.position,
         score: (r as { grade: NonNullable<OeqResult['grade']> }).grade.score,
       })),
+      result,
     });
   } catch (err) {
     console.error('[submit] error:', err);

@@ -245,16 +245,18 @@ describe('GET /api/attempts/student-quiz', () => {
     expect(body.quiz.title).toBe('Unit 3 Quiz');
     expect(Array.isArray(body.quiz.quiz_questions)).toBe(true);
 
-    // Existing attempt fields
+    // Existing attempt fields — raw score/band must NOT be present (Option-D)
     expect(body.existing_attempt).not.toBeNull();
     expect(body.existing_attempt.id).toBe(ATTEMPT_ID);
     expect(body.existing_attempt).toHaveProperty('is_complete');
-    expect(body.existing_attempt).toHaveProperty('score_pct');
-    expect(body.existing_attempt).toHaveProperty('mastery_band');
+    expect(body.existing_attempt).not.toHaveProperty('score_pct');
+    expect(body.existing_attempt).not.toHaveProperty('mastery_band');
     expect(body.existing_attempt).toHaveProperty('adapted_questions');
     expect(body.existing_attempt).toHaveProperty('started_at');
     expect(body.existing_attempt).toHaveProperty('last_active_at');
     expect(body.existing_attempt).toHaveProperty('forfeit_reason');
+    // In-progress attempt (FAKE_ATTEMPT.is_complete=false) → NO bundle
+    expect(body.existing_attempt.result).toBeUndefined();
 
     expect(body.teacher_name).toBe('Ms. Rivera');
     expect(body.class_name).toBe('Math 7A');
@@ -302,9 +304,14 @@ describe('GET /api/attempts/student-quiz', () => {
     // Fallback: the completed quiz is resolved (not null)
     expect(body.quiz).not.toBeNull();
     expect(body.quiz.id).toBe(QUIZ_ID);
-    // The attempt surfaced is the completed one
+    // Completed attempt → bundle present, raw score absent (Option-D)
     expect(body.existing_attempt.is_complete).toBe(true);
-    expect(body.existing_attempt.score_pct).toBe(82);
+    expect(body.existing_attempt).not.toHaveProperty('score_pct');
+    expect(body.existing_attempt.result).toBeDefined();
+    expect(typeof body.existing_attempt.result.masteryLabel).toBe('string');
+    const rawBody = JSON.stringify(body.existing_attempt);
+    expect(rawBody).not.toContain('82');
+    expect(rawBody).not.toMatch(/%/);
   });
 
   // ── No enrollments → quiz: null ──────────────────────────────────────────────
@@ -416,11 +423,12 @@ describe('GET /api/attempts/student-quiz', () => {
     expect(body.quiz).not.toBeNull();
     expect(body.quiz.id).toBe(COMPLETED_QUIZ_ID);
     expect(Array.isArray(body.quiz.quiz_questions)).toBe(true);
-    // Completed attempt must be surfaced
+    // Completed attempt must be surfaced; raw score absent (Option-D)
     expect(body.existing_attempt).not.toBeNull();
     expect(body.existing_attempt.id).toBe('attempt-completed-999');
     expect(body.existing_attempt.is_complete).toBe(true);
-    expect(body.existing_attempt.score_pct).toBe(88);
+    expect(body.existing_attempt).not.toHaveProperty('score_pct');
+    expect(body.existing_attempt.result).toBeDefined();
   });
 
   // ── ?quizId= draft quiz: must NOT be surfaced to student ─────────────────────

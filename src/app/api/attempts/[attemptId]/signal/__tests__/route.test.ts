@@ -329,10 +329,17 @@ describe('POST /api/attempts/[attemptId]/signal', () => {
       adminMock as unknown as ReturnType<typeof createAdminSupabaseClient>,
     );
 
-    const sessionAggregates = {
-      total_time_ms: 120000,
-      total_pauses: 5,
-      avg_hesitation_ms: 300,
+    const sessionAggregates: import('@/lib/signals/behavioralTypes').SessionAggregates = {
+      focusLossCount: 0,
+      pasteCount: 0,
+      pauseCount: 5,
+      totalPauseMs: 120000,
+      totalFocusLossMs: 0,
+      backspaceCount: 0,
+      keypressCount: 0,
+      ttsPlayCount: 0,
+      canvasUsed: false,
+      stuckEraseCount: 0,
     };
 
     const res = await POST(makeReq({ sessionAggregates }), makeParams());
@@ -399,7 +406,18 @@ describe('POST /api/attempts/[attemptId]/signal', () => {
       adminMock as unknown as ReturnType<typeof createAdminSupabaseClient>,
     );
 
-    const sessionAggregates = { total_time_ms: 60000 };
+    const sessionAggregates: Partial<import('@/lib/signals/behavioralTypes').SessionAggregates> = {
+      focusLossCount: 0,
+      pasteCount: 0,
+      pauseCount: 0,
+      totalPauseMs: 60000,
+      totalFocusLossMs: 0,
+      backspaceCount: 0,
+      keypressCount: 0,
+      ttsPlayCount: 0,
+      canvasUsed: false,
+      stuckEraseCount: 0,
+    };
     const responses = [
       {
         question_id: QUESTION_ID,
