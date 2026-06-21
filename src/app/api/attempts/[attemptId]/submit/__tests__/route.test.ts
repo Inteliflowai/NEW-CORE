@@ -196,6 +196,11 @@ function makeAdminMock(opts: {
 
 // ─── module mocks ─────────────────────────────────────────────────────────────
 
+vi.mock('next/server', async (orig) => ({
+  ...(await orig<typeof import('next/server')>()),
+  after: (cb: () => void | Promise<void>) => { void cb(); },
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: vi.fn(),
   createAdminSupabaseClient: vi.fn(),

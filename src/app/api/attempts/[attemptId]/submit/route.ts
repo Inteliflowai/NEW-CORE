@@ -18,7 +18,7 @@
 //   they go into grading_output jsonb.
 //
 // Outer catch: respondEngineError(err) — C9 (no bare 500).
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { gradeOpenResponse } from '@/lib/engine/grading';
 import { scoreMCQ, computeFinalScore, computeMasteryBand } from '@/lib/utils/scoring';
@@ -292,23 +292,23 @@ export async function POST(
     // A recompute error logs but NEVER fails the submit response — the student's
     // grade is already committed at this point.
     // Does NOT fire on pending/failed paths (those return early above).
-    try {
-      void recomputeSkillStatesForStudent(admin, {
-        studentId: attempt.student_id,
-        schoolId: null, // recomputeSkillStatesForStudent resolves school_id from users.school_id internally when null
-      }).catch((recomputeErr) => {
+    after(async () => {
+      try {
+        await recomputeSkillStatesForStudent(admin, {
+          studentId: attempt.student_id,
+          schoolId: null, // recomputeSkillStatesForStudent resolves school_id from users.school_id internally when null
+        });
+      } catch (recomputeErr) {
         console.warn('[submit] skill state recompute failed (non-blocking):', recomputeErr);
-      });
-    } catch (recomputeErr) {
-      console.error('[submit] skill state recompute hook threw (non-blocking):', recomputeErr);
-    }
+      }
+    });
 
     // ── Misconception observations hook (fail-isolated; Plan 3 Task 13) ──────
     // Fires on the all-clean path only. Fire-and-forget — does NOT block the
     // submit response (consistent with the recompute hook above).
     // C2: uses REAL quiz_responses.id (uuid), not a composite key.
     // C2: school_id sourced from users.school_id, NOT quizzes (quizzes has no school_id).
-    void (async () => {
+    after(async () => {
       try {
         const { recordMisconceptions } = await import('@/lib/misconceptions/recordMisconceptions');
 
@@ -361,7 +361,7 @@ export async function POST(
       } catch (err) {
         console.warn('[submit] recordMisconceptions hook failed (non-fatal):', err);
       }
-    })();
+    });
 
     // ── Behavioral signal store hook (fail-isolated; Plan 3 Task 7) ──────────
     // Fired on the all-clean path only (grading_status:'complete' written above).
@@ -369,7 +369,7 @@ export async function POST(
     // computeSignals, then upserts the EMA-merged result into behavioral_signals.
     // A signal failure logs but NEVER fails the submit response — the student's
     // grade is already committed. Mirrors the misconceptions hook (fire-and-forget).
-    void (async () => {
+    after(async () => {
       try {
         const { computeSignals } = await import('@/lib/signals/computeSignals');
         const { upsertBehavioralSignals } = await import('@/lib/signals/behavioralModel');
@@ -449,7 +449,7 @@ export async function POST(
       } catch (err) {
         console.warn('[submit] behavioral signal hook failed (non-fatal):', err);
       }
-    })();
+    });
 
     return NextResponse.json({
       attempt_id: attemptId,
