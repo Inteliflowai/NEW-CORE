@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, it, expect, beforeEach, afterEach } from 'vitest';
 import { LlmExhaustedError } from '@/lib/ai/errors';
 const { claudeChatMock } = vi.hoisted(() => ({ claudeChatMock: vi.fn() }));
 vi.mock('@/lib/ai/claude', () => ({ claudeChat: claudeChatMock }));

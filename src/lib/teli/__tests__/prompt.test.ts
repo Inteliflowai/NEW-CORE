@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { buildTeliSystemPrompt, RUNG_INSTRUCTIONS } from '@/lib/teli/prompt';
 const base = { taskDescription: 'Explain why ice floats on water.', studentResponse: 'because its cold' };
 describe('buildTeliSystemPrompt', () => {

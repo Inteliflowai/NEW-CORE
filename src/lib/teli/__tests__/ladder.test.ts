@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { rungForHelpCount, hintsRemaining, RUNGS, HINTS_PER_TASK } from '@/lib/teli/ladder';
 describe('hint ladder', () => {
   it('escalates nudge → cue → step → encourage and stays', () => {

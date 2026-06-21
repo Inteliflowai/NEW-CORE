@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { heuristicRevealsAnswer, failsSyncGate, namesAThinkingMove } from '@/lib/teli/revealCheck';
 describe('reveal-check sync gate', () => {
   it('flags the obvious answer-handing templates', () => {
