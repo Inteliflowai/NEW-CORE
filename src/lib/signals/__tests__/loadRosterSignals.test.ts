@@ -151,6 +151,9 @@ describe('loadRosterSignals()', () => {
     vi.clearAllMocks();
     // Reset detectConceptGaps to return empty by default
     vi.mocked(detectConceptGaps).mockReturnValue([]);
+    // clearAllMocks does NOT reset implementations — re-establish diagnose's default so the
+    // e2e tests' mockImplementation(actual.diagnose) can't leak into later tests via ordering.
+    vi.mocked(diagnose).mockReturnValue(null);
   });
 
   it('returns an object with class_id, roster, focus_group, concept_gaps', async () => {
@@ -259,6 +262,23 @@ describe('loadRosterSignals()', () => {
     const inGroup = result.focus_group.find((f) => f.student_id === 'stu1');
     expect(inGroup).toBeDefined();
     expect(inGroup!.diagnosis.suggestedAction).toBe('practice');
+  });
+
+  it('feeds diagnose only the RECURRING skill\'s error_types, not a below-threshold skill\'s', async () => {
+    // sk1 recurs (3x errA); sk2 is a one-off (errB). recurringErrorTypesFor must select sk1 only.
+    // Under the OLD cross-skill flatten, errB would have been included — this locks the per-skill grain.
+    const rows = [
+      { student_id: 'stu1', skill_id: 'sk1', error_type: 'errA' },
+      { student_id: 'stu1', skill_id: 'sk1', error_type: 'errA' },
+      { student_id: 'stu1', skill_id: 'sk1', error_type: 'errA' },
+      { student_id: 'stu1', skill_id: 'sk2', error_type: 'errB' },
+    ];
+    const admin = makeMockAdmin(undefined, rows) as unknown as Parameters<typeof loadRosterSignals>[0];
+    await loadRosterSignals(admin, 'class-1');
+    const call = vi.mocked(diagnose).mock.calls.find((c) => (c[0].error_types?.length ?? 0) > 0);
+    expect(call).toBeDefined();
+    expect(call![0].error_types).toContain('errA');
+    expect(call![0].error_types).not.toContain('errB');
   });
 
   it('does NOT light up: the SAME error_type once across 3 DIFFERENT skills stays out of focus_group', async () => {
