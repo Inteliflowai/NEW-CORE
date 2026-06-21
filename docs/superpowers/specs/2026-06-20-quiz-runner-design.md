@@ -75,7 +75,7 @@ Additive only (the core `quizzes`/`quiz_questions`/`quiz_attempts`/`quiz_respons
 3. `ALTER TABLE quiz_attempts ADD COLUMN study_guide text;` — cached guide.
 4. `ALTER TABLE quiz_responses ADD CONSTRAINT quiz_responses_attempt_question_unique UNIQUE (attempt_id, question_id);` — required for the heartbeat `onConflict` upsert (silently no-ops without it).
 5. **Behavioral-aggregate completeness** (for the coach's eyes): `quiz_responses` already has `response_time_ms, hesitation_ms, answer_changes, navigation_backs, pause_count, total_pause_ms, word_count`. ADD `focus_loss_count int`, `paste_count int`, `hints_used int` (the inputs `computeFrustration`/`computeAttention` need that aren't present). 
-6. The **signal store** for `ComputedSignals`: prefer extending `student_model_snapshots` with a `behavioral jsonb` column (so `loadStudentSignals` reads it with no new join), OR a slim `behavioral_signals (student_id, attempt_id, computed jsonb, created_at)` table. (Decision in the plan; `student_model_snapshots` extension is the lighter-touch default.)
+6. The **signal store** for `ComputedSignals` — **DECIDED: a dedicated `behavioral_signals` table** (NOT extending `student_model_snapshots`, which is a *weekly* cron-written longitudinal table — wrong grain for per-attempt signals). The table is the unified home for "the coach's evolving model of the student" that every producer (quiz now, Assignment Player next) writes and `loadStudentSignals` reads. Shape: a **per-student EMA-smoothed model row** (`behavioral_signals(student_id PK, school_id, computed jsonb, observation_count, updated_at)`) — the smoothed coach's-understanding (V1's `student_model` approach), updated each submit; per-attempt raw detail already lives on `quiz_responses`. This is the canonical V2 upgrade over V1's `cognitive_signals`+`student_model`+`signal_aggregates`+`signal_history` sprawl: one model, leaner, same signal power.
 
 The migration ships with a row in `supabase/migrations/__tests__/migrations.test.ts` asserting the columns/constraint (the established pattern).
 
@@ -140,6 +140,7 @@ This is one epic with a natural internal order (each phase independently testabl
 - **`audit_logs` absent in V2** — drop the V1 start audit row or retarget `platform_events`.
 - **Two student-quiz attempts colliding** — `start` is idempotent per `(quiz_id, student_id)` via the classifier; verify the unique/ordering assumptions.
 
-## 14. Open question for you before `writing-plans`
+## 14. Open questions — RESOLVED
 
-Only one, and it's small: the **signal store** — extend `student_model_snapshots` with a `behavioral jsonb` column (lightest; `loadStudentSignals` already reads that table) vs a dedicated `behavioral_signals` table (cleaner separation). I lean toward extending the snapshot. I'll pick the snapshot extension unless you prefer otherwise — everything else above is ready to turn into a task-by-task plan.
+- **Signal store:** DECIDED — dedicated `behavioral_signals` table, per-student EMA model (§6.6). Verifying `student_model_snapshots` showed it's a weekly cron table (wrong grain); the dedicated model is the clean V2 upgrade and the right home for the coach moat.
+- Spec **approved**; proceeding to `writing-plans` → subagent-driven-development.
