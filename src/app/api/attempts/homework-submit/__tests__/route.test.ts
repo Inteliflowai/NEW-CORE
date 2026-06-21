@@ -169,5 +169,13 @@ describe('POST /api/attempts/homework-submit', () => {
     expect(graded!.teli_hint_count).toBe(3);
     // (b) effort_label = 'effortful_success': score 84 >= SUCCESS_THRESHOLD (75) AND hints 3 >= EFFORT_THRESHOLD (2).
     expect(graded!.effort_label).toBe('effortful_success');
+    // (c) per-task hintsUsed in the moat hook matches the tutor_messages rows
+    //     (step 1 → 2 hints, step 2 → 1 hint). This verifies the perTaskHints aggregation
+    //     loop and the consumption in questionAttempts — a regression to hintsUsed:0 would fail here.
+    await drainAfter();
+    const raw = computeSignals.mock.calls[0][0];
+    const byStep = new Map(raw.questionAttempts.map((q: { questionIndex: number; hintsUsed: number }) => [q.questionIndex, q.hintsUsed]));
+    expect(byStep.get(1)).toBe(2);
+    expect(byStep.get(2)).toBe(1);
   });
 });
