@@ -146,10 +146,15 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
         focusLostAt.current = null;
       }
     }
-    function handlePaste() {
+    function handlePaste(e: ClipboardEvent) {
+      // Ignore pastes into the Teli tutor chat — they are not work on the assignment
+      // and must not pollute the behavioral aggregates (signal hygiene).
+      if ((e.target as HTMLElement | null)?.closest?.('[data-testid="teli-panel"]')) return;
       sessPasteCount.current += 1;
     }
     function handleKeydown(e: KeyboardEvent) {
+      // Ignore keystrokes into the Teli tutor chat — same signal-hygiene reason as paste.
+      if ((e.target as HTMLElement | null)?.closest?.('[data-testid="teli-panel"]')) return;
       const now = Date.now();
       if (lastKeypressMs.current > 0 && now - lastKeypressMs.current > PAUSE_THRESHOLD) {
         if (pauseStartMs.current === null) pauseStartMs.current = lastKeypressMs.current;

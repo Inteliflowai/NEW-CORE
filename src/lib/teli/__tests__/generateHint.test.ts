@@ -48,6 +48,20 @@ it('FAILS CLOSED to the safe line when the classifier is unavailable on a heuris
   // cannot-verify short-circuits to fallback (no gamble)
   expect(await generateGuardedHint(base)).toBe(SAFE_FALLBACK_REPLY);
 });
+it('FAILS CLOSED on a NON-CONFORMING classifier verdict (garbled/refusal) — only explicit OK certifies', async () => {
+  // Heuristic-clean reply that passes failsSyncGate (no banned words, no reveal pattern) AND
+  // names a thinking move (ends with '?'), so under the OLD fail-OPEN code it would be accepted
+  // and SHIPPED RAW on the first pass. The fix must instead reject the garbled verdict.
+  const RAW = 'Ice is less dense than water — what does that tell you about why it floats?';
+  claudeChatMock.mockResolvedValueOnce(RAW);
+  claudeChatMock.mockResolvedValueOnce('.'); // classifier returns a NON-conforming verdict → must NOT certify
+  claudeChatMock.mockRejectedValueOnce(new LlmExhaustedError('claude')); // regenerate exhausts → no second gamble
+  // A garbled verdict (no explicit OK, no REVEAL) is ambiguous → cannot-verify → fallback,
+  // NEVER the raw un-vetted reply.
+  const out = await generateGuardedHint(base);
+  expect(out).not.toBe(RAW);
+  expect(out).toBe(SAFE_FALLBACK_REPLY);
+});
 it('falls back when even the retry reveals the answer', async () => {
   claudeChatMock.mockResolvedValueOnce('The answer is less dense.'); // heuristic
   claudeChatMock.mockResolvedValueOnce('Basically the answer is density.'); // retry heuristic

@@ -61,8 +61,13 @@ async function classifyReveal(reply: string): Promise<'ok' | 'reveal' | 'unavail
     // LlmExhaustedError (retry exhaustion) → cannot verify → fail closed.
     return 'unavailable';
   }
+  // Only an EXPLICIT verdict certifies — anything ambiguous (garbled, refusal, truncated,
+  // e.g. ".", "Unsure", "I cannot determine") fails closed. A non-null but non-conforming
+  // verdict must NEVER certify an un-vetted reply.
   if (verdict == null) return 'unavailable';
-  return /\bREVEAL\b/i.test(verdict) ? 'reveal' : 'ok';
+  if (/\bREVEAL\b/i.test(verdict)) return 'reveal';
+  if (/\bOK\b/i.test(verdict)) return 'ok';
+  return 'unavailable';
 }
 
 /**

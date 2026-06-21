@@ -81,10 +81,13 @@ export async function POST(req: Request) {
       ?? 'this task';
 
     // 6. Insert the STUDENT turn FIRST (count-after-insert kills the rung race).
-    await admin.from('tutor_messages').insert({
+    // A failed persist must NOT proceed to the count query — that would desync the
+    // server-authoritative help count (count-after-insert relies on this row existing).
+    const { error: turnErr } = await admin.from('tutor_messages').insert({
       session_id: sessionId, task_step: taskStep, role: 'student',
       content: studentMessage, is_help_request: isHelpRequest,
     });
+    if (turnErr) return NextResponse.json({ error: 'Tutor unavailable' }, { status: 500 });
 
     // 7. Decide the rung (help turns only) + advance counters.
     let rung: HintRung | null = null;
@@ -97,7 +100,8 @@ export async function POST(req: Request) {
       const priorHelpCount = (count ?? 1) - 1; // the row just inserted is included.
       rung = rungForHelpCount(priorHelpCount);
       remaining = hintsRemaining(priorHelpCount);
-      await admin.rpc('bump_tutor_session', { p_session_id: sessionId });
+      const { error: bumpErr } = await admin.rpc('bump_tutor_session', { p_session_id: sessionId });
+      if (bumpErr) console.error('[homework-tutor] bump failed', bumpErr);
     } else {
       await admin.from('tutor_sessions').update({ last_activity_at: new Date().toISOString() }).eq('id', sessionId);
     }

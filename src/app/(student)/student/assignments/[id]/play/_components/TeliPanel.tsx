@@ -43,7 +43,7 @@ const INTRO_TEXT =
 /** Shown while the model is generating. → Barb. */
 const THINKING_TEXT = "Teli's thinking…";
 
-export function TeliPanel({ attemptId, step, taskDescription }: TeliPanelProps) {
+export function TeliPanel({ attemptId, step, taskDescription: _taskDescription }: TeliPanelProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);

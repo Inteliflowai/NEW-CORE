@@ -137,6 +137,49 @@ describe('AssignmentPlayer — TeliPanel mount (Task 10)', () => {
   });
 });
 
+describe('AssignmentPlayer — Teli signal isolation (final-review Fix 2)', () => {
+  it('does NOT count keydown/paste that originate inside the Teli panel, but DOES count task-textarea input', async () => {
+    const fetchMock = stubFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <AssignmentPlayer
+        assignmentId="a1"
+        attemptId="att1"
+        content={content}
+        initialResponses={{ tasks: {} } as ResponsesShape}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
+
+    // A keydown + paste originating inside the Teli panel must be ignored by the
+    // assignment's behavioral aggregates (they belong to the tutor chat, not the work).
+    const teliTextarea = screen.getByRole('textbox', { name: /ask teli a question/i });
+    fireEvent.keyDown(teliTextarea, { key: 'a' });
+    fireEvent.keyDown(teliTextarea, { key: 'b' });
+    fireEvent.paste(teliTextarea);
+
+    // Now fill + submit. The task textarea must still be the source of real signal.
+    const taskTextarea = screen.getByRole('textbox', { name: /answer for question/i });
+    // A genuine keydown on the task textarea SHOULD be counted.
+    fireEvent.keyDown(taskTextarea, { key: 'z' });
+    fireEvent.change(taskTextarea, { target: { value: 'because photosynthesis' } });
+    fireEvent.click(screen.getByRole('button', { name: /turn in|submit/i }));
+
+    await waitFor(() => {
+      const submitCall = fetchMock.mock.calls.find(
+        ([url]) => typeof url === 'string' && url.includes('/api/attempts/homework-submit'),
+      );
+      expect(submitCall).toBeDefined();
+      const sent = JSON.parse((submitCall![1] as RequestInit).body as string);
+      // Teli-originated paste must NOT pollute the paste aggregate.
+      expect(sent.sessionAggregates.pasteCount).toBe(0);
+      // Only the single task-textarea keydown ('z') is a real keypress; the two Teli
+      // keydowns ('a','b') must be excluded.
+      expect(sent.sessionAggregates.keypressCount).toBe(1);
+    });
+  });
+});
+
 describe('AssignmentPlayer — autosave (8b)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
