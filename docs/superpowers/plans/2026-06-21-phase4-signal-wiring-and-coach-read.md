@@ -31,6 +31,8 @@ Every task's requirements implicitly include these:
 - **Modify** `src/lib/signals/__tests__/loadStudentSignals.test.ts` — `maybeSingle` in mock chain + coach_read cases. (Task 3)
 - **Modify** `src/app/(teacher)/students/[studentId]/_components/WholeChildRail.tsx` — render `signals.coach_read` in the `#at-risk` card. (Task 4)
 - **Create** `src/app/(teacher)/students/[studentId]/_components/__tests__/WholeChildRail.test.tsx`. (Task 4)
+- **Modify** `src/app/(teacher)/students/[studentId]/__tests__/page.test.tsx` — add `coach_read` to `baseSignals()` (Task 3); update the "Nothing flagged" assertion (Task 4). **These existing fixtures build full `StudentSignals` literals — they MUST gain `coach_read` or tsc/runtime go red.**
+- **Modify** `src/app/(teacher)/students/[studentId]/__tests__/student.leak.test.tsx` — add `coach_read` to `LEAK_FIXTURE` (Task 3); update the "high" risk-band assertion (Task 4).
 - **Modify** `src/lib/signals/loadRosterSignals.ts` — thread per-student `error_types` into `diagnose()`. (Task 5)
 - **Modify** `src/lib/signals/__tests__/loadRosterSignals.test.ts` — assert error_types threaded. (Task 5)
 - **Modify** `src/app/(teacher)/today/page.tsx` — render `data.concept_gaps`. (Task 6)
@@ -394,10 +396,19 @@ git commit -m "feat(copy): coachObservation — EMA behavioral model to one plai
 **Files:**
 - Modify: `src/lib/signals/loadStudentSignals.ts`
 - Test: `src/lib/signals/__tests__/loadStudentSignals.test.ts`
+- Test (fix required): `src/app/(teacher)/students/[studentId]/__tests__/page.test.tsx` — add `coach_read` to `baseSignals()`.
+- Test (fix required): `src/app/(teacher)/students/[studentId]/__tests__/student.leak.test.tsx` — add `coach_read` to `LEAK_FIXTURE`.
 
 **Interfaces:**
 - Consumes: `coachObservation`, `CoachObservation` (Task 2).
 - Produces: `StudentSignals.coach_read: CoachObservation` (Task 4 renders it).
+
+> **CRITICAL (pre-flight finding):** making `coach_read` a **required** field on
+> `StudentSignals` breaks two existing test files that build full `StudentSignals`
+> literals without it (`page.test.tsx:31` `baseSignals()`, `student.leak.test.tsx:45`
+> `LEAK_FIXTURE`) — `npx tsc --noEmit` fails with TS2741. They MUST gain `coach_read`
+> in this task (Step 3b). The render-assertion updates those files also need come in
+> **Task 4** (when the card rendering changes), not here.
 
 - [ ] **Step 1: Write the failing tests** — in `loadStudentSignals.test.ts`, (a) add `maybeSingle` to the mock chain, (b) add coach_read cases. Update the `chain` object in `makeAdmin` to include:
 
@@ -491,15 +502,29 @@ import type { ComputedSignals } from '@/lib/signals/behavioralTypes';
 
 (d) Add `coach_read,` to the returned object.
 
+- [ ] **Step 3b: Add `coach_read` to the two existing `StudentSignals` fixtures** (keeps tsc green; the render-rendering they assert is still the OLD card until Task 4, so DON'T touch their assertions here).
+
+In `src/app/(teacher)/students/[studentId]/__tests__/page.test.tsx`, inside `baseSignals()` — add before the closing `...overrides,`:
+
+```ts
+    coach_read: { state: 'quiet', eyebrow: 'Still settling in', line: 'Still getting to know how Sam works.', suggestion: null, tone: 'ok' },
+```
+
+In `src/app/(teacher)/students/[studentId]/__tests__/student.leak.test.tsx`, inside `LEAK_FIXTURE` — add after `growth_history: [11, 22, 33, 44],` (strings carry NO digits / banned words so the leak audit holds):
+
+```ts
+  coach_read: { state: 'watch', eyebrow: 'Worth a look', line: "Jordan's recent quizzes have dipped.", suggestion: 'Worth a closer look at what changed.', tone: 'risk' },
+```
+
 - [ ] **Step 4: Run to confirm pass**
 
-Run: `npx vitest run src/lib/signals/__tests__/loadStudentSignals.test.ts && npx tsc --noEmit`
-Expected: PASS, tsc clean.
+Run: `npx vitest run src/lib/signals/__tests__/loadStudentSignals.test.ts "src/app/(teacher)/students/[studentId]/__tests__/page.test.tsx" "src/app/(teacher)/students/[studentId]/__tests__/student.leak.test.tsx" && npx tsc --noEmit`
+Expected: PASS (all three — the two existing files still pass because the card rendering is unchanged this task), tsc clean.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lib/signals/loadStudentSignals.ts src/lib/signals/__tests__/loadStudentSignals.test.ts
+git add src/lib/signals/loadStudentSignals.ts src/lib/signals/__tests__/loadStudentSignals.test.ts "src/app/(teacher)/students/[studentId]/__tests__/page.test.tsx" "src/app/(teacher)/students/[studentId]/__tests__/student.leak.test.tsx"
 git commit -m "feat(signals): loadStudentSignals computes coach_read from the EMA model (server-side)"
 ```
 
@@ -510,9 +535,18 @@ git commit -m "feat(signals): loadStudentSignals computes coach_read from the EM
 **Files:**
 - Modify: `src/app/(teacher)/students/[studentId]/_components/WholeChildRail.tsx`
 - Test (create): `src/app/(teacher)/students/[studentId]/_components/__tests__/WholeChildRail.test.tsx`
+- Test (fix required): `src/app/(teacher)/students/[studentId]/__tests__/student.leak.test.tsx` — update the "high" risk-band assertion.
+- Test (fix required): `src/app/(teacher)/students/[studentId]/__tests__/page.test.tsx` — update the "Nothing flagged" assertion.
 
 **Interfaces:**
 - Consumes: `StudentSignals.coach_read` (Task 3).
+
+> **CRITICAL (pre-flight finding):** this task removes `RiskBadge` and the
+> "Nothing flagged." low-risk branch from `WholeChildRail`. Two existing tests
+> assert exactly those deleted strings — `student.leak.test.tsx` asserts the band
+> word "high" (rendered only by the now-deleted `RiskBadge`), and `page.test.tsx`
+> asserts "Nothing flagged". Both crash at runtime after this task unless updated
+> in Step 3b. (`coach_read` was already added to both fixtures in Task 3.)
 
 - [ ] **Step 1: Write the failing test** — `__tests__/WholeChildRail.test.tsx`:
 
@@ -587,15 +621,55 @@ Expected: FAIL — component still renders the old "At risk?" card.
 
 Note: `Card`/`Eyebrow` already accept `'risk' | 'warn' | 'ok'` tones (the `EyebrowTone` union and Card `tone` prop). No new tone values are introduced.
 
+- [ ] **Step 3b: Update the two stale assertions in the existing surface tests** (the card no longer renders `RiskBadge`'s band word or "Nothing flagged."). The fixtures already carry `coach_read` from Task 3.
+
+In `student.leak.test.tsx`, replace the test that asserts the band word "high":
+
+```tsx
+  it('renders the risk BAND word (high), not the number', async () => {
+    const { container } = await renderPage();
+    expect(container.innerHTML.toLowerCase()).toContain('high');
+  });
+```
+
+with one that asserts the coach-read observation renders (the `LEAK_FIXTURE.coach_read.line` is "Jordan's recent quizzes have dipped."):
+
+```tsx
+  it('renders the coach-read observation (teacher-facing words)', async () => {
+    const { container } = await renderPage();
+    expect(container.innerHTML).toContain('dipped');
+  });
+```
+
+(All the other no-number leak assertions in this file are unaffected — `coach_read`'s strings carry no digits, and `risk_factors` is no longer rendered at all.)
+
+In `page.test.tsx`, replace:
+
+```tsx
+  it('shows "Nothing flagged." in the At-risk card when risk is low', async () => {
+    const { container } = await renderPage();
+    expect(container.innerHTML).toContain('Nothing flagged');
+  });
+```
+
+with (the `baseSignals().coach_read` is the quiet state, eyebrow "Still settling in"):
+
+```tsx
+  it('shows the coach-read in the Worth-a-look card when nothing is notable', async () => {
+    const { container } = await renderPage();
+    expect(container.innerHTML).toContain('Still settling in');
+  });
+```
+
 - [ ] **Step 4: Run to confirm pass**
 
-Run: `npx vitest run "src/app/(teacher)/students/[studentId]/_components/__tests__/WholeChildRail.test.tsx" && npx tsc --noEmit`
-Expected: PASS, tsc clean.
+Run: `npx vitest run "src/app/(teacher)/students/[studentId]/_components/__tests__/WholeChildRail.test.tsx" "src/app/(teacher)/students/[studentId]/__tests__/student.leak.test.tsx" "src/app/(teacher)/students/[studentId]/__tests__/page.test.tsx" && npx tsc --noEmit`
+Expected: PASS (all three), tsc clean.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add "src/app/(teacher)/students/[studentId]/_components/WholeChildRail.tsx" "src/app/(teacher)/students/[studentId]/_components/__tests__/WholeChildRail.test.tsx"
+git add "src/app/(teacher)/students/[studentId]/_components/WholeChildRail.tsx" "src/app/(teacher)/students/[studentId]/_components/__tests__/WholeChildRail.test.tsx" "src/app/(teacher)/students/[studentId]/__tests__/student.leak.test.tsx" "src/app/(teacher)/students/[studentId]/__tests__/page.test.tsx"
 git commit -m "feat(teacher): drill-in 'Worth a look?' card renders the EMA coach-read"
 ```
 
@@ -678,21 +752,13 @@ git commit -m "fix(signals): thread misconception error_types into roster diagno
 - Modify: `src/app/(teacher)/today/page.tsx`
 - Test: `src/app/(teacher)/today/__tests__/today.test.tsx`
 
-- [ ] **Step 1: Write the failing test** — add a case to `today.test.tsx` that makes `loadRosterSignals` return a `concept_gaps` row and asserts the skill label renders. Follow the file's existing mock pattern for `loadRosterSignals`; set its return to include:
+- [ ] **Step 1: Write the failing test** — the existing `today.test.tsx` FIXTURE already carries `concept_gaps: [{ skill_name: 'Adding fractions', pct_incorrect: 65, ... }]` (no fixture edit needed), and the file asserts via `container.innerHTML` (it does **not** import `screen`). Add a test that renders the populated-class case and asserts the concept-gap skill label now appears (it does not today — Today never reads `concept_gaps`). Match the file's existing render/await pattern (render with `?class=c1`), then:
 
 ```ts
-      concept_gaps: [
-        { question_index: 0, question_text: 'sk1', skill_name: 'Adding fractions', pct_incorrect: 80 },
-      ],
+    expect(container.innerHTML).toContain('Adding fractions');
 ```
 
-and assert:
-
-```ts
-    expect(screen.getByText('Adding fractions')).toBeInTheDocument();
-```
-
-(Match the existing test's render/await setup; reuse its `loadRosterSignals` mock object, adding `concept_gaps` to it. If the existing mock omits `concept_gaps`, add it to every return in that file so types stay satisfied.)
+(Do **not** add a second `concept_gaps` key or import `screen` — both would diverge from the file's pattern.)
 
 - [ ] **Step 2: Run to confirm failure**
 
