@@ -618,3 +618,13 @@ describe('0013_quiz_runner.sql', () => {
     expect(s()).toMatch(/observation_count\s+int/i);
   });
 });
+
+describe('0014_quiz_session_aggregates.sql', () => {
+  const s = () => sql('0014_quiz_session_aggregates.sql');
+  it('adds session_aggregates jsonb column to quiz_attempts', () => {
+    expect(s()).toMatch(/ALTER TABLE\s+(public\.)?quiz_attempts\s+ADD COLUMN.*session_aggregates\s+jsonb/i);
+  });
+  it('session_aggregates has NOT NULL default empty object', () => {
+    expect(s()).toMatch(/DEFAULT\s+'{}'::jsonb/i);
+  });
+});
