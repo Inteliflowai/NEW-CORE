@@ -597,3 +597,24 @@ describe('0012_spark.sql', () => {
     expect(s()).toMatch(/public\.get_my_role\(\) IN \('teacher','school_admin','school_sysadmin','platform_admin'\)/);
   });
 });
+
+describe('0013_quiz_runner.sql', () => {
+  const s = () => sql('0013_quiz_runner.sql');
+  it('adds quiz_attempts runner columns', () => {
+    expect(s()).toMatch(/ALTER TABLE\s+(public\.)?quiz_attempts\s+ADD COLUMN.*last_active_at/i);
+    expect(s()).toMatch(/forfeit_reason[\s\S]*CHECK[\s\S]*'closure'[\s\S]*'time_up'/i);
+    expect(s()).toMatch(/ADD COLUMN.*study_guide/i);
+  });
+  it('adds quiz_responses behavioral columns + unique constraint', () => {
+    expect(s()).toMatch(/quiz_responses[\s\S]*focus_loss_count/i);
+    expect(s()).toMatch(/quiz_responses[\s\S]*paste_count/i);
+    expect(s()).toMatch(/quiz_responses[\s\S]*hints_used/i);
+    expect(s()).toMatch(/UNIQUE\s*\(\s*attempt_id\s*,\s*question_id\s*\)/i);
+  });
+  it('creates the behavioral_signals per-student model table', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.behavioral_signals/i);
+    expect(s()).toMatch(/student_id[\s\S]*PRIMARY KEY|PRIMARY KEY[\s\S]*student_id/i);
+    expect(s()).toMatch(/computed\s+jsonb/i);
+    expect(s()).toMatch(/observation_count\s+int/i);
+  });
+});
