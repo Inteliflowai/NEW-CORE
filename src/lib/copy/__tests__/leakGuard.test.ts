@@ -1,6 +1,7 @@
 // src/lib/copy/__tests__/leakGuard.test.ts
 import { describe, it, expect } from 'vitest';
 import { hasLeak, assertNoLeak } from '../leakGuard';
+import { hasBannedWord, assertNoBannedWord } from '../leakGuard';
 
 describe('leakGuard', () => {
   it('flags bare digits, %, "avg", "score N", percentiles, rank words', () => {
@@ -25,5 +26,32 @@ describe('leakGuard', () => {
   it('assertNoLeak throws on a leak, is silent on clean text', () => {
     expect(() => assertNoLeak('avg 80%')).toThrow();
     expect(() => assertNoLeak('missed about half')).not.toThrow();
+  });
+});
+
+describe('leakGuard — banned words (COACH-POSTURE)', () => {
+  it('flags each banned word, case-insensitive, on word boundaries', () => {
+    [
+      'their score went up',
+      'in the 90th percentile',
+      'an engagement index',
+      'high divergence here',
+      'crossed the threshold',
+      'a strong signal',
+      'the model thinks',
+      'the algorithm picked',
+      'we flag this',
+    ].forEach((t) => expect(hasBannedWord(t)).toBe(true));
+  });
+
+  it('does NOT flag "risk" (allowed) or substrings inside other words', () => {
+    ['worth a look', 'at risk of falling behind', 'flagship lesson', 'indexed earlier'].forEach(
+      (t) => expect(hasBannedWord(t)).toBe(false),
+    );
+  });
+
+  it('assertNoBannedWord throws on a banned word, silent on clean text', () => {
+    expect(() => assertNoBannedWord('a clear signal')).toThrow();
+    expect(() => assertNoBannedWord('been rushing lately')).not.toThrow();
   });
 });

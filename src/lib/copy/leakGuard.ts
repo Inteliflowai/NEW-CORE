@@ -36,3 +36,27 @@ export function assertNoLeak(text: string, ctx?: string): void {
     );
   }
 }
+
+/**
+ * COACH-POSTURE banned words — metric/engineering jargon never shown to users.
+ * "risk" is intentionally NOT here (it appears in established teacher copy).
+ */
+export const BANNED_WORDS: readonly string[] = [
+  'score', 'percentile', 'index', 'divergence', 'threshold',
+  'signal', 'model', 'algorithm', 'flag',
+];
+
+const BANNED_WORD_RE = new RegExp(`\\b(?:${BANNED_WORDS.join('|')})\\b`, 'i');
+
+/** True if the text contains a COACH-POSTURE banned word (whole-word, case-insensitive). */
+export function hasBannedWord(text: string): boolean {
+  return BANNED_WORD_RE.test(text);
+}
+
+/** Throws if the text contains a banned word. Optional `ctx` for clearer errors. */
+export function assertNoBannedWord(text: string, ctx?: string): void {
+  if (hasBannedWord(text)) {
+    const prefix = ctx ? `[${ctx}] ` : '';
+    throw new Error(`${prefix}Banned coach-posture word detected in: "${text}"`);
+  }
+}
