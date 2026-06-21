@@ -1,10 +1,11 @@
 // src/app/(teacher)/students/[studentId]/_components/WholeChildRail.tsx
 // TEACHER-ONLY. Left sticky "whole child" rail: storyLine, ONE priority CTA,
-// then eyebrowed mini-cards (Mastery / Growing / At risk? / Effort).
+// then eyebrowed mini-cards (Mastery / Growing / Worth a look? / Effort).
 //
 // Leak discipline:
-//   - storyLine / effortPhrase / riskFactorPhrase / trajectoryPhrase are words-only.
-//   - RiskBadge gets the band; the raw risk_score is never passed/rendered.
+//   - storyLine / effortPhrase / trajectoryPhrase are words-only.
+//   - "Worth a look?" renders signals.coach_read — the EMA behavioral model is
+//     translated to plain words server-side (Option-D); raw numbers never reach here.
 //   - GrowthMotif gets growth_history (it normalises; numbers never render);
 //     cold-start under 4 points is the component's own dignified state.
 // Tokens only; content text-fg; eyebrows text-fg-muted.
@@ -41,7 +42,6 @@ export function WholeChildRail({
   storyLine,
   cta,
 }: WholeChildRailProps): React.JSX.Element {
-
   return (
     <div className="flex flex-col gap-3 lg:sticky lg:top-5">
       {/* Whole-child narrative */}

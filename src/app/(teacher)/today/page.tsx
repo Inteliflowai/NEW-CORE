@@ -100,7 +100,7 @@ export default async function TodayPage({
         <WinsCard roster={winsRoster} />
         <QuickStartCard classId={classId} />
       </div>
-        <ConceptGapsRail gaps={data.concept_gaps} />
+      <ConceptGapsRail gaps={data.concept_gaps} />
     </div>
   );
 }

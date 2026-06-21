@@ -217,7 +217,8 @@ describe('GET /api/teacher/student/[studentId]/signals', () => {
           }),
         };
       }
-      // fallback — return empty for other tables
+      // fallback — return empty for other tables (incl. behavioral_signals + users,
+      // which loadStudentSignals reads via .eq().maybeSingle() for coach_read)
       return {
         select: () => ({
           eq: () => ({
@@ -226,6 +227,7 @@ describe('GET /api/teacher/student/[studentId]/signals', () => {
             order: () => ({ limit: () => ({ data: [], error: null }) }),
             in: () => ({ data: [], error: null }),
             single: async () => ({ data: null, error: null }),
+            maybeSingle: async () => ({ data: null, error: null }),
           }),
           in: () => ({ data: [], error: null }),
         }),

@@ -566,7 +566,7 @@ function signalsWith(coach_read: CoachObservation): StudentSignals {
     divergence: { divergence_score: 0, divergence_direction: 'aligned', divergence_trend: null, hw_avg: null, quiz_avg: null, divergence_flagged: false } as StudentSignals['divergence'],
     effort: { dominant_effort_pattern: null },
     risk: { roster: { risk_score: 0, risk_level: 'low', risk_factors: [] }, session: { score: 0, factors: [] } },
-    reteach_outcomes: [], trajectory: { consistency_score: 0, consistency_label: 'consistent', trajectory: 'steady' } as StudentSignals['trajectory'],
+    reteach_outcomes: [], trajectory: { consistency_score: 0, consistency_label: 'consistent', trajectory: 'stable' } as StudentSignals['trajectory'],
     growth_history: [], coach_read,
   };
 }
