@@ -239,3 +239,8 @@ strings**. Pre-existing teacher copy still uses **"Flag {skill} for reteach"** i
 `priorityCta` (a teacher *action* verb, not the stat-jargon "flag"). It is unaffected by
 the guard and was not changed in this pass. **Barb to decide:** keep "Flag … for reteach"
 as the action verb (and treat the banned list as register-for-observations only), or reword.
+
+## Assignment Player (Epic 2, 2026-06-21) — follow-ups
+
+- **Shared `scoreMessage` EN pools leak teacher-only band/CL vocabulary to students.** Variants like "Reteach mode for {name}", "Partial mastery, {name}", "Strong mastery, {name}", "Mid-band/Top-band, {name}", "Above grade level on this, {name}" render to STUDENTS. This is **already live in prod via the quiz runner** (ResultScreen). The Assignment Player now defends against it (band/CL terms fall back to a generic coaching line), so the new surface is clean — but the **source pool variants still need rewording** so the coaching line is warm AND clean, and the quiz surface should adopt the same protection. Barb: please reword the band/CL variants to coach-posture language (Reinforce/On Track/Enrich; "Mastery" not "Band") without diagnostic readouts.
+- **`score` banned-word in 3 EN variants** ("Top-band score", "this score reflects real comprehension", "Mid-band score") — defended by the bundle's re-guard, but please drop "score" at the source (the teliMsg twins already avoid it).
