@@ -61,3 +61,8 @@ GRANT SELECT ON public.tutor_sessions TO authenticated, anon;
 GRANT ALL    ON public.tutor_sessions TO service_role;
 GRANT SELECT ON public.tutor_messages TO authenticated, anon;
 GRANT ALL    ON public.tutor_messages TO service_role;
+
+-- RPC: service_role must be able to call the atomic bump from the admin client (Task 7 route).
+-- GRANT ALL ON TABLE does NOT cover functions; explicit GRANT EXECUTE is required.
+-- Pattern mirrors 0009_security_hardening.sql.
+GRANT EXECUTE ON FUNCTION public.bump_tutor_session(uuid) TO service_role;

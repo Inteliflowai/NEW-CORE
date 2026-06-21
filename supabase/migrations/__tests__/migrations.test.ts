@@ -668,6 +668,7 @@ describe('0016 tutor_tables', () => {
   it('defines the atomic session bump function', () => {
     expect(s()).toMatch(/FUNCTION public\.bump_tutor_session\(p_session_id uuid\)/);
     expect(s()).toMatch(/hint_count = hint_count \+ 1/);
+    expect(s()).toMatch(/GRANT EXECUTE ON FUNCTION public\.bump_tutor_session\(uuid\).*TO service_role/);
   });
   it('enables RLS + service_role policy + grants on both tables', () => {
     expect(s()).toMatch(/ALTER TABLE public\.tutor_sessions\s+ENABLE ROW LEVEL SECURITY/);
