@@ -22,7 +22,7 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: async () => ({ auth: { getUser } }),
   createAdminSupabaseClient: () => ({
     from: (t: string) => {
-      if (t === 'assignments') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'a1', content: { title: 'X', tasks: [{ step: 1, description: 'Explain X' }, { step: 2, description: 'Explain Y' }] }, due_at: null } }) }) }) };
+      if (t === 'assignments') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'a1', content: ASSIGNMENT_CONTENT, due_at: null } }) }) }) };
       if (t === 'users') return { select: () => ({ eq: () => ({ single: async () => ({ data: { school_id: 'sch1', grade_level: '7', full_name: 'Jordan Lee' } }) }) }) };
       return { // homework_attempts
         select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: ATTEMPT }) }) }) }),
@@ -33,6 +33,10 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 let ATTEMPT: unknown;
+// The assignment content shape returned by the mocked `assignments` table. Default is the
+// already-normalized rich shape; the seed-shape regression test overrides it with the RAW
+// `{ type, prompt }` seed shape (no step, no description) to prove the route normalizes.
+let ASSIGNMENT_CONTENT: unknown;
 const req = (b: unknown) => new Request('http://x', { method: 'POST', body: JSON.stringify(b) });
 const fullBody = {
   attempt_id: 'att1',
@@ -49,6 +53,7 @@ beforeEach(() => {
   getUser.mockReset(); gradeAssignment.mockReset(); updates.length = 0; afterTasks.length = 0;
   computeSignals.mockClear(); upsertBehavioralSignals.mockClear(); recompute.mockClear();
   ATTEMPT = { id: 'att1', student_id: 'u1', assignment_id: 'a1', status: 'in_progress', teli_hint_count: 0, created_at: new Date(Date.now() - 3600_000).toISOString(), allow_redo: false };
+  ASSIGNMENT_CONTENT = { title: 'X', tasks: [{ step: 1, description: 'Explain X' }, { step: 2, description: 'Explain Y' }] };
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   gradeAssignment.mockResolvedValue({ overall_grade: 84, overall_feedback: 'Strong work.', task_grades: [{ step: 1, grade: 90, feedback: 'Clear.' }, { step: 2, grade: 78, feedback: 'Add detail.' }] });
 });
@@ -63,6 +68,27 @@ describe('POST /api/attempts/homework-submit', () => {
     expect(res.status).toBe(400); expect((await res.json()).error).toBe('incomplete_assignment');
   });
   it('409 when a graded attempt without allow_redo is resubmitted', async () => { ATTEMPT = { ...(ATTEMPT as object), status: 'graded', allow_redo: false }; expect((await (await load())(req(fullBody))).status).toBe(409); });
+  it('409 and NO graded overwrite when a graded attempt WITH allow_redo is resubmitted by id', async () => {
+    // A teacher-granted redo leaves allow_redo=true on the OLD graded row. Submitting that
+    // row's id must still 409 — the route must never re-grade/overwrite an earned grade.
+    ATTEMPT = { ...(ATTEMPT as object), status: 'graded', allow_redo: true };
+    const res = await (await load())(req(fullBody));
+    expect(res.status).toBe(409);
+    expect(updates.some(u => u.status === 'graded')).toBe(false);
+  });
+  it('grades a SEEDED assignment whose tasks use the raw { type, prompt } shape (normalized)', async () => {
+    // Live seed shape: no `step`, no `description` — the route must normalize { type, prompt }
+    // → { step, description } so the completeness gate keys off '1'/'2' and grades to 200.
+    ASSIGNMENT_CONTENT = { instructions: 'Show your work.', tasks: [{ type: 'identify', prompt: 'Name the cause' }, { type: 'explain', prompt: 'Explain why' }] };
+    const res = await (await load())(req({
+      ...fullBody,
+      responses: { tasks: { '1': { text: 'The cause is heat', image_url: null }, '2': { text: 'because energy', image_url: null } } },
+    }));
+    expect(res.status).toBe(200);
+    const graded = updates.find(u => u.status === 'graded');
+    expect(graded).toBeDefined();
+    expect(typeof graded!.score_pct).toBe('number');
+  });
   it('grades, returns the VISIBLE grade, and writes the full contract', async () => {
     const res = await (await load())(req(fullBody));
     expect(res.status).toBe(200);

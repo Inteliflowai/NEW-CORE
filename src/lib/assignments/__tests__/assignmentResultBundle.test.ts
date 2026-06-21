@@ -34,4 +34,27 @@ describe('assignmentResultBundle', () => {
     expect(b.taskFeedback[0].feedback).toContain('Great reasoning');
     expect(hasLeak(b.taskFeedback[1].feedback)).toBe(false);
   });
+
+  it('never leaks teacher-only band / CL vocabulary into the coaching message across all scores+tiers', () => {
+    // Mirrors the bundle's local diagnostic guard — the shared scoreMessage pool leaks
+    // band/CL terms ("Reteach mode", "Partial mastery", "Strong mastery", "Top-band",
+    // "Mid-band", "Above grade level", "Reteach scope") into some variants; the bundle must
+    // fall back to the clean generic line so none of these reach the student.
+    const DIAGNOSTIC =
+      /\b(?:reteach|re-teach|reinforce|enrich|partial mastery|strong mastery|(?:top|mid|low|high)-band|band|above grade level|grade level)\b/i;
+    const tiers = ['elementary', 'middle', 'high'] as const;
+    for (const tier of tiers) {
+      for (let scorePct = 0; scorePct <= 100; scorePct += 5) {
+        const b = assignmentResultBundle({
+          ...base, tier, scorePct, attemptId: `sweep-${tier}-${scorePct}`,
+          rawOverallFeedback: 'ok', rawTaskFeedback: [],
+        });
+        expect(DIAGNOSTIC.test(b.message.message), `${tier}@${scorePct} message`).toBe(false);
+        expect(DIAGNOSTIC.test(b.message.teliMsg), `${tier}@${scorePct} teliMsg`).toBe(false);
+        // The clean variant or the generic fallback is always a non-empty coaching line.
+        expect(b.message.message.length).toBeGreaterThan(0);
+        expect(b.message.teliMsg.length).toBeGreaterThan(0);
+      }
+    }
+  });
 });

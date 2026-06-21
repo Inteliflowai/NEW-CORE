@@ -10,7 +10,19 @@ import { hasLeak, hasBannedWord } from '@/lib/copy/leakGuard';
 const GENERIC_FEEDBACK = 'Nice effort here — keep building on your thinking.';
 const GENERIC_MESSAGE = 'Nice work on this one. Keep it up!';
 
-const dirty = (s: string) => hasLeak(s) || hasBannedWord(s);
+// Teacher-only diagnostic band / Comprehension-Level (CL) vocabulary that the shared
+// getScoreMessage pool leaks into some variants (e.g. "Reteach mode", "Partial mastery",
+// "Strong mastery", "Top-band", "Mid-band", "Above grade level", "Reteach scope"). These
+// are four-audience / COACH-POSTURE violations ("Mastery not Band"; CL verbs are teacher-only)
+// and must NOT reach the student. hasLeak/hasBannedWord catch digits + "score" but not these
+// CONCEPT terms, so this local guard does. CALIBRATION: the approved soft labels
+// 'Building' / 'On Track' / 'Strong' (and encouragement like "Strong work", "on track")
+// are deliberately NOT caught — only the clearly teacher-only terms below are.
+const DIAGNOSTIC_VOCAB_RE =
+  /\b(?:reteach|re-teach|reinforce|enrich|partial mastery|strong mastery|(?:top|mid|low|high)-band|\bband\b|above grade level|grade level)\b/i;
+
+const hasDiagnosticVocab = (s: string) => DIAGNOSTIC_VOCAB_RE.test(s);
+const dirty = (s: string) => hasLeak(s) || hasBannedWord(s) || hasDiagnosticVocab(s);
 const clean = (s: string, fallback: string) => (dirty(s) ? fallback : s);
 
 export interface AssignmentResultBundle {

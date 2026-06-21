@@ -4,6 +4,7 @@ import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/sup
 import { gradeAssignment } from '@/lib/engine/gradeAssignment';
 import { computeEffortLabel } from '@/lib/signals/computeEffortLabel';
 import { assignmentResultBundle } from '@/lib/assignments/assignmentResultBundle';
+import { normalizeContent } from '@/lib/assignments/loadAssignmentForPlay';
 import { computeMasteryBand } from '@/lib/utils/scoring';
 import { gradeTextToTier } from '@/lib/quiz/gradeTextToTier';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
@@ -30,12 +31,17 @@ export async function POST(req: Request) {
       .eq('id', body.attempt_id).eq('student_id', user.id).maybeSingle();
     const attempt = attemptRow as { id: string; student_id: string; assignment_id: string; status: string; teli_hint_count: number | null; created_at: string; allow_redo: boolean | null } | null;
     if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
-    if (attempt.status === 'graded' && !attempt.allow_redo) return NextResponse.json({ error: 'Already graded' }, { status: 409 });
+    // Never re-grade/overwrite a graded row. A teacher-granted redo opens a NEW in_progress
+    // row (via loadAssignmentForPlay); the player submits THAT row, not this graded one — so
+    // this guard blocks ANY graded attempt unconditionally (redo keeps history, never overwrites).
+    if (attempt.status === 'graded') return NextResponse.json({ error: 'Already graded' }, { status: 409 });
 
     const { data: aRow } = await admin.from('assignments').select('id, content, due_at').eq('id', attempt.assignment_id).maybeSingle();
-    const content = (aRow as { content?: { title?: string; tasks?: Array<{ step: number; description: string }> } } | null)?.content ?? {};
+    // Normalize the live SEEDED task shape `{ type, prompt }` → `{ step, description }` so the
+    // completeness gate, the grader, and the moat hook all key off a numeric `step`.
+    const content = normalizeContent((aRow as { content?: import('@/lib/assignments/loadAssignmentForPlay').AssignmentContent } | null)?.content ?? null);
     const dueAt = (aRow as { due_at?: string | null } | null)?.due_at ?? null;
-    const tasks = content.tasks ?? [];
+    const tasks = (content.tasks ?? []) as Array<{ step: number; description: string }>;
     if (tasks.length === 0) return NextResponse.json({ error: 'no_tasks' }, { status: 400 });
 
     // Completeness gate.

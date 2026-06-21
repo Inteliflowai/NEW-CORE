@@ -25,7 +25,7 @@ const NO_ATTEMPT = { id: '', status: 'none', responses: EMPTY, attempt_no: 0 };
  * uses `{ step, description }`; lean shapes may carry only `description`. Every task gets a
  * numeric `step` and a non-empty `description` (prompt → description → instructions → '').
  */
-function normalizeContent(raw: AssignmentContent | null): AssignmentContent {
+export function normalizeContent(raw: AssignmentContent | null): AssignmentContent {
   const c = raw ?? {};
   const tasks = (c.tasks ?? []).map((t, i) => {
     const tt = t as { step?: number; description?: string; prompt?: string; type?: string };
