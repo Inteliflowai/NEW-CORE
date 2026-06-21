@@ -244,3 +244,24 @@ as the action verb (and treat the banned list as register-for-observations only)
 
 - **Shared `scoreMessage` EN pools leak teacher-only band/CL vocabulary to students.** Variants like "Reteach mode for {name}", "Partial mastery, {name}", "Strong mastery, {name}", "Mid-band/Top-band, {name}", "Above grade level on this, {name}" render to STUDENTS. This is **already live in prod via the quiz runner** (ResultScreen). The Assignment Player now defends against it (band/CL terms fall back to a generic coaching line), so the new surface is clean — but the **source pool variants still need rewording** so the coaching line is warm AND clean, and the quiz surface should adopt the same protection. Barb: please reword the band/CL variants to coach-posture language (Reinforce/On Track/Enrich; "Mastery" not "Band") without diagnostic readouts.
 - **`score` banned-word in 3 EN variants** ("Top-band score", "this score reflects real comprehension", "Mid-band score") — defended by the bundle's re-guard, but please drop "score" at the source (the teliMsg twins already avoid it).
+
+## Teli Tutor (Epic 2, Segment 3, 2026-06-21) — copy drafts for Barb to gate
+
+All Teli-visible strings below are DRAFTS. Teli is the in-assignment Socratic tutor; coach posture, never reveals the answer, "not a chatbot." Numbers ARE allowed in tutor talk (the guard is the answer-reveal-check + diagnostic-vocabulary block, not a digit ban).
+
+| Where | Draft string | Notes |
+|---|---|---|
+| Panel intro bubble | "Hi! I'm Teli 👋 Stuck on this one? Ask me anything — I'll help you think it through." | Warm, invites use, not pushy. |
+| Action — free question | "Ask Teli" | Doesn't cost a hint. |
+| Action — hint | "I'm stuck — get a hint" | Escalates the ladder + counts. |
+| Hints-remaining pill | "{n} hints left" / "No hints left — you've got this" | Numbers allowed here. |
+| Thinking state | "Teli's thinking…" | Shown while the (non-streamed, fully-checked) reply is generated. |
+| Rung label — nudge | "A nudge" | Tag on the Teli bubble. |
+| Rung label — cue | "A cue" | |
+| Rung label — step | "First step" | |
+| Rung label — encourage | "Keep going" | The hard stop — affirms effort, no answer. |
+| Safe fallback line (shown if a reply can't be certified answer-free) | "Let's slow down and take it one piece at a time — what's the very first thing the question is asking you to find? Tell me that and we'll build from there." | Never reveals anything; appears on a model/checker outage. |
+
+**Rung instructions** (system-prompt guidance to Teli, not student-facing, but Barb may want to tune tone): nudge = "Ask one question that points their thinking in the right direction"; cue = "Name the key idea or strategy to focus on"; step = "Walk through the FIRST step, stop before the result"; encourage = "Affirm the effort, restate the thinking move, hand it back."
+
+Deferred design nit (not copy): the TeliPanel chrome currently uses the same token for border and background (reads flat); flagged for the design pass, not blocking.
