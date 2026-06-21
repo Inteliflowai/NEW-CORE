@@ -50,7 +50,7 @@ describe('AssignmentPlayer', () => {
     const submit = screen.getByRole('button', { name: /turn in|submit/i });
     expect(submit).toBeDisabled();
 
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'because photosynthesis' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /answer for question/i }), { target: { value: 'because photosynthesis' } });
     expect(submit).toBeEnabled();
 
     fireEvent.click(submit);
@@ -69,7 +69,7 @@ describe('AssignmentPlayer', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'because photosynthesis' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /answer for question/i }), { target: { value: 'because photosynthesis' } });
     fireEvent.click(screen.getByRole('button', { name: /turn in|submit/i }));
     await waitFor(() => expect(screen.getByText(/grading is on its way|being graded|check back/i)).toBeInTheDocument());
   });
@@ -86,7 +86,7 @@ describe('AssignmentPlayer', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'because photosynthesis' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /answer for question/i }), { target: { value: 'because photosynthesis' } });
     fireEvent.click(screen.getByRole('button', { name: /turn in|submit/i }));
 
     await waitFor(() => {
@@ -99,6 +99,83 @@ describe('AssignmentPlayer', () => {
       expect(sent.responses.tasks['1'].text).toBe('because photosynthesis');
       expect(sent.sessionAggregates).toBeDefined();
       expect(Array.isArray(sent.perTaskMetrics)).toBe(true);
+    });
+  });
+});
+
+describe('AssignmentPlayer — TeliPanel mount (Task 10)', () => {
+  it('does NOT show the teli-panel during the read phase', () => {
+    render(
+      <AssignmentPlayer
+        assignmentId="a1"
+        attemptId="att1"
+        content={content}
+        initialResponses={{ tasks: {} } as ResponsesShape}
+      />,
+    );
+    // We are still in the read phase — teli-panel must be absent.
+    expect(screen.queryByTestId('teli-panel')).not.toBeInTheDocument();
+  });
+
+  it('shows the teli-panel once in the tasks phase, without firing any fetch on mount', () => {
+    const fetchMock = stubFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <AssignmentPlayer
+        assignmentId="a1"
+        attemptId="att1"
+        content={content}
+        initialResponses={{ tasks: {} } as ResponsesShape}
+      />,
+    );
+    // Advance from read → tasks.
+    fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
+    // TeliPanel must now be present.
+    expect(screen.getByTestId('teli-panel')).toBeInTheDocument();
+    // TeliPanel must NOT have fired any fetch on mount (no network side-effect).
+    expect(fetchMock.mock.calls.length).toBe(0);
+  });
+});
+
+describe('AssignmentPlayer — Teli signal isolation (final-review Fix 2)', () => {
+  it('does NOT count keydown/paste that originate inside the Teli panel, but DOES count task-textarea input', async () => {
+    const fetchMock = stubFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <AssignmentPlayer
+        assignmentId="a1"
+        attemptId="att1"
+        content={content}
+        initialResponses={{ tasks: {} } as ResponsesShape}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
+
+    // A keydown + paste originating inside the Teli panel must be ignored by the
+    // assignment's behavioral aggregates (they belong to the tutor chat, not the work).
+    const teliTextarea = screen.getByRole('textbox', { name: /ask teli a question/i });
+    fireEvent.keyDown(teliTextarea, { key: 'a' });
+    fireEvent.keyDown(teliTextarea, { key: 'b' });
+    fireEvent.paste(teliTextarea);
+
+    // Now fill + submit. The task textarea must still be the source of real signal.
+    const taskTextarea = screen.getByRole('textbox', { name: /answer for question/i });
+    // A genuine keydown on the task textarea SHOULD be counted.
+    fireEvent.keyDown(taskTextarea, { key: 'z' });
+    fireEvent.change(taskTextarea, { target: { value: 'because photosynthesis' } });
+    fireEvent.click(screen.getByRole('button', { name: /turn in|submit/i }));
+
+    await waitFor(() => {
+      const submitCall = fetchMock.mock.calls.find(
+        ([url]) => typeof url === 'string' && url.includes('/api/attempts/homework-submit'),
+      );
+      expect(submitCall).toBeDefined();
+      const sent = JSON.parse((submitCall![1] as RequestInit).body as string);
+      // Teli-originated paste must NOT pollute the paste aggregate.
+      expect(sent.sessionAggregates.pasteCount).toBe(0);
+      // Only the single task-textarea keydown ('z') is a real keypress; the two Teli
+      // keydowns ('a','b') must be excluded.
+      expect(sent.sessionAggregates.keypressCount).toBe(1);
     });
   });
 });
@@ -126,7 +203,7 @@ describe('AssignmentPlayer — autosave (8b)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'photosynthesis' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /answer for question/i }), { target: { value: 'photosynthesis' } });
 
     // Before the debounce window elapses, no draft PUT has fired.
     expect(fetchMock.mock.calls.some(([url]) => typeof url === 'string' && url.includes('/homework-draft'))).toBe(false);
@@ -159,6 +236,6 @@ describe('AssignmentPlayer — autosave (8b)', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
-    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('restored draft text');
+    expect((screen.getByRole('textbox', { name: /answer for question/i }) as HTMLTextAreaElement).value).toBe('restored draft text');
   });
 });

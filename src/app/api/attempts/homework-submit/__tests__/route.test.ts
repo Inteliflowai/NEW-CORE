@@ -24,6 +24,35 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (t: string) => {
       if (t === 'assignments') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'a1', content: ASSIGNMENT_CONTENT, due_at: null } }) }) }) };
       if (t === 'users') return { select: () => ({ eq: () => ({ single: async () => ({ data: { school_id: 'sch1', grade_level: '7', full_name: 'Jordan Lee' } }) }) }) };
+      if (t === 'tutor_sessions') {
+        // Chainable: .select().eq().eq().order().limit().maybeSingle()
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                order: () => ({
+                  limit: () => ({
+                    maybeSingle: async () => ({ data: TUTOR_SESSION }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (t === 'tutor_messages') {
+        // Chainable: .select('task_step').eq(session_id).eq(role).eq(is_help_request)
+        // The terminal .eq() is awaited directly by the route (no .maybeSingle()).
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                eq: async () => ({ data: TUTOR_HELP_ROWS, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
       return { // homework_attempts
         select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: ATTEMPT }) }) }) }),
         update: (payload: Record<string, unknown>) => { updates.push(payload); return { eq: () => ({ eq: async () => ({ error: null }) }) }; },
@@ -37,6 +66,10 @@ let ATTEMPT: unknown;
 // already-normalized rich shape; the seed-shape regression test overrides it with the RAW
 // `{ type, prompt }` seed shape (no step, no description) to prove the route normalizes.
 let ASSIGNMENT_CONTENT: unknown;
+// TUTOR_SESSION: default null (no Teli session) so pre-existing tests are unaffected.
+let TUTOR_SESSION: unknown = null;
+// TUTOR_HELP_ROWS: default empty array (no help rows) for the per-task help-count query.
+let TUTOR_HELP_ROWS: unknown = [];
 const req = (b: unknown) => new Request('http://x', { method: 'POST', body: JSON.stringify(b) });
 const fullBody = {
   attempt_id: 'att1',
@@ -54,6 +87,9 @@ beforeEach(() => {
   computeSignals.mockClear(); upsertBehavioralSignals.mockClear(); recompute.mockClear();
   ATTEMPT = { id: 'att1', student_id: 'u1', assignment_id: 'a1', status: 'in_progress', teli_hint_count: 0, created_at: new Date(Date.now() - 3600_000).toISOString(), allow_redo: false };
   ASSIGNMENT_CONTENT = { title: 'X', tasks: [{ step: 1, description: 'Explain X' }, { step: 2, description: 'Explain Y' }] };
+  // Default: no Teli session (pre-existing cases unaffected; teli_hint_count stays 0).
+  TUTOR_SESSION = null;
+  TUTOR_HELP_ROWS = [];
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   gradeAssignment.mockResolvedValue({ overall_grade: 84, overall_feedback: 'Strong work.', task_grades: [{ step: 1, grade: 90, feedback: 'Clear.' }, { step: 2, grade: 78, feedback: 'Add detail.' }] });
 });
@@ -115,5 +151,31 @@ describe('POST /api/attempts/homework-submit', () => {
     expect((await res.json()).grading_delayed).toBe(true);
     expect(upsertBehavioralSignals).not.toHaveBeenCalled();
     expect(updates.some(u => u.status === 'pending_grade')).toBe(true);
+  });
+  it('sources teli_hint_count from the tutor session and writes effortful_success when hints>=2 and score>=75', async () => {
+    // Arrange: a Teli session with hint_count 3, and help rows for each task step.
+    TUTOR_SESSION = { id: 'sess1', hint_count: 3 };
+    TUTOR_HELP_ROWS = [
+      { task_step: 1 },
+      { task_step: 1 },
+      { task_step: 2 },
+    ];
+    // gradeAssignment default mock: overall_grade 84, both tasks pass (score >= 75 → success).
+    const res = await (await load())(req(fullBody));
+    expect(res.status).toBe(200);
+    const graded = updates.find(u => u.status === 'graded');
+    expect(graded).toBeDefined();
+    // (a) teli_hint_count sourced from the tutor session (3), not the attempt row (0).
+    expect(graded!.teli_hint_count).toBe(3);
+    // (b) effort_label = 'effortful_success': score 84 >= SUCCESS_THRESHOLD (75) AND hints 3 >= EFFORT_THRESHOLD (2).
+    expect(graded!.effort_label).toBe('effortful_success');
+    // (c) per-task hintsUsed in the moat hook matches the tutor_messages rows
+    //     (step 1 → 2 hints, step 2 → 1 hint). This verifies the perTaskHints aggregation
+    //     loop and the consumption in questionAttempts — a regression to hintsUsed:0 would fail here.
+    await drainAfter();
+    const raw = computeSignals.mock.calls[0][0];
+    const byStep = new Map(raw.questionAttempts.map((q: { questionIndex: number; hintsUsed: number }) => [q.questionIndex, q.hintsUsed]));
+    expect(byStep.get(1)).toBe(2);
+    expect(byStep.get(2)).toBe(1);
   });
 });

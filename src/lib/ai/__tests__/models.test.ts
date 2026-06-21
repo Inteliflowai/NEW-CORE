@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { usesLegacyTokenParam, tokenLimitParams, MODELS, MODEL_VERSION } from '@/lib/ai/models';
+import { usesLegacyTokenParam, tokenLimitParams, MODELS, MODEL_VERSION, CLAUDE_TUTOR_MODEL, CLAUDE_TUTOR_CHECK_MODEL } from '@/lib/ai/models';
 
 describe('usesLegacyTokenParam', () => {
   it('is true for gpt-4 / gpt-3 / fine-tuned legacy', () => {
@@ -29,4 +29,9 @@ describe('registry exports', () => {
     expect(typeof MODELS).toBe('object');
     expect(typeof MODEL_VERSION).toBe('string');
   });
+});
+
+describe('tutor model constants', () => {
+  it('defaults Teli to claude-opus-4-8', () => { expect(CLAUDE_TUTOR_MODEL).toBe('claude-opus-4-8'); });
+  it('uses a cheap model for the reveal classifier', () => { expect(CLAUDE_TUTOR_CHECK_MODEL).toBe('claude-haiku-4-5'); });
 });

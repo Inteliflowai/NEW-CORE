@@ -647,3 +647,38 @@ describe('0015 assignment_player', () => {
     }
   });
 });
+
+describe('0016 tutor_tables', () => {
+  const s = () => sql('0016_tutor_tables.sql');
+  it('creates tutor_sessions with counters + one-active-session unique index', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.tutor_sessions/);
+    expect(s()).toMatch(/hint_count\s+int\s+NOT NULL DEFAULT 0/);
+    expect(s()).toMatch(/help_request_count\s+int\s+NOT NULL DEFAULT 0/);
+    expect(s()).toMatch(/status\s+text\s+NOT NULL DEFAULT 'active'\s+CHECK \(status IN \('active','completed'\)\)/);
+    expect(s()).toMatch(/attempt_id\s+uuid\s+REFERENCES public\.homework_attempts\(id\) ON DELETE SET NULL/);
+    expect(s()).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS \w+ ON public\.tutor_sessions \(attempt_id\) WHERE status = 'active'/);
+  });
+  it('creates tutor_messages with role + hint_rung checks and cascade', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.tutor_messages/);
+    expect(s()).toMatch(/session_id\s+uuid\s+NOT NULL REFERENCES public\.tutor_sessions\(id\) ON DELETE CASCADE/);
+    expect(s()).toMatch(/role\s+text\s+NOT NULL CHECK \(role IN \('student','teli','system'\)\)/);
+    expect(s()).toMatch(/hint_rung\s+text\s+CHECK \(hint_rung IN \('nudge','cue','step','encourage'\)\)/);
+    expect(s()).toMatch(/is_help_request\s+boolean\s+NOT NULL DEFAULT false/);
+  });
+  it('defines the atomic session bump function', () => {
+    expect(s()).toMatch(/FUNCTION public\.bump_tutor_session\(p_session_id uuid\)/);
+    expect(s()).toMatch(/hint_count = hint_count \+ 1/);
+    expect(s()).toMatch(/GRANT EXECUTE ON FUNCTION public\.bump_tutor_session\(uuid\).*TO service_role/);
+  });
+  it('enables RLS + service_role policy + grants on both tables', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.tutor_sessions\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.tutor_messages\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/DROP POLICY IF EXISTS/);
+    expect(s()).toMatch(/CREATE POLICY .*service_role/);
+    expect(s()).toMatch(/GRANT ALL\s+ON public\.tutor_sessions\s+TO service_role/);
+    expect(s()).toMatch(/GRANT ALL\s+ON public\.tutor_messages\s+TO service_role/);
+  });
+  it('indexes the hot lookup paths', () => {
+    expect(s()).toMatch(/CREATE INDEX IF NOT EXISTS .*tutor_messages.*session_id/);
+  });
+});

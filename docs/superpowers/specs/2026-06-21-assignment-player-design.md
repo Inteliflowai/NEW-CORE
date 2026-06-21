@@ -160,7 +160,7 @@ By end of Segment 2 (+3 for hint count), a submitted+graded attempt MUST write, 
 
 ### 6.1 Canonical contract — ONE path
 
-V1 had **five** overlapping tutor implementations. V2 has exactly one: a route **`POST /api/attempts/[attemptId]/tutor`** (route.ts, matching the V2 quiz pattern — not V1's server action), powered by `claude-opus-4-8`, streaming the reply. Request `{ task_step, student_message, is_help_request }`; it loads/creates the `tutor_session` for this attempt, runs the ladder, persists the turn, and returns `{ reply, hint_rung, hints_remaining }`.
+V1 had **five** overlapping tutor implementations. V2 has exactly one: a route **`POST /api/attempts/[attemptId]/tutor`** (route.ts, matching the V2 quiz pattern — not V1's server action), powered by `claude-opus-4-8`. **Non-streaming by design (resolved 2026-06-21):** the reply is generated in full, run through the §6.3 reveal-check server-side, and only then returned — the student must never see an un-checked token, so token-by-token streaming is structurally incompatible with the no-answer guarantee, which wins. The client shows a brief "Teli's thinking…" state instead of live typing (this also matches V1's non-streaming tutor). Request `{ task_step, student_message, is_help_request }`; it loads/creates the `tutor_session` for this attempt, runs the ladder, persists the turn, and returns `{ reply, hint_rung, hints_remaining }`.
 
 ### 6.2 The hint ladder (4 rungs, one authoritative server counter)
 
@@ -183,7 +183,7 @@ Three independent layers; a single failure cannot leak the answer. (Memory: `v2-
 
 1. **Bounded ladder, no answer rung.** There is structurally no rung whose purpose is to give a solution; past the cap Teli only encourages. A student cannot pull until it caves.
 2. **No answer key in the prompt.** Teli receives the task text + the student's own work/thinking — never a "correct answer is X" field. Grading is a separate call with a separate prompt. Open-response tasks generally have no single answer to parrot.
-3. **Output-boundary reveal-check.** Before any reply renders: (a) the existing `assertNoLeak` + `assertNoBannedWord` number/word guard, **plus** (b) a lightweight reveal-check — if the draft reply appears to hand over the solution (heuristic + a cheap classifier pass), it regenerates once with a stricter instruction, and on a second failure falls back to a fixed safe scaffold line. The student never sees un-checked text.
+3. **Output-boundary reveal-check.** Before any reply renders: (a) the existing `assertNoBannedWord` guard (blocks the diagnostic vocabulary — score/percentile/index/divergence/threshold/signal/model/algorithm/flag — which must never appear in a kid-facing tutor turn anyway), **plus** (b) a lightweight reveal-check — if the draft reply appears to hand over the solution (heuristic + a cheap classifier pass), it regenerates once with a stricter instruction, and on a second failure falls back to a fixed safe scaffold line. The student never sees un-checked text. **The blanket digit-ban `assertNoLeak` is deliberately NOT applied to tutor turns (Marvin, 2026-06-21):** that rule exists to hide grades/scores on result screens; a subject tutor legitimately uses ordinary numbers ("what's left after you take away three?"). The answer-reveal-check — not a numeral ban — is the hard wall against leaking the *answer*.
 
 **Plus the critical-thinking requirement:** every Teli reply must **name the thinking move** ("let's separate what we know from what we're solving for") rather than the answer content. This gets its own tests (§6.6).
 
@@ -191,7 +191,7 @@ Three independent layers; a single failure cannot leak the answer. (Memory: `v2-
 
 A new `src/lib/teli/prompt.ts` builds the system prompt from: the Socratic contract (never reveal; ≤3 sentences; adapt to frustration; celebrate effort over correctness; when stuck twice, offer a *different* approach; **always name the thinking move**), light per-student personalization if available (learning style, recent struggle topics), the current task text, and the active rung instruction. **No V1 brand/curriculum names** ("i-Ready", "Knowledge Bridge") — reconciled to coach posture and the token system. All copy is DRAFTS → `STRINGS-FOR-BARB.md`; COACH-POSTURE Rule 6 ("not a chatbot") governs the surface.
 
-**Confirmed (Marvin, 2026-06-21):** plain questions (no help requested) are answered *without* advancing the ladder or counting a hint; only `is_help_request` turns escalate. The server, not the client, classifies ambiguous turns conservatively (a genuine "I'm stuck" counts; "what does this word mean?" does not).
+**Confirmed (Marvin, 2026-06-21):** plain questions (no help requested) are answered *without* advancing the ladder or counting a hint; only `is_help_request` turns escalate. **Amended 2026-06-21 (post pre-flight review):** the explicit two-button UI (Ask vs. Get a hint) is the student's *declared* intent and supersedes server-side NLP classification of ambiguous turns; the server still authoritatively decides the rung/count and runs the full fail-closed safety guard on EVERY turn (including free questions), so the no-answer guarantee does not depend on how a turn is framed.
 
 ### 6.5 How a hint becomes a signal (the moat wiring)
 
@@ -211,7 +211,7 @@ Written at grade time. (The 4 enum values already match `homework_attempts_effor
 
 ### 6.7 Teli tutor tests
 
-Unit (pure ladder logic): rung sequence, cap, counter authority, free-question-doesn't-escalate. Leak/guarantee tests: a battery of "just tell me the answer" / "what's the final number" prompts must never produce an answer-revealing reply (reveal-check forces regeneration/fallback); every reply passes `assertNoLeak` + `assertNoBannedWord`; every help reply contains a named thinking move. Persistence: turns land in `tutor_messages` with correct `role`/`hint_rung`; `hint_count` rolls to `teli_hint_count`.
+Unit (pure ladder logic): rung sequence, cap, counter authority, free-question-doesn't-escalate. Leak/guarantee tests: a battery of "just tell me the answer" / "what's the final number" prompts must never produce an answer-revealing reply (reveal-check forces regeneration/fallback); every reply passes `assertNoBannedWord` (the diagnostic-vocabulary guard) — note the blanket digit-ban `assertNoLeak` is intentionally NOT applied to tutor turns (§6.3, numbers are legitimate tutoring content); every help reply contains a named thinking move. Persistence: turns land in `tutor_messages` with correct `role`/`hint_rung`; `hint_count` rolls to `teli_hint_count`.
 
 ---
 
