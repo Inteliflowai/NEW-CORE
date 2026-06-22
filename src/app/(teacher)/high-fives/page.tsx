@@ -39,10 +39,28 @@ export default async function HighFivesPage({ searchParams }: { searchParams: Pr
   }));
   const suggestions = buildHighFiveSuggestions(inputs);
 
+  // Roster students for the blank-composer picker (lets the teacher write to anyone).
+  const rosterStudents = roster.roster.map((r) => ({ student_id: r.student_id, full_name: r.full_name }));
+  const nameById = new Map(rosterStudents.map((r) => [r.student_id, r.full_name]));
+
+  // Last ~10 sent notes for the read-only "Recent" list.
+  const { data: recentNotes } = await admin
+    .from('high_fives')
+    .select('student_id, note_text, created_at')
+    .eq('class_id', classId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+  const recentSent = ((recentNotes ?? []) as { student_id: string; note_text: string; created_at: string }[]).map((n) => ({
+    student_id: n.student_id,
+    full_name: nameById.get(n.student_id) ?? 'Student',
+    note_text: n.note_text,
+    created_at: n.created_at,
+  }));
+
   return (
     <div className="p-5 flex flex-col gap-5">
       <PageHeader title="High Fives" kicker="Catch them doing something right" accent="lime" />
-      <HighFiveComposer classId={classId} suggestions={suggestions} />
+      <HighFiveComposer classId={classId} suggestions={suggestions} roster={rosterStudents} recent={recentSent} />
     </div>
   );
 }

@@ -44,7 +44,7 @@ function NavLink({ item, alertCount }: { item: NavItem; alertCount?: number }) {
       <Icon className="size-[18px] shrink-0" />
       {item.label}
       {item.badgeKey === 'alerts' && (alertCount ?? 0) > 0 && (
-        <span aria-label={`${alertCount} need attention`}
+        <span aria-label={alertCount === 1 ? '1 student needs attention' : `${alertCount} students need attention`}
           className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full border-2 border-sidebar-edge bg-risk px-1.5 text-xs font-bold text-fg">
           {alertCount}
         </span>

@@ -19,4 +19,12 @@ describe('SidebarNav — carries the active ?class= on nav links', () => {
     expect(screen.getByRole('link', { name: /Today/i })).toHaveAttribute('href', '/today?class=c9');
     expect(screen.getByRole('link', { name: /Gradebook/i })).toHaveAttribute('href', '/gradebook?class=c9');
   });
+
+  it('uses a grammatical alerts-badge aria-label (singular at 1, plural otherwise)', () => {
+    const { unmount } = render(<SidebarNav alertCount={1} />);
+    expect(screen.getByLabelText('1 student needs attention')).toBeInTheDocument();
+    unmount();
+    render(<SidebarNav alertCount={3} />);
+    expect(screen.getByLabelText('3 students need attention')).toBeInTheDocument();
+  });
 });

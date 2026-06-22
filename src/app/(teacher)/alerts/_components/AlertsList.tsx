@@ -16,7 +16,7 @@ export function AlertsList({ alerts, classId }: { alerts: AlertRowItem[]; classI
           <section key={bucket.severity} className="flex flex-col gap-3">
             <div className="flex flex-col gap-0.5">
               <SectionLabel tone={bucket.severity === 'urgent' ? 'risk' : bucket.severity === 'watch' ? 'warn' : 'brand'}>{bucket.label}</SectionLabel>
-              <span className="text-fg-muted text-xs">{bucket.subline}</span>
+              <span className="text-fg text-xs">{bucket.subline}</span>
             </div>
             {rows.map((a) => <AlertRow key={a.id} alert={a} classId={classId} onResolved={() => router.refresh()} />)}
           </section>
