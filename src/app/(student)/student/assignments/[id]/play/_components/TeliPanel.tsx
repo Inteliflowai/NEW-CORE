@@ -13,7 +13,7 @@
  * Copy = DRAFTS → Barb (STRINGS-FOR-BARB.md §Teli-Tutor).
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import type { HintRung } from '@/lib/teli/ladder';
 
 export interface TeliPanelProps {
@@ -49,17 +49,18 @@ export function TeliPanel({ attemptId, step, taskDescription: _taskDescription }
   const [thinking, setThinking] = useState(false);
   const [hintsRemaining, setHintsRemaining] = useState<number | null>(null);
 
-  // Reset conversation when step changes (ladder is per-task).
-  const prevStepRef = useRef(step);
-  useEffect(() => {
-    if (prevStepRef.current !== step) {
-      prevStepRef.current = step;
-      setMessages([]);
-      setInput('');
-      setThinking(false);
-      setHintsRemaining(null);
-    }
-  }, [step]);
+  // Reset the conversation when the step changes (ladder is per-task). Adjusting state DURING
+  // render (React's documented "store info from previous renders" pattern) clears the previous
+  // task's thread BEFORE the browser paints — a post-paint useEffect leaves a one-frame flash of
+  // the old conversation + hints pill on the new task.
+  const [prevStep, setPrevStep] = useState(step);
+  if (prevStep !== step) {
+    setPrevStep(step);
+    setMessages([]);
+    setInput('');
+    setThinking(false);
+    setHintsRemaining(null);
+  }
 
   async function send(isHelpRequest: boolean) {
     const text = input.trim();
