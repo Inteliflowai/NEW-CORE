@@ -32,14 +32,29 @@ export async function POST(req: Request) {
     const attempt = attemptRow as { id: string; student_id: string; assignment_id: string; status: string; teli_hint_count: number | null; created_at: string; allow_redo: boolean | null } | null;
     if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
 
-    // Load the one active (or most-recent) Teli session for this attempt.
+    // Load the one active (or most-recent, now-completed) Teli session for this attempt.
     // The partial-unique index in migration 0016 guarantees at most one ACTIVE session;
-    // limit(1) handles a prior completed one. Falls back to 0 hints if Teli was never used.
+    // order+limit(1) picks the latest. No session → Teli was never used.
     const { data: tutorSession } = await admin.from('tutor_sessions')
-      .select('id, hint_count').eq('attempt_id', attempt.id).eq('student_id', user.id)
+      .select('id').eq('attempt_id', attempt.id).eq('student_id', user.id)
       .order('created_at', { ascending: false }).limit(1).maybeSingle();
     const sessionId = (tutorSession as { id?: string } | null)?.id ?? null;
-    const teliHintCount = (tutorSession as { hint_count?: number } | null)?.hint_count ?? 0;
+
+    // Source the Teli hint count from the help-request MESSAGE rows — the always-written truth.
+    // tutor_sessions.hint_count is bumped by a best-effort RPC whose failure is non-fatal, so it
+    // can silently undercount and would downgrade effort_label; the message rows never desync.
+    // Per-task counts also feed the moat's per-question hintsUsed.
+    const perTaskHints = new Map<number, number>();
+    let teliHintCount = 0;
+    if (sessionId) {
+      const { data: helpRows } = await admin.from('tutor_messages')
+        .select('task_step').eq('session_id', sessionId).eq('role', 'student').eq('is_help_request', true);
+      const rows = (helpRows ?? []) as { task_step: number | null }[];
+      teliHintCount = rows.length;
+      for (const r of rows) {
+        if (r.task_step != null) perTaskHints.set(r.task_step, (perTaskHints.get(r.task_step) ?? 0) + 1);
+      }
+    }
     // Never re-grade/overwrite a graded row. A teacher-granted redo opens a NEW in_progress
     // row (via loadAssignmentForPlay); the player submits THAT row, not this graded one — so
     // this guard blocks ANY graded attempt unconditionally (redo keeps history, never overwrites).
@@ -90,15 +105,7 @@ export async function POST(req: Request) {
       return PENDING(attempt.id);
     }
 
-    // ── Per-task hint counts from the Teli session (feeds hintsUsed in the moat) ──
-    const perTaskHints = new Map<number, number>();
-    if (sessionId) {
-      const { data: helpRows } = await admin.from('tutor_messages')
-        .select('task_step').eq('session_id', sessionId).eq('role', 'student').eq('is_help_request', true);
-      for (const r of (helpRows ?? []) as { task_step: number | null }[]) {
-        if (r.task_step != null) perTaskHints.set(r.task_step, (perTaskHints.get(r.task_step) ?? 0) + 1);
-      }
-    }
+    // (per-task hint counts + teliHintCount were sourced above from the help-message rows.)
 
     // ── Behavioral-signals hook (the MOAT) — context:'homework' ──
     after(async () => {

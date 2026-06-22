@@ -152,8 +152,21 @@ describe('POST /api/attempts/homework-submit', () => {
     expect(upsertBehavioralSignals).not.toHaveBeenCalled();
     expect(updates.some(u => u.status === 'pending_grade')).toBe(true);
   });
-  it('sources teli_hint_count from the tutor session and writes effortful_success when hints>=2 and score>=75', async () => {
-    // Arrange: a Teli session with hint_count 3, and help rows for each task step.
+  it('derives teli_hint_count from the Teli help-MESSAGE rows, not the desync-prone session counter', async () => {
+    // A transient bump_tutor_session RPC failure can leave tutor_sessions.hint_count UNDERCOUNTED.
+    // The help-request message rows are the always-written source of truth: 3 help rows here, but
+    // the session counter is a STALE 1. teli_hint_count MUST be 3 (from messages) so effort_label
+    // is not silently downgraded (3 >= EFFORT_THRESHOLD 2 → effortful, not independent).
+    TUTOR_SESSION = { id: 'sess1', hint_count: 1 }; // stale/undercounted — must be ignored
+    TUTOR_HELP_ROWS = [{ task_step: 1 }, { task_step: 1 }, { task_step: 2 }]; // true count = 3
+    const res = await (await load())(req(fullBody));
+    expect(res.status).toBe(200);
+    const gradedRow = updates.find(u => u.status === 'graded');
+    expect(gradedRow!.teli_hint_count).toBe(3);
+    expect(gradedRow!.effort_label).toBe('effortful_success');
+  });
+  it('aggregates per-task hints from the help-message rows and writes effortful_success when hints>=2 and score>=75', async () => {
+    // Arrange: help rows for each task step (session counter agrees here).
     TUTOR_SESSION = { id: 'sess1', hint_count: 3 };
     TUTOR_HELP_ROWS = [
       { task_step: 1 },
