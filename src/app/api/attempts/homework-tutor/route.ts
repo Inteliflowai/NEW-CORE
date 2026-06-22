@@ -44,9 +44,12 @@ export async function POST(req: Request) {
 
     // 3. Ownership-load (existence-hiding). 404 on null; 409 on a graded attempt.
     const { data: attemptRow } = await admin.from('homework_attempts')
-      .select('id, student_id, assignment_id, status')
+      .select('id, student_id, assignment_id, status, responses')
       .eq('id', attemptId).eq('student_id', user.id).maybeSingle();
-    const attempt = attemptRow as { id: string; student_id: string; assignment_id: string; status: string } | null;
+    type ResponsesShape = { tasks?: Record<string, { text?: string | null }> };
+    const attempt = attemptRow as {
+      id: string; student_id: string; assignment_id: string; status: string; responses?: ResponsesShape | null;
+    } | null;
     if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
     if (attempt.status === 'graded') return NextResponse.json({ error: 'Already graded' }, { status: 409 });
 
@@ -79,6 +82,9 @@ export async function POST(req: Request) {
     const tasks = (content.tasks ?? []) as Array<{ step: number; description: string }>;
     const taskDescription = tasks.find(t => t.step === taskStep)?.description
       ?? 'this task';
+    // The student's in-progress answer for THIS task — so Teli can react to their actual
+    // reasoning (prompt.ts "THE STUDENT'S WORK SO FAR" branch) instead of tutoring blind.
+    const studentResponse = attempt.responses?.tasks?.[String(taskStep)]?.text?.trim() || undefined;
 
     // 6. Insert the STUDENT turn FIRST (count-after-insert kills the rung race).
     // A failed persist must NOT proceed to the count query — that would desync the
@@ -108,7 +114,7 @@ export async function POST(req: Request) {
 
     // 8. Generate the guarded reply (ALWAYS a checked, safe string).
     const reply = await generateGuardedHint({
-      taskDescription, rung, isHelpRequest, studentMessage,
+      taskDescription, studentResponse, rung, isHelpRequest, studentMessage,
     });
 
     // 9. Insert the TELI turn (is_help_request:false so the help count never doubles).

@@ -138,6 +138,18 @@ describe('POST /api/attempts/homework-tutor', () => {
     expect((teli!.payload as { is_help_request?: boolean }).is_help_request).toBe(false);
   });
 
+  it("passes the student's in-progress task answer to Teli as studentResponse", async () => {
+    // The student typed work into the task box; Teli must receive it so it can react to the
+    // actual reasoning (prompt.ts "THE STUDENT'S WORK SO FAR" branch), not tutor blind.
+    ATTEMPT = {
+      id: 'att1', student_id: 'u1', assignment_id: 'a1', status: 'in_progress',
+      responses: { tasks: { '1': { text: 'I think it floats because it is lighter', image_url: null } } },
+    };
+    await (await load())(req(helpBody)); // task_step 1
+    expect(generateGuardedHint).toHaveBeenCalled();
+    expect(generateGuardedHint.mock.calls[0][0].studentResponse).toBe('I think it floats because it is lighter');
+  });
+
   it('400 on missing required body fields', async () => {
     const res = await (await load())(req({ attempt_id: 'att1' }));
     expect(res.status).toBe(400);
