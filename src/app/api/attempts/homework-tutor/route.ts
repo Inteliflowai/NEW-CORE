@@ -31,12 +31,16 @@ export async function POST(req: Request) {
     // 2. Parse + validate.
     let body: TutorBody;
     try { body = await req.json(); } catch { return NextResponse.json({ error: 'Bad request' }, { status: 400 }); }
+    // A top-level null/array/primitive is valid JSON but not a body object — guard before destructure
+    // so a crafted `null` body returns a clean 400 instead of throwing into the 500 path.
+    if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Bad request' }, { status: 400 });
     const attemptId = body.attempt_id;
     const taskStep = body.task_step;
     const studentMessage = body.student_message;
     const isHelpRequest = body.is_help_request;
-    if (!attemptId || typeof studentMessage !== 'string' || !studentMessage.trim()
-      || typeof taskStep !== 'number' || typeof isHelpRequest !== 'boolean') {
+    const MAX_MESSAGE_LEN = 2000; // bound the text persisted + forwarded verbatim to the model
+    if (!attemptId || typeof studentMessage !== 'string' || !studentMessage.trim() || studentMessage.length > MAX_MESSAGE_LEN
+      || typeof taskStep !== 'number' || !Number.isInteger(taskStep) || typeof isHelpRequest !== 'boolean') {
       return NextResponse.json({ error: 'Missing or invalid fields' }, { status: 400 });
     }
 
@@ -65,13 +69,20 @@ export async function POST(req: Request) {
         .insert({ student_id: user.id, assignment_id: attempt.assignment_id, attempt_id: attempt.id, status: 'active' })
         .select('id').maybeSingle();
       sessionId = (created as { id?: string } | null)?.id ?? null;
+      const insErrCode = (insertErr as { code?: string } | null)?.code;
       // Lost the create race (partial-unique 23505): re-select the existing active row.
-      if (!sessionId && (insertErr as { code?: string } | null)?.code === '23505') {
+      if (!sessionId && insErrCode === '23505') {
         const { data: raced } = await admin.from('tutor_sessions')
           .select('id')
           .eq('attempt_id', attempt.id).eq('student_id', user.id).eq('status', 'active')
           .maybeSingle();
         sessionId = (raced as { id?: string } | null)?.id ?? null;
+      }
+      // A genuine (non-race) insert failure (FK/grant/connectivity) must NOT be masked as a 404 —
+      // surface it as 500 + log so triage sees the real error, not a phantom missing attempt.
+      if (!sessionId && insertErr && insErrCode !== '23505') {
+        console.error('[homework-tutor] tutor_sessions insert failed (non-race):', insertErr);
+        return NextResponse.json({ error: 'Tutor unavailable' }, { status: 500 });
       }
     }
     if (!sessionId) return NextResponse.json({ error: 'Session unavailable' }, { status: 404 });

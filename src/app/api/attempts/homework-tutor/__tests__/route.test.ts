@@ -20,6 +20,7 @@ const sessionUpdates: Array<Record<string, unknown>> = [];
 let ATTEMPT: unknown; // homework_attempts ownership-load result
 let ASSIGNMENT_CONTENT: unknown; // assignments.content
 let ACTIVE_SESSION: unknown; // tutor_sessions active-lookup result (null → create)
+let CREATE_RESULT: { data: unknown; error: unknown }; // tutor_sessions insert result (create path)
 let HELP_COUNT: number; // count returned by the head:true count query
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -37,8 +38,8 @@ vi.mock('@/lib/supabase/server', () => ({
         return {
           // active-session lookup: .select().eq().eq().eq().maybeSingle()
           select: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: ACTIVE_SESSION, error: null }) }) }) }) }),
-          // create: .insert().select().maybeSingle()
-          insert: () => ({ select: () => ({ maybeSingle: async () => ({ data: { id: 'sess1' }, error: null }) }) }),
+          // create: .insert().select().maybeSingle() — scriptable result for the create path.
+          insert: () => ({ select: () => ({ maybeSingle: async () => CREATE_RESULT }) }),
           // free-turn touch: .update().eq()
           update: (payload: Record<string, unknown>) => { sessionUpdates.push(payload); return { eq: async () => ({ error: null }) }; },
         };
@@ -67,6 +68,7 @@ beforeEach(() => {
   ATTEMPT = { id: 'att1', student_id: 'u1', assignment_id: 'a1', status: 'in_progress' };
   ASSIGNMENT_CONTENT = { title: 'X', tasks: [{ step: 1, description: 'Explain why ice floats.' }] };
   ACTIVE_SESSION = { id: 'sess1', hint_count: 0, help_request_count: 0 };
+  CREATE_RESULT = { data: { id: 'sess1' }, error: null };
   HELP_COUNT = 1; // first help pull: the just-inserted student row makes count = 1
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   generateGuardedHint.mockResolvedValue("Let's look at what changes when water freezes — what do you notice?");
@@ -153,5 +155,27 @@ describe('POST /api/attempts/homework-tutor', () => {
   it('400 on missing required body fields', async () => {
     const res = await (await load())(req({ attempt_id: 'att1' }));
     expect(res.status).toBe(400);
+  });
+
+  it('400 on a non-integer task_step (e.g. 1.5)', async () => {
+    const res = await (await load())(req({ ...helpBody, task_step: 1.5 }));
+    expect(res.status).toBe(400);
+  });
+
+  it('400 on an over-long student_message (length bound)', async () => {
+    const res = await (await load())(req({ ...helpBody, student_message: 'x'.repeat(2001) }));
+    expect(res.status).toBe(400);
+  });
+
+  it('400 (not 500) on a null JSON body', async () => {
+    const res = await (await load())(req(null));
+    expect(res.status).toBe(400);
+  });
+
+  it('500 (not 404) when the session insert fails for a non-race reason', async () => {
+    ACTIVE_SESSION = null; // force the create path
+    CREATE_RESULT = { data: null, error: { code: '23503' } }; // FK violation, NOT the 23505 race
+    const res = await (await load())(req(helpBody));
+    expect(res.status).toBe(500);
   });
 });
