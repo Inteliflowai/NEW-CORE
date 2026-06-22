@@ -423,3 +423,21 @@ These are teacher-facing context hints (shown in the composer card), derived fro
 | `consistency_rising` | Steadier and steadier lately — the effort is showing. |
 | `reteach_completed` | Came back for another try and pushed it further. |
 | `stretch` | Ready for more — reaching past the standard and into deeper work. |
+
+### Empty-praise forbidden phrases (`src/lib/highfives/guardrail.ts`)
+
+> **DRAFTS — Barb to review the forbidden-phrase list for completeness + the suggestion wording for voice/tone.** The guardrail is fail-closed: any match blocks the note from sending until the teacher rewrites it. Purpose: coach-posture discipline — a high-five must name the specific effort, never generic cheerleading.
+
+| Forbidden phrase | Suggestion shown to teacher |
+|---|---|
+| great job | Name the specific thing they did. |
+| good job | Name the specific thing they did. |
+| amazing | Describe what was actually impressive. |
+| awesome | Describe what was actually impressive. |
+| excellent | Say what specifically was strong. |
+| perfect | Point to the concrete thing they did well. |
+| you got this | Name the effort you actually saw. |
+| i'm proud | Describe the work, not your reaction to it. |
+| so smart | Praise the effort/strategy, not the trait. |
+| a number or percent (leak) | Keep it about the effort — no numbers or grades. |
+| a data word (banned-word) | Use plain, human language. |
