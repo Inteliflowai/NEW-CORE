@@ -97,6 +97,12 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
   }
   const now = args && (globalThis as { __NOW__?: number }).__NOW__ ? new Date((globalThis as { __NOW__?: number }).__NOW__!) : new Date();
   const dueByKey = new Map(colMeta.map(c => [c.key, c.due_at]));
+  // Per-(student,colKey) assignment-row membership. A logical column may not include
+  // every enrolled student (differentiated assignments, mid-term enrollment). A student
+  // with NO assignment row in a column was never assigned that work → cell is `none`
+  // (inert: not a real "miss", excluded from missing_count). Built from colMeta rows in hand.
+  const assignedByCell = new Set<string>();
+  for (const c of colMeta) for (const r of c.rows) assignedByCell.add(`${r.student_id}__${c.key}`);
   const cells: Gradebook['cells'] = {};
   let missing_count = 0;
   for (const s of students) {
@@ -115,8 +121,12 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
         submitted_on_time = graded.submitted_on_time ?? null; attempt_id = graded.id;
       }
       if (!attempts.length) {
-        status = past ? 'missing' : 'not_due';
-        if (status === 'missing') missing_count++;
+        if (!assignedByCell.has(`${s.student_id}__${col.assignment_key}`)) {
+          status = 'none'; // never assigned to this student → inert, not a miss
+        } else {
+          status = past ? 'missing' : 'not_due';
+          if (status === 'missing') missing_count++;
+        }
       } else if (graded && newest && newest.status !== 'graded' && (newest.attempt_no ?? 1) > 1) {
         status = 'redo_in_progress';
       } else if (graded && graded.allow_redo) {

@@ -88,6 +88,18 @@ describe('loadGradebook', () => {
     expect(gb.quiz_cells['s2']['q1'].score_pct).toBe(60);
   });
 
+  it('a student with no assignment row in a column is `none` (never assigned), not `missing`', async () => {
+    // Differentiated column: only s1 is assigned (no a_s2 row), due date is in the past.
+    ASSIGNMENTS = [
+      { id: 'a_s1', lesson_id: 'L1', content: {}, due_at: '2026-06-10T00:00:00Z', created_at: '2026-06-01T00:00:00Z', student_id: 's1' },
+    ];
+    HW = [];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.cells['s1']['lesson:L1'].status).toBe('missing'); // assigned + past + no attempt → real miss
+    expect(gb.cells['s2']['lesson:L1'].status).toBe('none');    // never assigned → inert, NOT a miss
+    expect(gb.missing_count).toBe(1);                            // s2's `none` excluded from the count
+  });
+
   it('class_average is the mean of graded cells and excludes quizzes; null when nothing graded', async () => {
     HW = [
       { id: 'h1', assignment_id: 'a_s1', student_id: 's1', status: 'graded', score_pct: 80, teacher_score: null, allow_redo: false, is_redo: false, attempt_no: 1, graded_at: '2026-06-11T00:00:00Z' },
