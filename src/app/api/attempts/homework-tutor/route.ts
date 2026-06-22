@@ -3,12 +3,16 @@
 //
 // The server is AUTHORITATIVE for the hint rung + counts. The client never decides a rung.
 // Defense in depth lives in generateGuardedHint (the reply is always a checked, safe string;
-// Teli NEVER reveals the answer). This route adds the persistence + the race-robust ladder:
-//   • count-after-insert: the student turn is written BEFORE the help count is read, so two
-//     concurrent pulls can never share a rung.
-//   • atomic counter bump via the bump_tutor_session RPC (no read-modify-write lost update).
+// Teli NEVER reveals the answer). This route adds the persistence + the ladder:
+//   • count-after-insert: the student turn is written BEFORE the help count is read, so each
+//     SEQUENTIAL pull sees its own row in its own count and advances one rung. (Two genuinely
+//     concurrent pulls on the SAME attempt can still read the same count and return the same
+//     rung — a rare, self-healing bookkeeping skip; a single tab is serialized client-side and
+//     the rung is always a bounded, non-answer rung, so never-reveal is never affected.)
+//   • atomic counter bump via the bump_tutor_session RPC (no read-modify-write lost update);
+//     the authoritative aggregate is recomputed from the message rows at submit, not this counter.
 //   • one active tutor_session per attempt (a partial-unique index backs the find-or-create;
-//     a 23505 on the create race re-selects the existing row).
+//     a 23505 on the create race re-selects the existing row; a non-race insert error → 500).
 //
 // Auth chain: createServerSupabaseClient → auth.getUser (401) → admin client →
 // object-ownership guard (.eq id .eq student_id, 404 existence-hiding). RLS is NOT the IDOR
@@ -97,7 +101,7 @@ export async function POST(req: Request) {
     // reasoning (prompt.ts "THE STUDENT'S WORK SO FAR" branch) instead of tutoring blind.
     const studentResponse = attempt.responses?.tasks?.[String(taskStep)]?.text?.trim() || undefined;
 
-    // 6. Insert the STUDENT turn FIRST (count-after-insert kills the rung race).
+    // 6. Insert the STUDENT turn FIRST, then count (so a sequential pull sees its own row).
     // A failed persist must NOT proceed to the count query — that would desync the
     // server-authoritative help count (count-after-insert relies on this row existing).
     const { error: turnErr } = await admin.from('tutor_messages').insert({
