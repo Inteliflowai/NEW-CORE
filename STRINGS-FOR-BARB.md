@@ -343,3 +343,28 @@ Three mutually exclusive one-liners shown above the band-mix grid when a pattern
 
 3. **Split class (some reinforcement AND some enrichment, but neither threshold met):**
    "The class is split between students who need another pass and students ready to go deeper — small groups will help."
+
+---
+
+## Alerts
+
+> DRAFTS — all wording below awaits Barb's sign-off before shipping.
+> Teacher-facing only. Count-bearing strings carry digits by design (checked with `hasBannedWord`, not `assertNoLeak`). "Assignments", never "Homework".
+
+### Alert trigger labels (`alertTriggerLabel`, `src/lib/copy/alertTriggerLabel.ts`)
+
+| `source_kind` | Current draft |
+|---|---|
+| `low_quiz` | A comprehension check came back low on the latest try |
+| `low_assignment` | An assignment just came back with a low grade |
+| `reteach_flag` | You flagged this student for another try |
+| `reteach_review` | Another try is in — ready for your review |
+| `strong_result` | A strong recent result — worth a high-five? |
+
+### Severity buckets (`ALERT_BUCKETS`)
+
+| Severity | Label | Subline |
+|---|---|---|
+| `urgent` | Needs attention this week | Worth a check-in within the next few days. |
+| `watch` | Check in | Look at when you have a moment. |
+| `info` | Heads-up | Good news — nothing to do. |
