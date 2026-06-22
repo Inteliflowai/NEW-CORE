@@ -105,6 +105,13 @@ export async function POST(req: Request) {
       return PENDING(attempt.id);
     }
 
+    // Close the Teli session for this (now-graded) attempt — honors the tutor_sessions
+    // status lifecycle (CHECK + partial-unique index in migration 0016) that the schema
+    // defines but had no writer, so Epic-3 staff reads can rely on a real completed state.
+    if (sessionId) {
+      await admin.from('tutor_sessions').update({ status: 'completed' }).eq('id', sessionId);
+    }
+
     // (per-task hint counts + teliHintCount were sourced above from the help-message rows.)
 
     // ── Behavioral-signals hook (the MOAT) — context:'homework' ──

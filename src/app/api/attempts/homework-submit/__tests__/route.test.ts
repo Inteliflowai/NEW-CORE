@@ -13,6 +13,7 @@ const computeSignals = vi.fn().mockReturnValue({ ok: true });
 const upsertBehavioralSignals = vi.fn().mockResolvedValue(undefined);
 const recompute = vi.fn().mockResolvedValue(undefined);
 const updates: Array<Record<string, unknown>> = [];
+const tutorSessionUpdates: Array<Record<string, unknown>> = [];
 
 vi.mock('@/lib/engine/gradeAssignment', () => ({ gradeAssignment }));
 vi.mock('@/lib/signals/computeSignals', () => ({ computeSignals }));
@@ -25,7 +26,7 @@ vi.mock('@/lib/supabase/server', () => ({
       if (t === 'assignments') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'a1', content: ASSIGNMENT_CONTENT, due_at: null } }) }) }) };
       if (t === 'users') return { select: () => ({ eq: () => ({ single: async () => ({ data: { school_id: 'sch1', grade_level: '7', full_name: 'Jordan Lee' } }) }) }) };
       if (t === 'tutor_sessions') {
-        // Chainable: .select().eq().eq().order().limit().maybeSingle()
+        // Chainable: .select().eq().eq().order().limit().maybeSingle() + .update().eq()
         return {
           select: () => ({
             eq: () => ({
@@ -38,6 +39,7 @@ vi.mock('@/lib/supabase/server', () => ({
               }),
             }),
           }),
+          update: (payload: Record<string, unknown>) => { tutorSessionUpdates.push(payload); return { eq: async () => ({ error: null }) }; },
         };
       }
       if (t === 'tutor_messages') {
@@ -83,7 +85,7 @@ async function load() { vi.resetModules(); return (await import('@/app/api/attem
 async function drainAfter() { await Promise.allSettled(afterTasks); }
 
 beforeEach(() => {
-  getUser.mockReset(); gradeAssignment.mockReset(); updates.length = 0; afterTasks.length = 0;
+  getUser.mockReset(); gradeAssignment.mockReset(); updates.length = 0; tutorSessionUpdates.length = 0; afterTasks.length = 0;
   computeSignals.mockClear(); upsertBehavioralSignals.mockClear(); recompute.mockClear();
   ATTEMPT = { id: 'att1', student_id: 'u1', assignment_id: 'a1', status: 'in_progress', teli_hint_count: 0, created_at: new Date(Date.now() - 3600_000).toISOString(), allow_redo: false };
   ASSIGNMENT_CONTENT = { title: 'X', tasks: [{ step: 1, description: 'Explain X' }, { step: 2, description: 'Explain Y' }] };
@@ -137,6 +139,11 @@ describe('POST /api/attempts/homework-submit', () => {
     expect(graded!.submitted_at).toBeTruthy();
     expect(graded!.graded_at).toBeTruthy();
     expect(typeof graded!.hours_to_submit).toBe('number');
+  });
+  it('marks the Teli session completed after a successful grade', async () => {
+    TUTOR_SESSION = { id: 'sess1', hint_count: 0 };
+    await (await load())(req(fullBody));
+    expect(tutorSessionUpdates.some(u => u.status === 'completed')).toBe(true);
   });
   it('fires the moat hook with context:homework on the clean path', async () => {
     await (await load())(req(fullBody));
