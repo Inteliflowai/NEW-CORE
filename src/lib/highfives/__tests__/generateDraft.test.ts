@@ -32,6 +32,13 @@ describe('generateHighFiveDraft', () => {
     const r = await generateHighFiveDraft({ studentName: 'Ann' });
     expect(r.source).toBe('fallback');
   });
+  it('falls back (never throws) when claudeChat throws on every call (LlmExhaustedError)', async () => {
+    vi.spyOn(ai, 'claudeChat').mockRejectedValue(new Error('exhausted'));
+    const r = await generateHighFiveDraft({ studentName: 'Ann' });
+    expect(r.source).toBe('fallback');
+    expect(r.draft_text).toContain('Ann');
+    expect(validateHighFive(r.draft_text)).toEqual([]);
+  });
 });
 
 describe('fallbackDraft', () => {

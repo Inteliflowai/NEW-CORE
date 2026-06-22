@@ -20,16 +20,30 @@ export function fallbackDraft(studentName: string): string {
   return `${studentName}, your teacher noticed how you worked this week and wanted to name it.`;
 }
 
+/**
+ * One generation attempt. claudeChat THROWS LlmExhaustedError on retry-exhaustion (429/5xx/net)
+ * and only returns null on 400/401/404/timeout — so a throw must be treated as null here or the
+ * deterministic fallback is skipped and the draft route 500s. Mirrors Teli's tryGenerate
+ * (src/lib/teli/generateHint.ts). Net: generateHighFiveDraft NEVER throws — always returns a draft.
+ */
+async function tryGenerate(system: string, user: string): Promise<string | null> {
+  try {
+    return await claudeChat(system, user, { model: CLAUDE_TUTOR_MODEL });
+  } catch {
+    return null; // LlmExhaustedError → flows to the existing retry/fallback path
+  }
+}
+
 export async function generateHighFiveDraft(opts: DraftOpts): Promise<{ draft_text: string; source: 'ai' | 'ai_retry' | 'fallback' }> {
   const user = [
     `Student first name: ${opts.studentName}`,
     opts.contextHint ? `What they did: ${opts.contextHint}` : '',
   ].filter(Boolean).join('\n');
 
-  const first = await claudeChat(SYSTEM, user, { model: CLAUDE_TUTOR_MODEL });
+  const first = await tryGenerate(SYSTEM, user);
   if (first && validateHighFive(first.trim()).length === 0) return { draft_text: first.trim(), source: 'ai' };
 
-  const second = await claudeChat(SYSTEM + RETRY_SUFFIX, user, { model: CLAUDE_TUTOR_MODEL });
+  const second = await tryGenerate(SYSTEM + RETRY_SUFFIX, user);
   if (second && validateHighFive(second.trim()).length === 0) return { draft_text: second.trim(), source: 'ai_retry' };
 
   return { draft_text: fallbackDraft(opts.studentName), source: 'fallback' };
