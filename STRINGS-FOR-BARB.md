@@ -315,3 +315,31 @@ A compact legend strip above the grid mapping each status glyph to a leak-guarde
 - Save now persists an emptied note as a cleared note (a teacher can view, edit, AND clear a note).
 - Save-failure inline error (unchanged): "That didn't save — try again in a moment."
 - Empty/out-of-range grade inline error (unchanged): "Enter a grade from 0 to 100, or use Clear override."
+
+---
+
+## Insights
+
+> DRAFTS — all wording below awaits Barb's sign-off before shipping.
+
+### Band-pill labels (`bandPillLabel`, `src/lib/copy/insightsObservation.ts`)
+
+| Band key | Current draft |
+|---|---|
+| `needs_reinforcement` | Needs reinforcement |
+| `on_track` | On track |
+| `ready_to_enrich` | Ready to enrich |
+| `not_assessed` | Not yet assessed |
+
+### Class-level observation lines (`insightsObservation`)
+
+Three mutually exclusive one-liners shown above the band-mix grid when a pattern is notable. Quiet (no line) when the class is cold-start or nothing stands out.
+
+1. **High reinforcement (≥ 40% of assessed):**
+   "A good part of the class is still finding their footing — the latest concept may be worth a whole-class re-teach."
+
+2. **Enrichment majority (> 50% of assessed):**
+   "Most of the class is ready for deeper work on the same topic."
+
+3. **Split class (some reinforcement AND some enrichment, but neither threshold met):**
+   "The class is split between students who need another pass and students ready to go deeper — small groups will help."
