@@ -10,19 +10,17 @@ export function heuristicRevealsAnswer(reply: string): boolean {
   return REVEAL_PATTERNS.some((re) => re.test(reply));
 }
 
-// Teli's reply is student-facing, BUT Teli's prompt contains NO diagnostic machinery (no band,
-// score, or risk — only the task + the student's words), so the dashboard leak-guard BANNED_WORDS
-// (leakGuard.ts) is the WRONG gate here: it whole-word-bans ordinary K-12 tutoring vocabulary
-// (model/signal/threshold/index/algorithm/flag) and silently degraded on-topic Socratic hints to
-// the SAFE_FALLBACK — Teli's own STYLE_HINT even says "build a model", tripping its own gate.
-// The never-reveal wall is heuristicRevealsAnswer + the LLM classifier; this reduced set keeps
-// ONLY the pure assessment/diagnostic words a tutor should never utter to a student.
-// DRAFT → Barb (four-audience copy owner). See review finding (2026-06-22).
-export const TELI_OUTPUT_BANNED: readonly string[] = ['score', 'percentile', 'divergence'];
-const TELI_BANNED_RE = new RegExp(`\\b(?:${TELI_OUTPUT_BANNED.join('|')})\\b`, 'i');
-
+// The synchronous gate catches ONLY high-precision answer-handing (heuristicRevealsAnswer).
+// It deliberately does NOT word-ban subject/assessment vocabulary: Teli's prompt holds no
+// diagnostic machinery (no band/score/risk — only the task + the student's words), and a blunt
+// word list cannot tell "the score was 24 to 21" (legitimate STEM vocabulary) from misuse — it
+// over-blocked real Socratic hints (math/chemistry/physics/algebra/geometry/trig) into the
+// SAFE_FALLBACK. Context is judged by the LLM reveal classifier in generateHint, which reads the
+// whole reply; the never-reveal wall is heuristicRevealsAnswer + that classifier (fail-closed).
+// Decision (Marvin, 2026-06-22): let these words through when relevant; the smart check judges,
+// not a fixed list. DRAFT → Barb (four-audience copy owner).
 export function failsSyncGate(reply: string): boolean {
-  return heuristicRevealsAnswer(reply) || TELI_BANNED_RE.test(reply);
+  return heuristicRevealsAnswer(reply);
 }
 const MOVE_PATTERNS: RegExp[] = [
   /\b(let'?s|try|start by|what if|think about|focus on|compare|separate|picture|imagine|notice|break it (?:down|into))\b/i,

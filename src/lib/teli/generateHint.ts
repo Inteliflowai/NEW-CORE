@@ -4,7 +4,7 @@
 // THE INVARIANT: generateGuardedHint ALWAYS returns a checked, safe string. Teli NEVER
 // reveals the answer. Defense in depth, fail-closed:
 //   (1) bounded ladder + no answer key in the prompt (upstream — prompt.ts / ladder.ts)
-//   (2) always-on synchronous gate (heuristic reveal patterns + banned diagnostic words)
+//   (2) always-on synchronous gate (high-precision answer-handing heuristic patterns)
 //   (3) an output-boundary LLM reveal classifier that FAILS CLOSED — a classifier or model
 //       outage yields the safe fallback, NEVER un-certified text. The guarantee outranks
 //       availability (spec §6.1): a reveal-classifier outage degrades Teli to the safe
@@ -80,7 +80,7 @@ async function classifyReveal(reply: string): Promise<'ok' | 'reveal' | 'unavail
  */
 async function assessSafety(reply: string | null): Promise<'safe' | 'unsafe' | 'cannot-verify'> {
   if (reply == null) return 'cannot-verify'; // model exhausted/unavailable
-  if (failsSyncGate(reply)) return 'unsafe'; // always-on (heuristic reveal OR banned diagnostic word)
+  if (failsSyncGate(reply)) return 'unsafe'; // always-on answer-handing heuristic (context judged by the classifier)
   const v = await classifyReveal(reply);
   if (v === 'reveal') return 'unsafe';
   if (v === 'unavailable') return 'cannot-verify'; // FAIL CLOSED — never certify without the classifier

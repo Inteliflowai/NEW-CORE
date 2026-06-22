@@ -11,22 +11,21 @@ describe('reveal-check sync gate', () => {
     expect(heuristicRevealsAnswer('What happens to the 2 numbers when you combine them?')).toBe(false);
     expect(heuristicRevealsAnswer('Great start — what is the first thing the leaf needs?')).toBe(false);
   });
-  it('fails the gate on diagnostic vocabulary but NOT on bare numbers', () => {
-    expect(failsSyncGate('Your score shows you should try again.')).toBe(true);
-    expect(failsSyncGate('Try adding the first 3 terms together.')).toBe(false);
-  });
-  it('allows ordinary K-12 subject vocabulary but still blocks pure assessment/diagnostic jargon', () => {
-    // The dashboard leak-guard BANNED_WORDS list over-blocks normal tutoring verbs. The
-    // never-reveal wall is the heuristic + the LLM classifier, NOT a subject-word ban — so a
-    // clean Socratic hint using these words must pass the sync gate (was wrongly forced 'unsafe').
+  it('blocks only answer-handing, NOT subject/stats vocabulary (the LLM classifier judges context)', () => {
+    // Teli holds NO diagnostic data; the never-reveal wall is the heuristic + the context-aware
+    // LLM classifier. A blunt word-ban over-blocked legitimate STEM vocabulary, so the sync gate
+    // no longer rejects these — score/percentile/divergence are valid in math/stats/physics work,
+    // and the smart classifier (which reads the whole reply) catches any actual reveal in context.
+    expect(failsSyncGate('The score of the game was 24 to 21 — what is the difference?')).toBe(false);
+    expect(failsSyncGate('Which percentile would the 80th value fall in?')).toBe(false);
+    expect(failsSyncGate("Let's test the series for divergence — what do the terms do?")).toBe(false);
     expect(failsSyncGate("Let's model this with an equation — what changes?")).toBe(false);
     expect(failsSyncGate('Which variables would you flag as the key ones?')).toBe(false);
-    expect(failsSyncGate('What signal in the data shows the trend changing?')).toBe(false);
-    expect(failsSyncGate('Notice the threshold where the function changes sign.')).toBe(false);
     expect(failsSyncGate('What is the index of the second term?')).toBe(false);
-    // Genuine assessment/diagnostic jargon a tutor should never utter to a student is STILL gated:
-    expect(failsSyncGate('Your percentile shows you should try again.')).toBe(true);
-    expect(failsSyncGate('Your divergence value there is low.')).toBe(true);
+    // Answer-handing is still caught synchronously by the heuristic, with or without numbers:
+    expect(failsSyncGate('The answer is 42.')).toBe(true);
+    expect(failsSyncGate('Just multiply 7 by 8 to get 56.')).toBe(true);
+    expect(failsSyncGate('Try adding the first 3 terms together.')).toBe(false);
   });
   it('detects whether a reply names a thinking move', () => {
     expect(namesAThinkingMove("Let's separate what we know from what we're solving for.")).toBe(true);
