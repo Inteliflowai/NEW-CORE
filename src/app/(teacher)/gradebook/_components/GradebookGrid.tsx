@@ -154,7 +154,7 @@ export function GradebookGrid({ data }: GradebookGridProps) {
                   const status: CellStatus = cell?.status ?? 'none';
                   const safeCell: GradebookCell = cell ?? {
                     attempt_id: null, status: 'none', displayed_grade: null, score_pct: null,
-                    is_override: false, submitted_on_time: null, allow_redo: false,
+                    effort_label: null, is_override: false, submitted_on_time: null, allow_redo: false,
                   };
                   const grade = safeCell.displayed_grade;
                   const showGrade = grade != null && (status === 'graded' || status === 'redo' || status === 'redo_in_progress');
