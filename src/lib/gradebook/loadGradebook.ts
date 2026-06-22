@@ -8,6 +8,9 @@ export interface GradebookAssignmentCol { assignment_key: string; title: string;
 export type CellStatus = 'graded' | 'submitted' | 'not_due' | 'missing' | 'redo' | 'redo_in_progress' | 'none';
 export interface GradebookCell {
   attempt_id: string | null; status: CellStatus; displayed_grade: number | null;
+  // The immutable AI grade — carried regardless of override so the drill-in's
+  // "AI grade vs Your grade" comparison stays meaningful on overridden cells.
+  score_pct: number | null;
   is_override: boolean; submitted_on_time: boolean | null; allow_redo: boolean;
 }
 export interface GradebookQuizCol { quiz_id: string; label: string; }
@@ -113,10 +116,11 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
       const past = due ? new Date(due).getTime() < now.getTime() : false;
       const graded = latest(attempts.filter(a => a.status === 'graded'));
       const newest = latest(attempts);
-      let status: CellStatus; let displayed_grade: number | null = null; let is_override = false;
+      let status: CellStatus; let displayed_grade: number | null = null; let score_pct: number | null = null; let is_override = false;
       let allow_redo = false; let submitted_on_time: boolean | null = null; let attempt_id: string | null = null;
       if (graded) {
-        displayed_grade = (typeof graded.teacher_score === 'number') ? graded.teacher_score : (graded.score_pct ?? null);
+        score_pct = graded.score_pct ?? null; // immutable AI grade, carried regardless of override
+        displayed_grade = (typeof graded.teacher_score === 'number') ? graded.teacher_score : score_pct;
         is_override = graded.teacher_score != null; allow_redo = !!graded.allow_redo;
         submitted_on_time = graded.submitted_on_time ?? null; attempt_id = graded.id;
       }
@@ -136,7 +140,7 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
       } else {
         status = 'submitted'; attempt_id = newest?.id ?? null;
       }
-      cells[s.student_id][col.assignment_key] = { attempt_id, status, displayed_grade, is_override, submitted_on_time, allow_redo };
+      cells[s.student_id][col.assignment_key] = { attempt_id, status, displayed_grade, score_pct, is_override, submitted_on_time, allow_redo };
     }
   }
 

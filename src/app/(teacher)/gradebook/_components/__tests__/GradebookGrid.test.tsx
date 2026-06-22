@@ -1,18 +1,20 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { hasBannedWord } from '@/lib/copy/leakGuard';
 import { GradebookGrid } from '../GradebookGrid';
 import type { Gradebook } from '@/lib/gradebook/loadGradebook';
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const data: Gradebook = {
   class_id: 'c1',
   students: [{ student_id: 's1', name: 'Ana Diaz' }, { student_id: 's2', name: 'Ben Cole' }],
   assignments: [{ assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z' }],
   cells: {
-    s1: { 'due:d1': { attempt_id: 'h1', status: 'graded', displayed_grade: 88, is_override: false, submitted_on_time: true, allow_redo: false } },
-    s2: { 'due:d1': { attempt_id: null, status: 'missing', displayed_grade: null, is_override: false, submitted_on_time: null, allow_redo: false } },
+    s1: { 'due:d1': { attempt_id: 'h1', status: 'graded', displayed_grade: 88, score_pct: 88, is_override: false, submitted_on_time: true, allow_redo: false } },
+    s2: { 'due:d1': { attempt_id: null, status: 'missing', displayed_grade: null, score_pct: null, is_override: false, submitted_on_time: null, allow_redo: false } },
   },
   class_average: 88, column_averages: { 'due:d1': 88 }, missing_count: 1,
   quizzes: [], quiz_cells: { s1: {}, s2: {} },

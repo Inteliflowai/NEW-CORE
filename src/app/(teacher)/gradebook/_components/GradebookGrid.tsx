@@ -22,7 +22,6 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import type { CellStatus, Gradebook, GradebookAssignmentCol, GradebookCell } from '@/lib/gradebook/loadGradebook';
 import { SectionLabel } from '../../_components/SectionLabel';
 import { SummaryCallout } from '../../_components/SummaryCallout';
@@ -101,29 +100,17 @@ export interface GradebookGridProps {
   classId: string;
 }
 
-/** App Router refresh when one is mounted; a no-op otherwise (e.g. a router-less unit test).
- * Hook order is stable: in production a router is always mounted, in a test it never is, so the
- * try/catch resolves the same way on every render of a given mount. */
-function useRefresh(): () => void {
-  let router: AppRouterInstance | null = null;
-  try {
-    router = useRouter();
-  } catch {
-    router = null;
-  }
-  return () => router?.refresh();
-}
-
 export function GradebookGrid({ data }: GradebookGridProps) {
-  const refresh = useRefresh();
+  const router = useRouter();
   const [selected, setSelected] = useState<Selection | null>(null);
 
   const { students, assignments, cells, column_averages, class_average, missing_count } = data;
 
-  /** Build the drill-in cell. score_pct (the AI grade) is only known to the grid when there is
-   * no override; on an override the AI grade is not carried in props → pass null (panel shows —). */
+  /** Build the drill-in cell. The cell already carries the immutable AI grade (score_pct) from the
+   * loader regardless of override, so the drill-in's "AI grade vs Your grade" comparison stays
+   * meaningful exactly on overridden cells. */
   function toDrillCell(cell: GradebookCell): DrillInCell {
-    return { ...cell, score_pct: cell.is_override ? null : cell.displayed_grade };
+    return { ...cell, score_pct: cell.score_pct };
   }
 
   return (
@@ -167,7 +154,7 @@ export function GradebookGrid({ data }: GradebookGridProps) {
                   const cell = cells[s.student_id]?.[col.assignment_key];
                   const status: CellStatus = cell?.status ?? 'none';
                   const safeCell: GradebookCell = cell ?? {
-                    attempt_id: null, status: 'none', displayed_grade: null,
+                    attempt_id: null, status: 'none', displayed_grade: null, score_pct: null,
                     is_override: false, submitted_on_time: null, allow_redo: false,
                   };
                   const grade = safeCell.displayed_grade;
@@ -247,7 +234,7 @@ export function GradebookGrid({ data }: GradebookGridProps) {
           onClose={() => setSelected(null)}
           onWrite={() => {
             setSelected(null);
-            refresh();
+            router.refresh();
           }}
         />
       )}
