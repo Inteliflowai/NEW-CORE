@@ -404,3 +404,22 @@ Three mutually exclusive one-liners shown above the band-mix grid when a pattern
 | Button idle | Mark handled |
 | Button busy / loading | Working… |
 | Error message | Could not mark handled — try again. |
+
+---
+
+## High-Fives
+
+> **DRAFTS — Barb gates all copy. Also flag: the AI voice (SYSTEM prompt in `generateDraft.ts`), the empty-praise forbidden list (`FORBIDDEN_PRAISE` in `guardrail.ts`), and the six context-hint templates below need Barb's review for tone + voice.**
+
+### Suggestion context hints (`src/lib/highfives/suggestions.ts`)
+
+These are teacher-facing context hints (shown in the composer card), derived from the student's effort/trajectory/band. They are also STUDENT-FACING-safe (no numbers, no jargon) because they seed the AI draft.
+
+| Reason key | Current draft |
+|---|---|
+| `persistence` | Kept at it through some tough work this week, even when it was a grind. |
+| `recovery` | Bounced back after a rough patch — nice to see them climb again. |
+| `effortful_success` | Worked hard and got there — earned that result. |
+| `consistency_rising` | Steadier and steadier lately — the effort is showing. |
+| `reteach_completed` | Came back for another try and pushed it further. |
+| `stretch` | Ready for more — reaching past the standard and into deeper work. |
