@@ -185,7 +185,8 @@ describe('POST /api/attempts/homework-submit', () => {
     expect(res.status).toBe(200);
     const graded = updates.find(u => u.status === 'graded');
     expect(graded).toBeDefined();
-    // (a) teli_hint_count sourced from the tutor session (3), not the attempt row (0).
+    // (a) teli_hint_count derived from the 3 help-MESSAGE rows (the session counter agrees
+    //     here at 3 but is NOT the source — the sibling test above proves the message count wins).
     expect(graded!.teli_hint_count).toBe(3);
     // (b) effort_label = 'effortful_success': score 84 >= SUCCESS_THRESHOLD (75) AND hints 3 >= EFFORT_THRESHOLD (2).
     expect(graded!.effort_label).toBe('effortful_success');
