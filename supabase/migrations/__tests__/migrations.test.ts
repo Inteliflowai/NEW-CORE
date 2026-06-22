@@ -648,6 +648,22 @@ describe('0015 assignment_player', () => {
   });
 });
 
+describe('0017 teacher completion', () => {
+  const s = () => sql('0017_teacher_completion.sql');
+  it('creates the alerts table with severity + status CHECKs and the occurrence unique index', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.alerts/);
+    expect(s()).toMatch(/source_kind\s+text[\s\S]*?check \(source_kind in[\s\S]*?'low_quiz'[\s\S]*?'strong_result'\)/i);
+    expect(s()).toMatch(/severity\s+text[\s\S]*?check \(severity in \('urgent','watch','info'\)\)/i);
+    expect(s()).toMatch(/status\s+text[\s\S]*?check \(status in \('open','resolved'\)\)/i);
+    expect(s()).toMatch(/create unique index[\s\S]*alerts_occurrence_uq[\s\S]*\(student_id, class_id, source_kind, source_ref\)/i);
+  });
+  it('creates the high_fives table', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.high_fives/);
+    expect(s()).toMatch(/note_text\s+text\s+not null/i);
+    expect(s()).toMatch(/ai_drafted\s+boolean\s+not null\s+default false/i);
+  });
+});
+
 describe('0016 tutor_tables', () => {
   const s = () => sql('0016_tutor_tables.sql');
   it('creates tutor_sessions with counters + one-active-session unique index', () => {
