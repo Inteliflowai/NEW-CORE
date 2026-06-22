@@ -13,7 +13,7 @@ export function SkillsToFocus({ gaps }: { gaps: SkillGap[] }): React.JSX.Element
         <SectionLabel tone="warn">Skills to focus on</SectionLabel>
         <ul className="flex flex-col gap-2">
           {gaps.map((g) => (
-            <li key={g.skill_name} className="flex items-baseline justify-between gap-3 text-fg">
+            <li key={g.skill_name} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-fg">
               <span className="font-semibold">{g.skill_name}</span>
               <span className="text-fg text-sm whitespace-nowrap">{g.phrase} missed this</span>
             </li>

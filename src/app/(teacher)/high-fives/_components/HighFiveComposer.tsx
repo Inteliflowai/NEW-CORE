@@ -80,7 +80,7 @@ export function HighFiveComposer({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex max-w-3xl flex-col gap-4">
       <SectionLabel tone="lime">Worth recognizing today</SectionLabel>
       {suggestions.length === 0 && (
         <p className="text-fg text-sm">No standouts to flag today — you can still write a note to anyone from the roster.</p>
@@ -94,7 +94,7 @@ export function HighFiveComposer({
                 <span className="text-fg text-sm">{s.context_hint}</span>
               </div>
               <button type="button" onClick={() => open({ student_id: s.student_id, full_name: s.full_name, reason: s.reason, context_hint: s.context_hint })}
-                className="rounded-md border-2 border-sidebar-edge bg-brand-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                className="rounded-md border-2 border-sidebar-edge bg-brand-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker transition-transform hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
                 Write a note
               </button>
             </div>
@@ -109,13 +109,13 @@ export function HighFiveComposer({
             <label className="flex flex-col gap-1 text-sm font-bold text-fg" htmlFor="hf-picker">
               Write a note to someone else
               <select id="hf-picker" value={pickedId} onChange={(e) => setPickedId(e.target.value)}
-                className="rounded-md border-2 border-sidebar-edge bg-surface px-2 py-1 text-sm text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                className="rounded-md border-2 border-sidebar-edge bg-surface px-2 py-1 text-sm text-fg transition-colors hover:bg-brand-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
                 <option value="">Choose a student…</option>
                 {roster.map((r) => <option key={r.student_id} value={r.student_id}>{r.full_name}</option>)}
               </select>
             </label>
             <button type="button" onClick={openPicked} disabled={pickedId === ''}
-              className="rounded-md border-2 border-sidebar-edge bg-brand-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+              className="rounded-md border-2 border-sidebar-edge bg-brand-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker transition-transform hover:-translate-y-0.5 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
               Open note
             </button>
           </div>
@@ -128,7 +128,7 @@ export function HighFiveComposer({
             <p className="text-fg font-display font-bold">A note for {active.full_name}</p>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={draft} disabled={busy}
-                className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker transition-colors hover:bg-brand-surface disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
                 {busy ? 'Working…' : 'Draft with help'}
               </button>
             </div>
@@ -150,11 +150,11 @@ export function HighFiveComposer({
             {err && <p className="text-fg text-sm">{err}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={send} disabled={busy || text.trim().length === 0}
-                className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-1 text-sm font-bold text-fg-on-brand shadow-sticker disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-1 text-sm font-bold text-fg-on-brand shadow-sticker transition-transform hover:-translate-y-0.5 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
                 Send
               </button>
               <button type="button" onClick={() => setActive(null)}
-                className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker transition-colors hover:bg-brand-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
                 Cancel
               </button>
             </div>

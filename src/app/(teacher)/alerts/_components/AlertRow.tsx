@@ -31,7 +31,7 @@ export function AlertRow({ alert, classId, onResolved }: { alert: AlertRowItem; 
           <span className="text-fg text-sm">{alertTriggerLabel(alert.source_kind)}</span>
         </div>
         <button type="button" onClick={markHandled} disabled={busy}
-          className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker hover:bg-brand-surface disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+          className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker transition-colors hover:bg-brand-surface disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
           {busy ? 'Working…' : 'Mark handled'}
         </button>
       </div>
