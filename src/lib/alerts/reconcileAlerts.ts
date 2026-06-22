@@ -47,11 +47,13 @@ export function computeConditions(input: ReconcileInput, _now: Date): Condition[
       }
     }
 
-    // reteach_flag: an attempt flagged allow_redo with no redo started for that assignment yet
+    // reteach_flag: an attempt flagged allow_redo with no COMPLETED redo yet for that assignment.
+    // An in-progress redo does NOT clear this flag — the teacher still needs to review once done.
+    const COMPLETED_STATUSES = new Set(['submitted', 'pending_grade', 'graded']);
     for (const h of hw) {
       if (h.allow_redo && !h.is_redo) {
-        const redoExists = hw.some((r) => r.is_redo && r.assignment_id === h.assignment_id);
-        if (!redoExists) out.push({ student_id: sid, source_kind: 'reteach_flag', source_ref: h.id, severity: 'watch' });
+        const completedRedoExists = hw.some((r) => r.is_redo && r.assignment_id === h.assignment_id && COMPLETED_STATUSES.has(r.status));
+        if (!completedRedoExists) out.push({ student_id: sid, source_kind: 'reteach_flag', source_ref: h.id, severity: 'watch' });
       }
     }
 
@@ -88,7 +90,7 @@ export async function reconcileAlerts(
   if (!schoolId) return [];
 
   // active enrolled students + names
-  const { data: enr } = await admin.from('enrollments').select('student_id').eq('class_id', classId);
+  const { data: enr } = await admin.from('enrollments').select('student_id').eq('class_id', classId).eq('is_active', true);
   const studentIds = (enr ?? []).map((e: { student_id: string }) => e.student_id);
   if (studentIds.length === 0) return [];
   const { data: userRows } = await admin.from('users').select('id, full_name').in('id', studentIds);

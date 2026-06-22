@@ -37,6 +37,14 @@ describe('computeConditions', () => {
     ] }, NOW);
     expect(c).toContainEqual({ student_id: 's1', source_kind: 'reteach_review', source_ref: 'r1', severity: 'urgent' });
   });
+  it('preserves reteach_flag when an IN-PROGRESS redo exists (only a COMPLETED redo clears it)', () => {
+    // allow_redo original attempt + an in_progress redo → reteach_flag must still fire
+    const c = computeConditions({ ...base, hwAttempts: [
+      { id: 'h1', student_id: 's1', assignment_id: 'a1', status: 'graded', score_pct: 70, teacher_score: null, allow_redo: true, is_redo: false, submitted_at: '2026-06-22T09:00:00Z' },
+      { id: 'r1', student_id: 's1', assignment_id: 'a1', status: 'in_progress', score_pct: null, teacher_score: null, allow_redo: false, is_redo: true, submitted_at: null },
+    ] }, NOW);
+    expect(c).toContainEqual({ student_id: 's1', source_kind: 'reteach_flag', source_ref: 'h1', severity: 'watch' });
+  });
   it('flags a strong result (info) at or above 85 when not low', () => {
     const c = computeConditions({ ...base, quizAttempts: [{ id: 'q1', student_id: 's1', is_complete: true, score_pct: 92, submitted_at: '2026-06-22T10:00:00Z' }] }, NOW);
     expect(c).toContainEqual({ student_id: 's1', source_kind: 'strong_result', source_ref: 'q1', severity: 'info' });
@@ -60,30 +68,40 @@ const upsertCalls: unknown[] = [];
 const updateCalls: unknown[] = [];
 
 // Minimal chainable query stub mirroring the loadGradebook.test.ts harness.
-// maybeSingle() returns the first row (or null) as a Promise<{ data, error }>.
+// Supports eq() scalar filters and in() set filters so tests that assert on
+// active-only enrollments and per-student scoping can verify the real behaviour.
 function table(rows: () => unknown[]) {
+  const eqFilters: { field: string; value: unknown }[] = [];
+  const inFilters: { field: string; values: unknown[] }[] = [];
   const q: Record<string, unknown> = {};
   const chain = () => q;
-  for (const m of ['select', 'eq', 'in', 'order', 'gte']) q[m] = chain;
+  for (const m of ['select', 'order', 'gte']) q[m] = chain;
+  q['eq'] = (field: string, value: unknown) => { eqFilters.push({ field, value }); return q; };
+  q['in'] = (field: string, values: unknown[]) => { inFilters.push({ field, values }); return q; };
+  const resolve = () => rows().filter((r) => {
+    const row = r as Record<string, unknown>;
+    const eqOk = eqFilters.every(({ field, value }) => row[field] === value);
+    const inOk = inFilters.every(({ field, values }) => values.includes(row[field]));
+    return eqOk && inOk;
+  });
   // maybeSingle: resolves with first row or null (single-row variant)
-  q['maybeSingle'] = () => Promise.resolve({ data: (rows()[0] ?? null), error: null });
+  q['maybeSingle'] = () => Promise.resolve({ data: (resolve()[0] ?? null), error: null });
   q['upsert'] = (data: unknown, opts?: unknown) => {
     upsertCalls.push({ data, opts });
-    // upsert returns a builder; make it awaitable with no-error result
     const u: Record<string, unknown> = {};
     for (const m of ['select', 'eq', 'in']) u[m] = () => u;
-    (u as { then: unknown }).then = (resolve: (v: { error: null }) => void) => resolve({ error: null });
+    (u as { then: unknown }).then = (cb: (v: { error: null }) => void) => cb({ error: null });
     return u;
   };
   q['update'] = (data: unknown) => {
     updateCalls.push({ data });
     const u: Record<string, unknown> = {};
     for (const m of ['eq', 'in']) u[m] = () => u;
-    (u as { then: unknown }).then = (resolve: (v: { error: null }) => void) => resolve({ error: null });
+    (u as { then: unknown }).then = (cb: (v: { error: null }) => void) => cb({ error: null });
     return u;
   };
-  (q as { then: unknown }).then = (resolve: (v: { data: unknown[]; error: null }) => void) =>
-    resolve({ data: rows(), error: null });
+  (q as { then: unknown }).then = (cb: (v: { data: unknown[]; error: null }) => void) =>
+    cb({ data: resolve(), error: null });
   return q;
 }
 
@@ -107,15 +125,15 @@ beforeEach(() => {
   upsertCalls.length = 0;
   updateCalls.length = 0;
   CLASSES = [{ id: 'c1', school_id: 'sc1' }];
-  ENROLLMENTS = [{ student_id: 's1' }];
+  ENROLLMENTS = [{ student_id: 's1', class_id: 'c1', is_active: true }];
   USERS = [{ id: 's1', full_name: 'Ann' }];
-  ASSIGNMENTS = [{ id: 'a1' }];
-  QUIZZES = [{ id: 'qz1' }];
+  ASSIGNMENTS = [{ id: 'a1', class_id: 'c1' }];
+  QUIZZES = [{ id: 'qz1', class_id: 'c1' }];
   HW = [{ id: 'h1', student_id: 's1', assignment_id: 'a1', status: 'graded', score_pct: 30, teacher_score: null, allow_redo: false, is_redo: false, submitted_at: '2026-06-22T10:00:00Z' }];
-  QUIZ_ATTEMPTS = [{ id: 'qa1', student_id: 's1', is_complete: true, score_pct: 30, submitted_at: '2026-06-22T10:00:00Z' }];
+  QUIZ_ATTEMPTS = [{ id: 'qa1', student_id: 's1', quiz_id: 'qz1', is_complete: true, score_pct: 30, submitted_at: '2026-06-22T10:00:00Z' }];
   // A stale open alert whose occurrence key (strong_result / old_qa) is NOT in the new condition set
   OPEN_ALERTS = [
-    { id: 'stale1', student_id: 's1', source_kind: 'strong_result', source_ref: 'old_qa', severity: 'info', created_at: '2026-06-20T00:00:00Z' },
+    { id: 'stale1', student_id: 's1', source_kind: 'strong_result', source_ref: 'old_qa', severity: 'info', class_id: 'c1', status: 'open', created_at: '2026-06-20T00:00:00Z' },
   ];
 });
 
@@ -139,18 +157,60 @@ describe('reconcileAlerts (integration)', () => {
     expect(call.data.resolved_at).toBeTruthy();
   });
 
-  it('returns AlertView[] sorted urgent → watch → info', async () => {
-    // Seed OPEN_ALERTS with mixed severities both in the condition set
+  it('returns AlertView[] sorted urgent → watch → info with ≥2 live results', async () => {
+    // Seed two students: s1 gets a low quiz (urgent), s2 gets a strong result (info).
+    // Both alerts are in OPEN_ALERTS with keys matching the computed conditions → both survive
+    // reconcile and the sort loop must execute (result.length === 2).
+    ENROLLMENTS = [{ student_id: 's1', class_id: 'c1', is_active: true }, { student_id: 's2', class_id: 'c1', is_active: true }];
+    USERS = [{ id: 's1', full_name: 'Ann' }, { id: 's2', full_name: 'Bob' }];
+    QUIZ_ATTEMPTS = [
+      { id: 'qa1', student_id: 's1', quiz_id: 'qz1', is_complete: true, score_pct: 30, submitted_at: '2026-06-22T10:00:00Z' },
+      { id: 'qa2', student_id: 's2', quiz_id: 'qz1', is_complete: true, score_pct: 90, submitted_at: '2026-06-22T10:00:00Z' },
+    ];
+    HW = [];
+    // OPEN_ALERTS contains one row for each live condition key
     OPEN_ALERTS = [
-      // Both of these correspond to conditions that will be computed (low_quiz + low_assignment)
-      { id: 'a_info', student_id: 's1', source_kind: 'strong_result', source_ref: 'qa1', severity: 'info', created_at: '2026-06-22T00:00:00Z' },
-      { id: 'a_urg', student_id: 's1', source_kind: 'low_quiz', source_ref: 'qa1', severity: 'urgent', created_at: '2026-06-22T00:00:00Z' },
+      { id: 'a_info', student_id: 's2', source_kind: 'strong_result', source_ref: 'qa2', severity: 'info', class_id: 'c1', status: 'open', created_at: '2026-06-22T00:00:00Z' },
+      { id: 'a_urg', student_id: 's1', source_kind: 'low_quiz', source_ref: 'qa1', severity: 'urgent', class_id: 'c1', status: 'open', created_at: '2026-06-22T00:00:00Z' },
     ];
     const result = await reconcileAlerts(mockAdmin(), { classId: 'c1', now: NOW });
-    // Sort invariant: severity order must be non-decreasing
+    expect(result.length).toBeGreaterThanOrEqual(2); // loop must execute
     const severityOrder: Record<string, number> = { urgent: 0, watch: 1, info: 2 };
     for (let i = 1; i < result.length; i++) {
       expect(severityOrder[result[i].severity]).toBeGreaterThanOrEqual(severityOrder[result[i - 1].severity]);
     }
+  });
+
+  it('excludes inactive enrollments (is_active filter): withdrawn student generates no alerts', async () => {
+    // s_inactive is enrolled but NOT active; seeded enrollment has is_active: false.
+    // The mock honours eq() calls by chaining (all rows returned), so we test the
+    // impl adds .eq('is_active', true) by seeding ONLY an inactive student and verifying
+    // no conditions are upserted and the return is empty when is_active filtering works.
+    // We do this by seeding a second, inactive enrollment entry and confirming the
+    // upserted conditions only reference active students.
+    ENROLLMENTS = [
+      { student_id: 's1', class_id: 'c1', is_active: true },
+      { student_id: 's_inactive', class_id: 'c1', is_active: false },
+    ];
+    USERS = [
+      { id: 's1', full_name: 'Ann' },
+      { id: 's_inactive', full_name: 'Withdrawn' },
+    ];
+    // The impl must filter enrollments to is_active:true → only s1 appears in studentIds
+    // (in the mock the chain always returns all rows, so we test the impl calls
+    // .eq('is_active', true) by checking the upserted student_ids never include s_inactive)
+    HW = [
+      { id: 'h_inactive', student_id: 's_inactive', assignment_id: 'a1', status: 'graded', score_pct: 20, teacher_score: null, allow_redo: false, is_redo: false, submitted_at: '2026-06-22T10:00:00Z' },
+    ];
+    QUIZ_ATTEMPTS = [];
+    OPEN_ALERTS = [];
+    await reconcileAlerts(mockAdmin(), { classId: 'c1', now: NOW });
+    // If is_active filter works, s_inactive is excluded from studentIds and their attempts
+    // are never in the .in(student_id) filter → no condition for s_inactive is upserted.
+    // The mock returns ALL HW rows regardless, so we verify via the condition computation:
+    // if s_inactive is not in students list, computeConditions won't generate a condition for them.
+    // We check: no upsert row has student_id === 's_inactive'
+    const allUpserted = upsertCalls.flatMap((c) => (c as { data: { student_id: string }[] }).data);
+    expect(allUpserted.every((r) => r.student_id !== 's_inactive')).toBe(true);
   });
 });
