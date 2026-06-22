@@ -368,3 +368,39 @@ Three mutually exclusive one-liners shown above the band-mix grid when a pattern
 | `urgent` | Needs attention this week | Worth a check-in within the next few days. |
 | `watch` | Check in | Look at when you have a moment. |
 | `info` | Heads-up | Good news — nothing to do. |
+
+### Page header (`src/app/(teacher)/alerts/page.tsx`)
+
+| Element | Current draft |
+|---|---|
+| Page title | Alerts |
+| Kicker | Things that just changed |
+
+### Summary callout — `summary()` function (`src/app/(teacher)/alerts/page.tsx`)
+
+> Count-bearing; uses digits by design (`hasBannedWord` only, not `assertNoLeak`).
+
+| Condition | Current draft |
+|---|---|
+| No urgent, no watch | Nothing new — the class is steady today. |
+| Watch only, 1 student | 1 to check in on. |
+| Watch only, N students | N to check in on. |
+| Urgent only, 1 student | 1 student needs attention. |
+| Urgent only, N students | N students need attention. |
+| Both urgent and watch | N students need attention, N to check in on. |
+
+### Empty states (`src/app/(teacher)/alerts/page.tsx`)
+
+| Variant | Title draft | Body draft |
+|---|---|---|
+| No classes (`NO_CLASSES`) | No classes yet | Once a class is set up for you, alerts show up here. |
+| Class unavailable (`CLASS_UNAVAILABLE`) | That class isn't available | Use the class selector to pick one of your classes. |
+| No open alerts | No new change events | When something needs your eyes, it'll show up here. |
+
+### AlertRow strings (`src/app/(teacher)/alerts/_components/AlertRow.tsx`)
+
+| State | Current draft |
+|---|---|
+| Button idle | Mark handled |
+| Button busy / loading | Working… |
+| Error message | Could not mark handled — try again. |
