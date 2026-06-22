@@ -54,13 +54,21 @@ describe('GradebookDrillIn', () => {
     }
   });
 
-  // M2 — an empty/blank grade must NOT silently POST teacher_score:null (that's a silent clear).
-  it('blocks save on an empty grade input — shows an inline error, does NOT POST', async () => {
-    render(<GradebookDrillIn selected={{ ...selected, cell: { ...selected.cell, is_override: false, displayed_grade: 70 } }} onClose={() => {}} onWrite={() => {}} />);
-    // Grade input starts empty for a non-override cell.
+  // Finding 1 — a graded cell with NO existing override starts with a blank grade input.
+  // Editing ONLY the note (grade left blank) must SAVE the note: POST carries teacher_notes and
+  // NO teacher_score key, with no inline error (a blank grade = "no grade change", not an error).
+  it('allows a note-only save on a graded cell with no override — POSTs teacher_notes, no teacher_score, no error', async () => {
+    const onWrite = vi.fn();
+    render(<GradebookDrillIn selected={{ ...selected, cell: { ...selected.cell, is_override: false, displayed_grade: 70 } }} onClose={() => {}} onWrite={onWrite} />);
+    // Grade input starts empty for a non-override cell; edit only the note.
+    fireEvent.change(screen.getByLabelText(/add a note/i), { target: { value: 'great effort' } });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/grade from 0 to 100/i);
-    expect(fetch).not.toHaveBeenCalled();
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const body = JSON.parse((fetch as unknown as { mock: { calls: Array<[unknown, { body: string }]> } }).mock.calls[0][1].body);
+    expect(body.teacher_notes).toBe('great effort');
+    expect('teacher_score' in body).toBe(false); // blank grade → no grade change sent
+    expect(screen.queryByRole('alert')).toBeNull(); // no inline error
+    await waitFor(() => expect(onWrite).toHaveBeenCalled());
   });
   it('blocks save on an out-of-range grade — shows an inline error, does NOT POST', async () => {
     render(<GradebookDrillIn selected={selected} onClose={() => {}} onWrite={() => {}} />);
@@ -85,11 +93,13 @@ describe('GradebookDrillIn', () => {
     expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /clear override/i })).toBeInTheDocument();
   });
-  it('a submitted (ungraded) cell shows notes only — NO grade input, with a "not graded yet" line', () => {
+  it('a submitted (ungraded) cell shows notes only — NO grade input, NO reteach toggle, with a "not graded yet" line', () => {
     const submittedSel = { ...selected, cell: { ...selected.cell, status: 'submitted' as const, attempt_id: 'h2', displayed_grade: null, score_pct: null, is_override: false } };
     render(<GradebookDrillIn selected={submittedSel} onClose={() => {}} onWrite={() => {}} />);
     expect(screen.queryByLabelText(/grade/i)).toBeNull();          // no grade input
     expect(screen.queryByRole('spinbutton')).toBeNull();           // no numeric input
+    // Finding 2 — submitted (ungraded) work can't be reteached; the toggle must NOT render.
+    expect(screen.queryByRole('checkbox', { name: /another try/i })).toBeNull();
     expect(screen.getByText(/not graded yet/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/add a note/i)).toBeInTheDocument(); // notes still editable
   });

@@ -74,7 +74,9 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
   // A grade override needs a graded attempt; a note needs ANY attempt (submitted included).
   const canEditGrade = isGradedFamily && cell.attempt_id != null;
   const canEditNote = cell.attempt_id != null;
-  const canReteach = cell.attempt_id != null;
+  // Finding 2: you can't reteach work that isn't graded yet — gate the toggle on the graded family
+  // (the same statuses that show the grade input). A `submitted` (ungraded) cell is notes-only.
+  const canReteach = isGradedFamily && cell.attempt_id != null;
 
   const [gradeInput, setGradeInput] = useState<string>(
     cell.is_override && cell.displayed_grade != null ? String(cell.displayed_grade) : '',
@@ -157,15 +159,19 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
     const patch: Record<string, unknown> = { teacher_notes: trimmedNote === '' ? null : trimmedNote };
 
     if (canEditGrade) {
-      // M2: never silently clear. An empty/blank grade is rejected inline; clearing an override
-      // is the explicit separate "Clear override" action.
+      // Finding 1: a graded cell with no override starts with a BLANK grade input. A blank grade
+      // means "no grade change" — send no teacher_score (so a note-only edit still saves), and do
+      // NOT error. Clearing an existing override stays the explicit separate "Clear override".
+      // Guard only NON-empty invalid input.
       const trimmed = gradeInput.trim();
-      const score = trimmed === '' ? NaN : Number(trimmed);
-      if (trimmed === '' || !Number.isFinite(score) || score < 0 || score > 100) {
-        setError('Enter a grade from 0 to 100, or use Clear override.');
-        return;
+      if (trimmed !== '') {
+        const score = Number(trimmed);
+        if (!Number.isFinite(score) || score < 0 || score > 100) {
+          setError('Enter a grade from 0 to 100, or use Clear override.');
+          return;
+        }
+        patch.teacher_score = score;
       }
-      patch.teacher_score = score;
     }
 
     void post(patch).then((ok) => {
