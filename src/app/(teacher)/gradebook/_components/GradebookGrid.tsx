@@ -72,6 +72,33 @@ function missingSummary(n: number): string {
   return `${n} assignments are still outstanding.`;
 }
 
+/** Glyph legend rows — recognition-over-recall (B-U2). Leak-guarded words. DRAFT → Barb. */
+const LEGEND: ReadonlyArray<{ glyph: string; word: string }> = [
+  { glyph: '✓', word: 'graded' },
+  { glyph: '⋯', word: 'turned in' },
+  { glyph: '·', word: 'not due' },
+  { glyph: 'miss', word: 'missing' },
+  { glyph: '⟳', word: 'another try' },
+  { glyph: '⤺', word: 'grade changed' },
+  { glyph: 'late', word: 'turned in late' },
+];
+
+function GlyphLegend() {
+  return (
+    <ul
+      data-testid="glyph-legend"
+      className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-fg-muted"
+    >
+      {LEGEND.map(({ glyph, word }) => (
+        <li key={word} className="flex items-center gap-1">
+          <span aria-hidden="true" className="font-bold text-fg">{glyph}</span>
+          <span>{word}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
  * Footer average renderer — shows the real number visibly but glyph-by-glyph so the value is
  * always a screen-reader-labeled summary, distinct from the per-cell grade. (Each character is its
@@ -119,18 +146,22 @@ export function GradebookGrid({ data }: GradebookGridProps) {
         <span data-testid="missing-summary">{missingSummary(missing_count)}</span>
       </SummaryCallout>
 
-      {/* Horizontal scroll wrapper; sticky first column. */}
-      <div className="overflow-x-auto rounded-lg border-2 border-sidebar-edge shadow-sticker">
+      {/* Glyph legend (recognition-over-recall). */}
+      <GlyphLegend />
+
+      {/* Scroll wrapper — capped height so the sticky header row stays visible with a long roster.
+          Sticky first column (left) + sticky header row (top); the top-left corner sits above both. */}
+      <div className="max-h-[70vh] overflow-auto rounded-lg border-2 border-sidebar-edge shadow-sticker">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-surface border-b-2 border-sidebar-edge p-2 text-left align-bottom">
+              <th className="sticky left-0 top-0 z-30 bg-surface border-b-2 border-sidebar-edge p-2 text-left align-bottom">
                 <span className="sr-only">Student</span>
               </th>
               {assignments.map((col) => (
                 <th
                   key={col.assignment_key}
-                  className="bg-surface border-b-2 border-l-2 border-sidebar-edge p-2 text-center align-bottom"
+                  className="sticky top-0 z-20 bg-surface border-b-2 border-l-2 border-sidebar-edge p-2 text-center align-bottom"
                 >
                   <div className="flex flex-col items-center gap-1">
                     <SectionLabel tone="brand">{col.title}</SectionLabel>
@@ -159,11 +190,21 @@ export function GradebookGrid({ data }: GradebookGridProps) {
                   const grade = safeCell.displayed_grade;
                   const showGrade = grade != null && (status === 'graded' || status === 'redo' || status === 'redo_in_progress');
                   const interactive = INTERACTIVE.has(status);
-                  const ariaLabel = `${s.name} — ${col.title} — ${STATUS_WORD[status]}${showGrade ? `, ${grade} percent` : ''}`;
+                  // B-A1: fold cell state into the accessible name (banned-word-free).
+                  const stateSuffix =
+                    (showGrade ? `, ${grade} percent` : '')
+                    + (safeCell.submitted_on_time === false ? ', late' : '')
+                    + (safeCell.is_override ? ', grade changed by teacher' : '')
+                    + (status === 'redo_in_progress' ? ', redo open' : '');
+                  const ariaLabel = `${s.name} — ${col.title} — ${STATUS_WORD[status]}${stateSuffix}`;
 
                   const inner = (
                     <span className="flex flex-col items-center gap-0.5">
                       <span aria-hidden="true" className="text-fg font-bold">{GLYPH[status]}</span>
+                      {/* B-U6: a visible word beside the bare ⋯ glyph for a turned-in cell. */}
+                      {status === 'submitted' && (
+                        <span className="text-fg-muted text-xs">in</span>
+                      )}
                       {showGrade && <span className="text-fg font-bold">{grade}%</span>}
                       {safeCell.is_override && (
                         <span aria-hidden="true" className="text-fg-muted text-xs" title="Overridden">⤺</span>
@@ -187,7 +228,7 @@ export function GradebookGrid({ data }: GradebookGridProps) {
                           type="button"
                           aria-label={ariaLabel}
                           onClick={() => setSelected({ studentName: s.name, col, cell: toDrillCell(safeCell) })}
-                          className="flex w-full items-center justify-center rounded-md p-1 text-fg hover:shadow-sticker"
+                          className="flex w-full cursor-pointer items-center justify-center rounded-md p-1 text-fg ring-1 ring-sidebar-edge/40 hover:shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                         >
                           {inner}
                         </button>

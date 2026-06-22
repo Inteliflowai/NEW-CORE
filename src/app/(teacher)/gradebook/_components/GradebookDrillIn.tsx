@@ -3,12 +3,14 @@
 /**
  * GradebookDrillIn — the click-a-cell side panel for a single (student, assignment) attempt.
  *
- * Opened by GradebookGrid (Task 4) when a graded/redo/missing cell is clicked. All read data
- * arrives in props (no extra fetch for the read). The teacher can:
- *   - override the grade (writes teacher_score; override-wins is teacher_score ?? score_pct),
- *   - leave a note (teacher_notes),
- *   - clear the override (teacher_score = null → reverts to the AI grade),
- *   - open the assignment for another try (allow_redo — the reteach toggle).
+ * Opened by GradebookGrid (Task 4) when an interactive cell is clicked. All read data arrives in
+ * props (no extra fetch for the read). What a teacher can do depends on the cell's status:
+ *   - graded / redo / redo_in_progress → override the grade (teacher_score), leave/clear a note
+ *     (teacher_notes), clear the override (teacher_score = null → reverts to the AI grade),
+ *     and open the assignment for another try (allow_redo — the reteach toggle).
+ *   - submitted (turned in, not graded yet) → leave/clear a note only; NO grade input (the route
+ *     409s a grade override on a non-graded attempt — showing the input would mislead).
+ *   - missing / not_due / none (no attempt) → an explanatory empty-state; NO write controls.
  * All writes go through POST /api/teacher/gradebook/override (the route re-checks the auth chain
  * + IDOR; the client cannot be trusted). On a 200, onWrite() lets the grid router.refresh().
  *
@@ -24,7 +26,7 @@ import type { GradebookCell, GradebookAssignmentCol } from '@/lib/gradebook/load
 import { effortLabelPhrase } from '@/lib/copy/effortLabelPhrase';
 
 /** The drill-in renders the loader's GradebookCell verbatim — it already carries the immutable
- * AI grade (score_pct) and the effort label (effort_label) needed for the breakdown + effort line. */
+ * AI grade (score_pct), the effort label, the teacher note and the submission date. */
 export type DrillInCell = GradebookCell;
 
 export interface GradebookDrillInSelection {
@@ -42,7 +44,7 @@ export interface GradebookDrillInProps {
 /** Teacher-safe status microcopy (number-free, banned-word-free). DRAFT → Barb. */
 const STATUS_WORD: Record<GradebookCell['status'], string> = {
   graded: 'Graded',
-  submitted: 'Turned in — not graded yet',
+  submitted: 'Turned in, waiting on a grade',
   not_due: 'Not due yet',
   missing: 'Missing',
   redo: 'Open for another try',
@@ -50,29 +52,84 @@ const STATUS_WORD: Record<GradebookCell['status'], string> = {
   none: 'Not assigned',
 };
 
+/** Statuses where a grade exists to override (the route only accepts a grade override on a
+ * `graded` attempt; redo / redo_in_progress carry the prior graded attempt's id). */
+const GRADED_FAMILY: ReadonlySet<GradebookCell['status']> = new Set<GradebookCell['status']>([
+  'graded', 'redo', 'redo_in_progress',
+]);
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Date-only, banned-word-free (count-bearing prose → hasBannedWord, not hasLeak). DRAFT → Barb. */
+function submittedDateLabel(iso: string): string {
+  const d = new Date(iso);
+  return `Turned in ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+
+const FOCUSABLE = 'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])';
+
 export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillInProps) {
   const { studentName, col, cell } = selected;
+
+  const isGradedFamily = GRADED_FAMILY.has(cell.status);
+  // A grade override needs a graded attempt; a note needs ANY attempt (submitted included).
+  const canEditGrade = isGradedFamily && cell.attempt_id != null;
+  const canEditNote = cell.attempt_id != null;
+  const canReteach = cell.attempt_id != null;
 
   const [gradeInput, setGradeInput] = useState<string>(
     cell.is_override && cell.displayed_grade != null ? String(cell.displayed_grade) : '',
   );
-  const [notes, setNotes] = useState<string>('');
+  const [notes, setNotes] = useState<string>(cell.teacher_notes ?? '');
   const [allowRedo, setAllowRedo] = useState<boolean>(cell.allow_redo);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canOverride = cell.attempt_id != null;
   const effortPhrase = cell.effort_label ? effortLabelPhrase(cell.effort_label) : null;
 
-  // Keyboard a11y (M4): move focus into the panel on mount; Escape closes it.
+  // Keyboard a11y: trap focus inside the panel, restore focus to the originating cell button on
+  // every close path, and close on Escape (M4 / B-A2).
+  const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => { closeRef.current?.focus(); }, []);
+  const triggerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    // Capture the element that had focus when the panel opened (the cell button).
+    triggerRef.current = (document.activeElement as HTMLElement) ?? null;
+    closeRef.current?.focus();
+    return () => {
+      // Restore focus on unmount (covers every close path: Escape, ✕, Save→onWrite, Clear, scrim).
+      triggerRef.current?.focus?.();
+    };
+  }, []);
+
   function onKeyDown(e: React.KeyboardEvent<HTMLElement>) {
-    if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key === 'Tab') {
+      const root = panelRef.current;
+      if (!root) return;
+      const nodes = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (n) => !n.hasAttribute('disabled'),
+      );
+      if (nodes.length === 0) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
   }
 
-  async function post(patch: Record<string, unknown>) {
-    if (!cell.attempt_id || busy) return;
+  async function post(patch: Record<string, unknown>): Promise<boolean> {
+    if (!cell.attempt_id || busy) return false;
     setBusy(true);
     setError(null);
     try {
@@ -83,171 +140,219 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
       });
       if (!res.ok) {
         setError("That didn't save — try again in a moment.");
-        return;
+        return false;
       }
-      onWrite();
+      return true;
     } catch {
       setError("That didn't save — try again in a moment.");
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
   function onSave() {
-    // M2: never silently clear. An empty/blank or non-finite 0–100 grade is rejected inline;
-    // clearing an override is the explicit separate "Clear override" action.
-    const trimmed = gradeInput.trim();
-    const score = trimmed === '' ? NaN : Number(trimmed);
-    if (trimmed === '' || !Number.isFinite(score) || score < 0 || score > 100) {
-      setError('Enter a grade from 0 to 100, or use Clear override.');
-      return;
+    // The note is always sent ('' → null) so a teacher can view, edit AND CLEAR it (B-U5).
+    const trimmedNote = notes.trim();
+    const patch: Record<string, unknown> = { teacher_notes: trimmedNote === '' ? null : trimmedNote };
+
+    if (canEditGrade) {
+      // M2: never silently clear. An empty/blank grade is rejected inline; clearing an override
+      // is the explicit separate "Clear override" action.
+      const trimmed = gradeInput.trim();
+      const score = trimmed === '' ? NaN : Number(trimmed);
+      if (trimmed === '' || !Number.isFinite(score) || score < 0 || score > 100) {
+        setError('Enter a grade from 0 to 100, or use Clear override.');
+        return;
+      }
+      patch.teacher_score = score;
     }
-    const patch: Record<string, unknown> = { teacher_score: score };
-    if (notes.trim() !== '') patch.teacher_notes = notes.trim();
-    void post(patch);
+
+    void post(patch).then((ok) => {
+      if (ok) onWrite();
+    });
   }
 
   function onClear() {
     setGradeInput('');
-    void post({ teacher_score: null });
+    void post({ teacher_score: null }).then((ok) => {
+      if (ok) onWrite();
+    });
   }
 
   function onToggleRedo() {
-    const next = !allowRedo;
+    // B-C2: flip optimistically, but capture the prior value and REVERT on a failed/throwing POST
+    // (or only commit on success). Never leave the checkbox out of sync with the server.
+    const prev = allowRedo;
+    const next = !prev;
     setAllowRedo(next);
-    void post({ allow_redo: next });
+    void post({ allow_redo: next }).then((ok) => {
+      if (!ok) setAllowRedo(prev); // rollback
+    });
   }
 
   return (
-    <aside
-      role="dialog"
-      aria-label={`${studentName} — ${col.title}`}
-      onKeyDown={onKeyDown}
-      className="fixed inset-y-0 right-0 z-30 flex w-full max-w-md flex-col gap-4 overflow-y-auto border-l-2 border-sidebar-edge bg-surface p-5 shadow-sticker-lg"
-    >
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-lg font-extrabold text-fg">{studentName}</h2>
-          <p className="text-sm text-fg">{col.title}</p>
+    <>
+      {/* Click-outside-to-close scrim (B-A2). Token-only; inert to screen readers. */}
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        className="fixed inset-0 z-20 bg-fg/30"
+      />
+      <aside
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${studentName} — ${col.title}`}
+        onKeyDown={onKeyDown}
+        className="fixed inset-y-0 right-0 z-30 flex w-full max-w-md flex-col gap-4 overflow-y-auto border-l-2 border-sidebar-edge bg-surface p-5 shadow-sticker-lg"
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-lg font-extrabold text-fg">{studentName}</h2>
+            <p className="text-sm text-fg">{col.title}</p>
+            {cell.submitted_at && (
+              <p data-testid="submitted-date" className="text-xs text-fg-muted">
+                {submittedDateLabel(cell.submitted_at)}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            ref={closeRef}
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md border-2 border-sidebar-edge px-2 py-1 text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
+            ✕
+          </button>
         </div>
-        <button
-          type="button"
-          ref={closeRef}
-          onClick={onClose}
-          aria-label="Close"
-          className="rounded-md border-2 border-sidebar-edge px-2 py-1 text-fg shadow-sticker"
-        >
-          ✕
-        </button>
-      </div>
 
-      {/* Status line — glyph + word, never colour alone */}
-      <p className="text-sm text-fg">
-        <span aria-hidden="true" className="mr-1">
-          {cell.status === 'graded' ? '✓' : cell.status === 'missing' ? '•' : '·'}
-        </span>
-        {STATUS_WORD[cell.status]}
-        {cell.submitted_on_time === false && (
-          <span className="ml-2 rounded-md border-2 border-sidebar-edge bg-warn-surface px-1.5 py-0.5 text-xs font-bold text-fg">
-            Late
+        {/* Status line — glyph + word, never colour alone */}
+        <p className="text-sm text-fg">
+          <span aria-hidden="true" className="mr-1">
+            {cell.status === 'graded' ? '✓' : cell.status === 'missing' ? '•' : '·'}
           </span>
-        )}
-      </p>
-
-      {/* Grade breakdown — AI grade vs the teacher's override (teacher-only render site) */}
-      {cell.is_override ? (
-        <div className="flex flex-col gap-1 rounded-lg border-2 border-sidebar-edge bg-brand-surface p-3">
-          <p className="text-sm text-fg">
-            <span className="font-bold">AI grade:</span>{' '}
-            {cell.score_pct != null ? `${cell.score_pct}%` : '—'}
-          </p>
-          <p className="text-sm text-fg">
-            <span className="font-bold">Your grade:</span>{' '}
-            {cell.displayed_grade != null ? `${cell.displayed_grade}%` : '—'}
-          </p>
-        </div>
-      ) : (
-        cell.displayed_grade != null && (
-          <p className="text-sm text-fg">
-            <span className="font-bold">AI grade:</span> {cell.displayed_grade}%
-          </p>
-        )
-      )}
-
-      {/* Effort line — only shown when an effort label is available */}
-      {effortPhrase && <p className="text-sm text-fg-muted">{effortPhrase}</p>}
-
-      {/* Override control (assignments only — an attempt must exist) */}
-      {canOverride && (
-        <div className="flex flex-col gap-3 border-t-2 border-sidebar-edge pt-4">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="override-grade" className="text-sm font-bold text-fg">
-              Override grade
-            </label>
-            <input
-              id="override-grade"
-              type="number"
-              min={0}
-              max={100}
-              value={gradeInput}
-              onChange={(e) => setGradeInput(e.target.value)}
-              disabled={busy}
-              className="w-24 rounded-md border-2 border-sidebar-edge bg-bg px-2 py-1 text-fg"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label htmlFor="override-notes" className="text-sm font-bold text-fg">
-              Add a note
-            </label>
-            <textarea
-              id="override-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              disabled={busy}
-              className="min-h-[60px] w-full resize-none rounded-md border-2 border-sidebar-edge bg-bg px-2 py-1 text-fg"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={busy}
-              className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-bold text-fg-on-brand shadow-sticker disabled:opacity-50"
-            >
-              Save
-            </button>
-            <button
-              type="button"
-              onClick={onClear}
-              disabled={busy}
-              className="rounded-md border-2 border-sidebar-edge bg-surface px-4 py-2 text-fg shadow-sticker disabled:opacity-50"
-            >
-              Clear override
-            </button>
-          </div>
-
-          {/* Reteach toggle */}
-          <label className="flex items-center gap-2 text-sm text-fg">
-            <input
-              type="checkbox"
-              checked={allowRedo}
-              onChange={onToggleRedo}
-              disabled={busy}
-            />
-            Open this for another try.
-          </label>
-
-          {error && (
-            <p role="alert" className="text-sm text-fg">
-              {error}
-            </p>
+          {STATUS_WORD[cell.status]}
+          {cell.submitted_on_time === false && (
+            <span className="ml-2 rounded-md border-2 border-sidebar-edge bg-warn-surface px-1.5 py-0.5 text-xs font-bold text-fg">
+              Late
+            </span>
           )}
-        </div>
-      )}
-    </aside>
+        </p>
+
+        {/* Grade breakdown — AI grade vs the teacher's override (teacher-only render site) */}
+        {cell.is_override ? (
+          <div className="flex flex-col gap-1 rounded-lg border-2 border-sidebar-edge bg-brand-surface p-3">
+            <p className="text-sm text-fg">
+              <span className="font-bold">AI grade:</span>{' '}
+              {cell.score_pct != null ? `${cell.score_pct}%` : '—'}
+            </p>
+            <p className="text-sm text-fg">
+              <span className="font-bold">Your grade:</span>{' '}
+              {cell.displayed_grade != null ? `${cell.displayed_grade}%` : '—'}
+            </p>
+          </div>
+        ) : (
+          cell.displayed_grade != null && (
+            <p className="text-sm text-fg">
+              <span className="font-bold">AI grade:</span> {cell.displayed_grade}%
+            </p>
+          )
+        )}
+
+        {/* Effort line — only shown when an effort label is available */}
+        {effortPhrase && <p className="text-sm text-fg-muted">{effortPhrase}</p>}
+
+        {/* No-attempt empty-state: nothing to grade, no write controls (B-C1). */}
+        {!canEditNote && (
+          <p className="border-t-2 border-sidebar-edge pt-4 text-sm text-fg-muted">
+            Nothing&apos;s been turned in yet — there&apos;s nothing to grade.
+          </p>
+        )}
+
+        {/* Write controls — present whenever an attempt exists (grade input gated separately). */}
+        {canEditNote && (
+          <div className="flex flex-col gap-3 border-t-2 border-sidebar-edge pt-4">
+            {/* Grade override — graded-family attempts only (B-C1). */}
+            {canEditGrade ? (
+              <div className="flex flex-col gap-1">
+                <label htmlFor="override-grade" className="text-sm font-bold text-fg">
+                  Override grade
+                </label>
+                <input
+                  id="override-grade"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={gradeInput}
+                  onChange={(e) => setGradeInput(e.target.value)}
+                  disabled={busy}
+                  className="w-24 rounded-md border-2 border-sidebar-edge bg-bg px-2 py-1 text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                />
+              </div>
+            ) : (
+              <p className="text-sm text-fg-muted">Not graded yet — you can add a note.</p>
+            )}
+
+            <div className="flex flex-col gap-1">
+              <label htmlFor="override-notes" className="text-sm font-bold text-fg">
+                Add a note
+              </label>
+              <textarea
+                id="override-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                disabled={busy}
+                className="min-h-[60px] w-full resize-none rounded-md border-2 border-sidebar-edge bg-bg px-2 py-1 text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onSave}
+                disabled={busy}
+                className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-bold text-fg-on-brand shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
+              >
+                Save
+              </button>
+              {canEditGrade && (
+                <button
+                  type="button"
+                  onClick={onClear}
+                  disabled={busy}
+                  className="rounded-md border-2 border-sidebar-edge bg-surface px-4 py-2 text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
+                >
+                  Clear override
+                </button>
+              )}
+            </div>
+
+            {/* Reteach toggle */}
+            {canReteach && (
+              <label className="flex items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  checked={allowRedo}
+                  onChange={onToggleRedo}
+                  disabled={busy}
+                  className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                />
+                Open this for another try.
+              </label>
+            )}
+
+            {error && (
+              <p role="alert" className="text-sm text-fg">
+                {error}
+              </p>
+            )}
+          </div>
+        )}
+      </aside>
+    </>
   );
 }
 

@@ -5,6 +5,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { GradebookDrillIn } from '../GradebookDrillIn';
 import { effortLabelPhrase } from '@/lib/copy/effortLabelPhrase';
 import { EFFORT_LABELS } from '@/lib/signals/computeEffortLabel';
+import { hasBannedWord } from '@/lib/copy/leakGuard';
 
 const selected = {
   studentName: 'Ana Diaz',
@@ -75,5 +76,63 @@ describe('GradebookDrillIn', () => {
     render(<GradebookDrillIn selected={selected} onClose={onClose} onWrite={() => {}} />);
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  // B-C1 — the grade-override input shows ONLY for graded-family statuses.
+  it('a graded cell shows the grade-override input, Save and Clear', () => {
+    render(<GradebookDrillIn selected={selected} onClose={() => {}} onWrite={() => {}} />);
+    expect(screen.getByLabelText(/grade/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /clear override/i })).toBeInTheDocument();
+  });
+  it('a submitted (ungraded) cell shows notes only — NO grade input, with a "not graded yet" line', () => {
+    const submittedSel = { ...selected, cell: { ...selected.cell, status: 'submitted' as const, attempt_id: 'h2', displayed_grade: null, score_pct: null, is_override: false } };
+    render(<GradebookDrillIn selected={submittedSel} onClose={() => {}} onWrite={() => {}} />);
+    expect(screen.queryByLabelText(/grade/i)).toBeNull();          // no grade input
+    expect(screen.queryByRole('spinbutton')).toBeNull();           // no numeric input
+    expect(screen.getByText(/not graded yet/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/add a note/i)).toBeInTheDocument(); // notes still editable
+  });
+  it('a missing cell (no attempt) shows an explanatory empty-state and NO write controls', () => {
+    const missingSel = { ...selected, cell: { ...selected.cell, status: 'missing' as const, attempt_id: null, displayed_grade: null, score_pct: null, is_override: false } };
+    render(<GradebookDrillIn selected={missingSel} onClose={() => {}} onWrite={() => {}} />);
+    expect(screen.queryByLabelText(/grade/i)).toBeNull();
+    expect(screen.queryByLabelText(/add a note/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^save$/i })).toBeNull();
+    expect(screen.getByText(/nothing'?s been turned in/i)).toBeInTheDocument();
+  });
+
+  // B-U5 — the notes textarea seeds from cell.teacher_notes and an emptied note clears (null).
+  it('seeds the notes textarea from an existing teacher_notes', () => {
+    const noted = { ...selected, cell: { ...selected.cell, teacher_notes: 'keep going' } };
+    render(<GradebookDrillIn selected={noted} onClose={() => {}} onWrite={() => {}} />);
+    expect(screen.getByLabelText(/add a note/i)).toHaveValue('keep going');
+  });
+  it('saving an emptied note sends teacher_notes: null', async () => {
+    const noted = { ...selected, cell: { ...selected.cell, teacher_notes: 'keep going' } };
+    render(<GradebookDrillIn selected={noted} onClose={() => {}} onWrite={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/add a note/i), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const body = JSON.parse((fetch as unknown as { mock: { calls: Array<[unknown, { body: string }]> } }).mock.calls[0][1].body);
+    expect(body.teacher_notes).toBeNull(); // '' → null so a teacher can CLEAR a note
+  });
+
+  // B-C7 — the submitted date appears in the header.
+  it('shows the submitted date (no banned words)', () => {
+    render(<GradebookDrillIn selected={selected} onClose={() => {}} onWrite={() => {}} />);
+    expect(screen.getByTestId('submitted-date')).toBeInTheDocument();
+    expect(hasBannedWord(screen.getByTestId('submitted-date').textContent || '')).toBe(false);
+  });
+
+  // B-C2 — a failed reteach toggle reverts the checkbox to its prior state + shows an error.
+  it('reverts the reteach toggle on a failed POST and shows an error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({ error: 'x' }) }));
+    render(<GradebookDrillIn selected={selected} onClose={() => {}} onWrite={() => {}} />);
+    const toggle = screen.getByRole('checkbox', { name: /another try/i }) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(toggle.checked).toBe(false); // reverted to prior state
   });
 });

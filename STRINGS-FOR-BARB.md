@@ -267,3 +267,51 @@ All Teli-visible strings below are DRAFTS. Teli is the in-assignment Socratic tu
 **FYI for Barb — Teli reply safety: word-ban removed in favor of the context-aware check (decided 2026-06-22, Marvin).** Teli's reply gate originally reused the dashboard leak-guard `BANNED_WORDS` (score/percentile/index/divergence/threshold/signal/model/algorithm/flag), which whole-word-blocked ordinary tutoring vocabulary and silently degraded on-topic Socratic hints to the safe-fallback line (Teli's own "build a model" hint tripped it). Teli's prompt holds NO diagnostic machinery (no band/score/risk — only the task + the student's words), so a blunt word list was the wrong tool. **Decision: drop the word-ban entirely.** The synchronous gate now catches only high-precision answer-handing ("the answer is…", "just multiply… to get…"); whether a word like "score"/"percentile"/"divergence" is fine is judged in context by the LLM reveal classifier (it reads the whole reply), so these flow freely when relevant to STEM work (math/chemistry/physics/algebra/geometry/trig) — Marvin's call: "let it through when relevant; the smart check judges, not a fixed list." The never-reveal guarantee is unchanged (heuristic + classifier, fail-closed). **Barb: nothing to action — flagging in case you want Teli's voice to avoid clinical phrasing ("your score is low") as a tone preference; that's copy/tone, not a safety gate.**
 
 Deferred design nit (not copy): the TeliPanel chrome currently uses the same token for border and background (reads flat); flagged for the design pass, not blocking.
+
+---
+
+## §Gradebook — fix wave #2 DRAFT strings (2026-06-22)
+
+> New or changed user-facing copy from the gradebook correctness + a11y pass (branch
+> `feat/teacher-gradebook`). All teacher-facing; count-bearing strings carry digits by
+> design (checked with `hasBannedWord`, not `hasLeak`); number-free strings pass both
+> guards. "Assignments", never "Homework".
+
+### Grid — cell glyph legend (new, `GradebookGrid.tsx`)
+
+A compact legend strip above the grid mapping each status glyph to a leak-guarded word:
+
+| Glyph | Draft word |
+|---|---|
+| ✓ | graded |
+| ⋯ | turned in |
+| · | not due |
+| miss | missing |
+| ⟳ | another try |
+| ⤺ | grade changed |
+| late | turned in late |
+
+### Grid — cell microcopy (changed/added, `GradebookGrid.tsx`)
+
+- A turned-in (`submitted`) cell now shows the word **"in"** beside the `⋯` glyph (was a bare glyph).
+- Cell accessible names now fold in state (banned-word-free), e.g. appended:
+  `", late"`, `", grade changed by teacher"`, `", redo open"`.
+
+### Missing-work summary (unchanged wording, listed for completeness)
+
+- 0 outstanding: "Everything's turned in — nothing outstanding."
+- 1 outstanding: "1 assignment is still outstanding."
+- N outstanding: "{N} assignments are still outstanding."
+
+### Drill-in panel (changed/added, `GradebookDrillIn.tsx`)
+
+- Status word for a turned-in-but-ungraded attempt: **"Turned in, waiting on a grade"**
+  (was "Turned in — not graded yet").
+- Submitted-date line in the header (date only, no banned words): **"Turned in {Mon} {D}"**
+  (e.g. "Turned in Jun 9").
+- Ungraded-but-turned-in cell, in place of the grade input: **"Not graded yet — you can add a note."**
+- No-attempt cell (missing / not due / never assigned) empty-state:
+  **"Nothing's been turned in yet — there's nothing to grade."**
+- Save now persists an emptied note as a cleared note (a teacher can view, edit, AND clear a note).
+- Save-failure inline error (unchanged): "That didn't save — try again in a moment."
+- Empty/out-of-range grade inline error (unchanged): "Enter a grade from 0 to 100, or use Clear override."
