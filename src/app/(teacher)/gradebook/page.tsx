@@ -65,7 +65,7 @@ export default async function GradebookPage({
   return (
     <div className="p-5 flex flex-col gap-5">
       <PageHeader title="Gradebook" kicker="Where the class stands" accent="brand" />
-      <GradebookGrid data={data} classId={classId} />
+      <GradebookGrid data={data} />
       <DiagnosticChecksSection data={data} />
     </div>
   );

@@ -97,7 +97,6 @@ interface Selection {
 
 export interface GradebookGridProps {
   data: Gradebook;
-  classId: string;
 }
 
 export function GradebookGrid({ data }: GradebookGridProps) {

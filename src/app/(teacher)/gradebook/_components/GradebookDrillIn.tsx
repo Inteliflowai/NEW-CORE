@@ -19,16 +19,13 @@
  * All user-facing strings are DRAFTS → Barb (STRINGS-FOR-BARB.md §Gradebook).
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { GradebookCell, GradebookAssignmentCol } from '@/lib/gradebook/loadGradebook';
 import { effortLabelPhrase } from '@/lib/copy/effortLabelPhrase';
-import type { EffortLabel } from '@/lib/signals/computeEffortLabel';
 
-/** The grid passes the cell plus the immutable AI grade (score_pct) and the optional effort label. */
-export interface DrillInCell extends GradebookCell {
-  score_pct: number | null;
-  effort_label?: EffortLabel | null;
-}
+/** The drill-in renders the loader's GradebookCell verbatim — it already carries the immutable
+ * AI grade (score_pct) and the effort label (effort_label) needed for the breakdown + effort line. */
+export type DrillInCell = GradebookCell;
 
 export interface GradebookDrillInSelection {
   studentName: string;
@@ -67,6 +64,13 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
   const canOverride = cell.attempt_id != null;
   const effortPhrase = cell.effort_label ? effortLabelPhrase(cell.effort_label) : null;
 
+  // Keyboard a11y (M4): move focus into the panel on mount; Escape closes it.
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { closeRef.current?.focus(); }, []);
+  function onKeyDown(e: React.KeyboardEvent<HTMLElement>) {
+    if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
+  }
+
   async function post(patch: Record<string, unknown>) {
     if (!cell.attempt_id || busy) return;
     setBusy(true);
@@ -90,8 +94,14 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
   }
 
   function onSave() {
+    // M2: never silently clear. An empty/blank or non-finite 0–100 grade is rejected inline;
+    // clearing an override is the explicit separate "Clear override" action.
     const trimmed = gradeInput.trim();
-    const score = trimmed === '' ? null : Number(trimmed);
+    const score = trimmed === '' ? NaN : Number(trimmed);
+    if (trimmed === '' || !Number.isFinite(score) || score < 0 || score > 100) {
+      setError('Enter a grade from 0 to 100, or use Clear override.');
+      return;
+    }
     const patch: Record<string, unknown> = { teacher_score: score };
     if (notes.trim() !== '') patch.teacher_notes = notes.trim();
     void post(patch);
@@ -112,6 +122,7 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
     <aside
       role="dialog"
       aria-label={`${studentName} — ${col.title}`}
+      onKeyDown={onKeyDown}
       className="fixed inset-y-0 right-0 z-30 flex w-full max-w-md flex-col gap-4 overflow-y-auto border-l-2 border-sidebar-edge bg-surface p-5 shadow-sticker-lg"
     >
       {/* Header */}
@@ -122,6 +133,7 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
         </div>
         <button
           type="button"
+          ref={closeRef}
           onClick={onClose}
           aria-label="Close"
           className="rounded-md border-2 border-sidebar-edge px-2 py-1 text-fg shadow-sticker"
