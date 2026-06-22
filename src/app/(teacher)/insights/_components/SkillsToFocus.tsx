@@ -1,9 +1,9 @@
-// Class-wide skill gaps — "N of M students need attention". Count-bearing prose (digits OK; banned-word-free).
+// Class-wide skill gaps — soft words, never a fabricated count (mirrors roster ConceptGapsRail).
 import React from 'react';
 import { Card } from '@/components/core/Card';
 import { SectionLabel } from '../../_components/SectionLabel';
 
-export interface SkillGap { skill_name: string; needs_count: number; total: number }
+export interface SkillGap { skill_name: string; phrase: string }
 
 export function SkillsToFocus({ gaps }: { gaps: SkillGap[] }): React.JSX.Element | null {
   if (gaps.length === 0) return null; // quiet when none
@@ -15,7 +15,7 @@ export function SkillsToFocus({ gaps }: { gaps: SkillGap[] }): React.JSX.Element
           {gaps.map((g) => (
             <li key={g.skill_name} className="flex items-baseline justify-between gap-3 text-fg">
               <span className="font-semibold">{g.skill_name}</span>
-              <span className="text-fg text-sm whitespace-nowrap">{g.needs_count} of {g.total} need attention</span>
+              <span className="text-fg text-sm whitespace-nowrap">{g.phrase} missed this</span>
             </li>
           ))}
         </ul>

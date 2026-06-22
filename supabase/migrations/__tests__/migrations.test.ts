@@ -662,6 +662,28 @@ describe('0017 teacher completion', () => {
     expect(s()).toMatch(/note_text\s+text\s+not null/i);
     expect(s()).toMatch(/ai_drafted\s+boolean\s+not null\s+default false/i);
   });
+  it('enables RLS on both alerts and high_fives', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.alerts\s+ENABLE ROW LEVEL SECURITY/i);
+    expect(s()).toMatch(/ALTER TABLE public\.high_fives\s+ENABLE ROW LEVEL SECURITY/i);
+  });
+  it('creates the service_role-all policies on both tables (DROP-then-CREATE, re-runnable)', () => {
+    expect(s()).toMatch(/DROP POLICY IF EXISTS "alerts_service_role_all" ON public\.alerts/i);
+    expect(s()).toMatch(/CREATE POLICY "alerts_service_role_all" ON public\.alerts FOR ALL TO service_role USING \(true\) WITH CHECK \(true\)/i);
+    expect(s()).toMatch(/DROP POLICY IF EXISTS "high_fives_service_role_all" ON public\.high_fives/i);
+    expect(s()).toMatch(/CREATE POLICY "high_fives_service_role_all" ON public\.high_fives FOR ALL TO service_role USING \(true\) WITH CHECK \(true\)/i);
+  });
+  it('alerts are teacher-only: NO authenticated read policy on alerts', () => {
+    expect(s()).not.toMatch(/CREATE POLICY[^\n]*ON public\.alerts[^\n]*FOR SELECT TO authenticated/i);
+  });
+  it('high_fives lets a student read their own notes', () => {
+    expect(s()).toMatch(/CREATE POLICY "high_fives_student_read" ON public\.high_fives FOR SELECT TO authenticated USING \(student_id = auth\.uid\(\)\)/i);
+  });
+  it('grants SELECT to authenticated/anon + ALL to service_role on both tables', () => {
+    expect(s()).toMatch(/GRANT SELECT ON public\.alerts\s+TO authenticated, anon/i);
+    expect(s()).toMatch(/GRANT ALL\s+ON public\.alerts\s+TO service_role/i);
+    expect(s()).toMatch(/GRANT SELECT ON public\.high_fives\s+TO authenticated, anon/i);
+    expect(s()).toMatch(/GRANT ALL\s+ON public\.high_fives\s+TO service_role/i);
+  });
 });
 
 describe('0016 tutor_tables', () => {

@@ -1,6 +1,8 @@
 -- 0017_teacher_completion.sql
 -- Epic 3b: small persistence for teacher Alerts (reconciled-on-read history) and High-Fives (sent notes).
--- No edits to existing tables. App-logic + object-level IDOR guards are the access backstop (consistent with V2).
+-- No edits to existing tables. RLS is enabled on both new tables (service_role full;
+-- alerts are teacher-only with NO authenticated read; high_fives are student-read-own).
+-- App-logic + object-level IDOR guards remain the access backstop (consistent with V2).
 
 -- ── Alerts ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.alerts (
@@ -40,3 +42,20 @@ CREATE TABLE IF NOT EXISTS public.high_fives (
 );
 CREATE INDEX IF NOT EXISTS high_fives_student_idx ON public.high_fives (student_id, created_at desc);
 CREATE INDEX IF NOT EXISTS high_fives_class_idx   ON public.high_fives (class_id, created_at desc);
+
+-- ── RLS: service_role full; alerts teacher-only (NO authenticated read); high_fives student-read-own ──
+ALTER TABLE public.alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.high_fives ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "alerts_service_role_all" ON public.alerts;
+CREATE POLICY "alerts_service_role_all" ON public.alerts FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "high_fives_service_role_all" ON public.high_fives;
+CREATE POLICY "high_fives_service_role_all" ON public.high_fives FOR ALL TO service_role USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "high_fives_student_read" ON public.high_fives;
+CREATE POLICY "high_fives_student_read" ON public.high_fives FOR SELECT TO authenticated USING (student_id = auth.uid());
+
+GRANT SELECT ON public.alerts     TO authenticated, anon;
+GRANT ALL    ON public.alerts     TO service_role;
+GRANT SELECT ON public.high_fives TO authenticated, anon;
+GRANT ALL    ON public.high_fives TO service_role;

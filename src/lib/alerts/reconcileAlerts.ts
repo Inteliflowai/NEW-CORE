@@ -64,10 +64,13 @@ export function computeConditions(input: ReconcileInput, _now: Date): Condition[
       }
     }
 
-    // strong_result (info): latest quiz/assignment >= STRONG and not already low
-    const strongQuiz = latestQuiz && !quizIsLow && latestQuiz.score_pct != null && latestQuiz.score_pct >= STRONG ? latestQuiz : null;
+    // strong_result (info): latest quiz/assignment >= STRONG.
+    // Suppress entirely when the student has ANY low condition (low_quiz OR low_assignment),
+    // even cross-source — a strong heads-up while something else is struggling is noise.
+    const anyLow = quizIsLow || hwIsLow;
+    const strongQuiz = !anyLow && latestQuiz && latestQuiz.score_pct != null && latestQuiz.score_pct >= STRONG ? latestQuiz : null;
     const strongHwDisplayed = latestHw ? (latestHw.teacher_score ?? latestHw.score_pct) : null;
-    const strongHw = latestHw && !hwIsLow && strongHwDisplayed != null && strongHwDisplayed >= STRONG ? latestHw : null;
+    const strongHw = !anyLow && latestHw && strongHwDisplayed != null && strongHwDisplayed >= STRONG ? latestHw : null;
     const strong = (strongQuiz && strongHw) ? (ts(strongQuiz.submitted_at) >= ts(strongHw.submitted_at) ? strongQuiz : strongHw) : (strongQuiz ?? strongHw);
     if (strong) out.push({ student_id: sid, source_kind: 'strong_result', source_ref: strong.id, severity: 'info' });
   }
@@ -119,9 +122,12 @@ export async function reconcileAlerts(
     now,
   );
 
+  const liveKeys = new Set(conditions.map((c) => `${c.student_id}|${c.source_kind}|${c.source_ref}`));
+  const keyOf = (r: { student_id: string; source_kind: string; source_ref: string }) => `${r.student_id}|${r.source_kind}|${r.source_ref}`;
+
   // upsert open alerts (dedup on the occurrence unique index; do nothing on conflict)
   if (conditions.length) {
-    await admin.from('alerts').upsert(
+    const { error: upsertErr } = await admin.from('alerts').upsert(
       conditions.map((c) => ({
         school_id: schoolId, class_id: classId, student_id: c.student_id,
         source_kind: c.source_kind, source_ref: c.source_ref, severity: c.severity,
@@ -129,22 +135,44 @@ export async function reconcileAlerts(
       })),
       { onConflict: 'student_id,class_id,source_kind,source_ref', ignoreDuplicates: true },
     );
+    if (upsertErr) console.error('[reconcileAlerts] upsert write failed', upsertErr);
   }
 
-  // load currently-open alerts, auto-clear those no longer in the condition set
-  const { data: openRows } = await admin.from('alerts')
-    .select('id, student_id, source_kind, source_ref, severity, created_at')
-    .eq('class_id', classId).eq('status', 'open');
-  const open = (openRows ?? []) as { id: string; student_id: string; source_kind: AlertSourceKind; source_ref: string; severity: AlertSeverity; created_at: string }[];
-  const liveKeys = new Set(conditions.map((c) => `${c.student_id}|${c.source_kind}|${c.source_ref}`));
-  const staleIds = open.filter((o) => !liveKeys.has(`${o.student_id}|${o.source_kind}|${o.source_ref}`)).map((o) => o.id);
+  // Load the reconcilable set: open rows + auto-cleared rows (resolved with resolved_by NULL).
+  // Manually-resolved rows (resolved_by NOT NULL) are intentionally excluded — they stay resolved.
+  const { data: rows } = await admin.from('alerts')
+    .select('id, student_id, source_kind, source_ref, severity, status, resolved_by, created_at')
+    .eq('class_id', classId)
+    .or('status.eq.open,and(status.eq.resolved,resolved_by.is.null)');
+  type Row = { id: string; student_id: string; source_kind: AlertSourceKind; source_ref: string; severity: AlertSeverity; status: 'open' | 'resolved'; resolved_by: string | null; created_at: string };
+  const all = (rows ?? []) as Row[];
+
+  // Auto-clear: open rows whose occurrence is no longer live.
+  const staleIds = all
+    .filter((o) => o.status === 'open' && !liveKeys.has(keyOf(o)))
+    .map((o) => o.id);
   if (staleIds.length) {
-    await admin.from('alerts').update({ status: 'resolved', resolved_at: now.toISOString(), resolved_by: null, resolution_note: 'cleared' }).in('id', staleIds);
+    const { error: clearErr } = await admin.from('alerts')
+      .update({ status: 'resolved', resolved_at: now.toISOString(), resolved_by: null, resolution_note: 'cleared' })
+      .in('id', staleIds);
+    if (clearErr) console.error('[reconcileAlerts] auto-clear write failed', clearErr);
   }
 
-  // return the still-open set (those whose key is live), shaped + sorted
-  return open
-    .filter((o) => liveKeys.has(`${o.student_id}|${o.source_kind}|${o.source_ref}`))
+  // Revive: auto-cleared rows (resolved + resolved_by NULL) whose occurrence is live again → re-open.
+  const reviveIds = all
+    .filter((o) => o.status === 'resolved' && o.resolved_by === null && liveKeys.has(keyOf(o)))
+    .map((o) => o.id);
+  if (reviveIds.length) {
+    const { error: reviveErr } = await admin.from('alerts')
+      .update({ status: 'open', resolved_at: null, resolution_note: null })
+      .in('id', reviveIds);
+    if (reviveErr) console.error('[reconcileAlerts] revive write failed', reviveErr);
+  }
+
+  // Return the live-open set: rows whose key is live AND were open OR just revived. Shaped + sorted.
+  const reviveSet = new Set(reviveIds);
+  return all
+    .filter((o) => liveKeys.has(keyOf(o)) && (o.status === 'open' || reviveSet.has(o.id)))
     .map((o) => ({ id: o.id, student_id: o.student_id, student_name: nameById.get(o.student_id) ?? 'Student', source_kind: o.source_kind, severity: o.severity, created_at: o.created_at }))
     .sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || a.student_name.localeCompare(b.student_name));
 }

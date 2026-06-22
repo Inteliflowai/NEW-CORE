@@ -2,11 +2,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadRosterSignals } from '@/lib/signals/loadRosterSignals';
 import { insightsObservation, type BandMix } from '@/lib/copy/insightsObservation';
+import { pctIncorrectToWords } from '@/lib/copy/pctIncorrectToWords';
+import { hasBannedWord } from '@/lib/copy/leakGuard';
 
 export interface ClassInsights {
   band_mix: BandMix;
   observation: string | null;
-  concept_gaps: { skill_name: string; needs_count: number; total: number }[];
+  concept_gaps: { skill_name: string; phrase: string }[];
 }
 
 export async function loadInsights(
@@ -22,14 +24,14 @@ export async function loadInsights(
     not_assessed: signals.roster.filter((r) => r.band === null).length,
     total,
   };
-  // pct_incorrect is a class-wide "how many got it wrong" share — convert to a count, drop unnamed skills.
+  // pct_incorrect here is sourced only from misconception rows (always ~100), so a derived
+  // "N of M" count is meaningless and fabricated. Render WORDS instead (mirrors ConceptGapsRail).
+  // Drop unnamed skills and any admin-authored skill_name that carries a banned coach-posture word.
   const concept_gaps = signals.concept_gaps
-    .filter((g) => g.skill_name)
+    .filter((g): g is typeof g & { skill_name: string } => Boolean(g.skill_name) && !hasBannedWord(g.skill_name as string))
     .map((g) => ({
-      skill_name: g.skill_name as string,
-      needs_count: Math.round((g.pct_incorrect / 100) * total),
-      total,
-    }))
-    .filter((g) => g.needs_count > 0);
+      skill_name: g.skill_name,
+      phrase: pctIncorrectToWords(g.pct_incorrect),
+    }));
   return { band_mix, observation: insightsObservation(band_mix), concept_gaps };
 }

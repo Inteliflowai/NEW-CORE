@@ -49,6 +49,15 @@ describe('computeConditions', () => {
     const c = computeConditions({ ...base, quizAttempts: [{ id: 'q1', student_id: 's1', is_complete: true, score_pct: 92, submitted_at: '2026-06-22T10:00:00Z' }] }, NOW);
     expect(c).toContainEqual({ student_id: 's1', source_kind: 'strong_result', source_ref: 'q1', severity: 'info' });
   });
+  it('suppresses strong_result when the student has ANY low condition in a DIFFERENT source', () => {
+    // Strong quiz (92) but a low assignment (30) for the same student → do NOT also raise a strong heads-up.
+    const c = computeConditions({ ...base,
+      quizAttempts: [{ id: 'q1', student_id: 's1', is_complete: true, score_pct: 92, submitted_at: '2026-06-22T10:00:00Z' }],
+      hwAttempts: [{ id: 'h1', student_id: 's1', assignment_id: 'a1', status: 'graded', score_pct: 30, teacher_score: null, allow_redo: false, is_redo: false, submitted_at: '2026-06-22T10:00:00Z' }],
+    }, NOW);
+    expect(c.find((x) => x.source_kind === 'low_assignment')).toBeTruthy(); // the low still fires
+    expect(c.find((x) => x.source_kind === 'strong_result')).toBeUndefined(); // strong is suppressed
+  });
 });
 
 // ── reconcileAlerts integration test (mock-admin pattern mirrors loadGradebook.test.ts) ────────────
@@ -66,23 +75,34 @@ let HW: unknown[]; let QUIZ_ATTEMPTS: unknown[];
 let OPEN_ALERTS: unknown[];
 const upsertCalls: unknown[] = [];
 const updateCalls: unknown[] = [];
+// Per-test fault injection: map an alerts write ('upsert' | the update payload's resolution_note/status) to an error.
+let UPSERT_ERROR: unknown = null;
+let UPDATE_ERROR: unknown = null;
 
 // Minimal chainable query stub mirroring the loadGradebook.test.ts harness.
 // Supports eq() scalar filters and in() set filters so tests that assert on
 // active-only enrollments and per-student scoping can verify the real behaviour.
+// Also supports the alerts .or('status.eq.open,and(status.eq.resolved,resolved_by.is.null)')
+// reconcilable-set predicate used by reconcileAlerts.
 function table(rows: () => unknown[]) {
   const eqFilters: { field: string; value: unknown }[] = [];
   const inFilters: { field: string; values: unknown[] }[] = [];
+  let reconcilableOnly = false; // set by the alerts .or() predicate
   const q: Record<string, unknown> = {};
   const chain = () => q;
   for (const m of ['select', 'order', 'gte']) q[m] = chain;
   q['eq'] = (field: string, value: unknown) => { eqFilters.push({ field, value }); return q; };
   q['in'] = (field: string, values: unknown[]) => { inFilters.push({ field, values }); return q; };
+  q['or'] = (_predicate: string) => { reconcilableOnly = true; return q; };
   const resolve = () => rows().filter((r) => {
     const row = r as Record<string, unknown>;
     const eqOk = eqFilters.every(({ field, value }) => row[field] === value);
     const inOk = inFilters.every(({ field, values }) => values.includes(row[field]));
-    return eqOk && inOk;
+    // open OR (resolved AND resolved_by IS NULL)
+    const orOk = !reconcilableOnly ||
+      row['status'] === 'open' ||
+      (row['status'] === 'resolved' && (row['resolved_by'] ?? null) === null);
+    return eqOk && inOk && orOk;
   });
   // maybeSingle: resolves with first row or null (single-row variant)
   q['maybeSingle'] = () => Promise.resolve({ data: (resolve()[0] ?? null), error: null });
@@ -90,14 +110,14 @@ function table(rows: () => unknown[]) {
     upsertCalls.push({ data, opts });
     const u: Record<string, unknown> = {};
     for (const m of ['select', 'eq', 'in']) u[m] = () => u;
-    (u as { then: unknown }).then = (cb: (v: { error: null }) => void) => cb({ error: null });
+    (u as { then: unknown }).then = (cb: (v: { error: unknown }) => void) => cb({ error: UPSERT_ERROR });
     return u;
   };
   q['update'] = (data: unknown) => {
     updateCalls.push({ data });
     const u: Record<string, unknown> = {};
     for (const m of ['eq', 'in']) u[m] = () => u;
-    (u as { then: unknown }).then = (cb: (v: { error: null }) => void) => cb({ error: null });
+    (u as { then: unknown }).then = (cb: (v: { error: unknown }) => void) => cb({ error: UPDATE_ERROR });
     return u;
   };
   (q as { then: unknown }).then = (cb: (v: { data: unknown[]; error: null }) => void) =>
@@ -124,6 +144,8 @@ function mockAdmin() {
 beforeEach(() => {
   upsertCalls.length = 0;
   updateCalls.length = 0;
+  UPSERT_ERROR = null;
+  UPDATE_ERROR = null;
   CLASSES = [{ id: 'c1', school_id: 'sc1' }];
   ENROLLMENTS = [{ student_id: 's1', class_id: 'c1', is_active: true }];
   USERS = [{ id: 's1', full_name: 'Ann' }];
@@ -212,5 +234,51 @@ describe('reconcileAlerts (integration)', () => {
     // We check: no upsert row has student_id === 's_inactive'
     const allUpserted = upsertCalls.flatMap((c) => (c as { data: { student_id: string }[] }).data);
     expect(allUpserted.every((r) => r.student_id !== 's_inactive')).toBe(true);
+  });
+
+  it('revives an AUTO-cleared (resolved_by NULL) alert whose occurrence is live again', async () => {
+    // s1 has a live low_quiz on qa1, but a prior reconcile auto-cleared that very occurrence
+    // (resolved + resolved_by NULL). Reconcile must re-open it and return it.
+    OPEN_ALERTS = [
+      { id: 'revivable', student_id: 's1', source_kind: 'low_quiz', source_ref: 'qa1', severity: 'urgent', class_id: 'c1', status: 'resolved', resolved_by: null, created_at: '2026-06-20T00:00:00Z' },
+    ];
+    const result = await reconcileAlerts(mockAdmin(), { classId: 'c1', now: NOW });
+    // an update re-opening the row must have fired
+    const revive = updateCalls.find((c) => (c as { data: { status?: string } }).data.status === 'open');
+    expect(revive, 'expected a revive update to status open').toBeTruthy();
+    expect((revive as { data: { resolved_at: unknown; resolution_note: unknown } }).data.resolved_at).toBeNull();
+    expect((revive as { data: { resolution_note: unknown } }).data.resolution_note).toBeNull();
+    // and the revived row is returned in the live set
+    expect(result.some((r) => r.id === 'revivable' && r.source_kind === 'low_quiz')).toBe(true);
+  });
+
+  it('does NOT revive a MANUALLY-resolved (resolved_by set) occurrence even if it is live again', async () => {
+    // Same live low_quiz, but the existing row was manually resolved by a teacher.
+    // The reconcilable-set query excludes it (resolved_by NOT NULL) → it must stay resolved
+    // and never appear in the returned live set.
+    OPEN_ALERTS = [
+      { id: 'manual', student_id: 's1', source_kind: 'low_quiz', source_ref: 'qa1', severity: 'urgent', class_id: 'c1', status: 'resolved', resolved_by: 'teacher-1', created_at: '2026-06-20T00:00:00Z' },
+    ];
+    const result = await reconcileAlerts(mockAdmin(), { classId: 'c1', now: NOW });
+    const revive = updateCalls.find((c) => (c as { data: { status?: string } }).data.status === 'open');
+    expect(revive, 'manual resolve must NOT be revived').toBeFalsy();
+    expect(result.some((r) => r.id === 'manual')).toBe(false);
+  });
+
+  it('logs console.error when the upsert write fails (I2 diagnosability)', async () => {
+    UPSERT_ERROR = { message: 'boom' };
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await reconcileAlerts(mockAdmin(), { classId: 'c1', now: NOW });
+    expect(spy).toHaveBeenCalledWith('[reconcileAlerts] upsert write failed', { message: 'boom' });
+    spy.mockRestore();
+  });
+
+  it('logs console.error when the auto-clear update fails (I2 diagnosability)', async () => {
+    // stale1 (the seeded stale open alert) drives an auto-clear update; make that write fail.
+    UPDATE_ERROR = { message: 'clear-fail' };
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await reconcileAlerts(mockAdmin(), { classId: 'c1', now: NOW });
+    expect(spy).toHaveBeenCalledWith('[reconcileAlerts] auto-clear write failed', { message: 'clear-fail' });
+    spy.mockRestore();
   });
 });
