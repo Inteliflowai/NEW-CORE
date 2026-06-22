@@ -441,3 +441,32 @@ These are teacher-facing context hints (shown in the composer card), derived fro
 | so smart | Praise the effort/strategy, not the trait. |
 | a number or percent (leak) | Keep it about the effort — no numbers or grades. |
 | a data word (banned-word) | Use plain, human language. |
+
+### Composer UI strings (`src/app/(teacher)/high-fives/_components/HighFiveComposer.tsx`)
+
+> DRAFTS — Barb to review the composer interaction copy, the "Worth recognizing today" section label, and the empty-state fallback. These are teacher-facing only except for the note text itself (which ships student-facing, guardrailed at send).
+
+| Context | Current draft |
+|---|---|
+| Section label (above suggestion cards) | Worth recognizing today |
+| No suggestions (empty state within composer) | No standouts to flag today — you can still write a note to anyone from the roster. |
+| Suggestion card CTA button | Write a note |
+| Composer heading | A note for {student first name} |
+| AI draft CTA button (idle) | Draft with help |
+| AI draft CTA button (loading) | Working… |
+| AI draft failure message | Could not draft — write your own below. |
+| Send button | Send |
+| Cancel button | Cancel |
+| Send error message | Could not send — try again. |
+| 422 violation prefix | Avoid "{phrase}" — {suggestion} |
+
+### Page header + empty states (`src/app/(teacher)/high-fives/page.tsx`)
+
+| Element | Current draft |
+|---|---|
+| Page title | High Fives |
+| Kicker | Catch them doing something right |
+| No classes title | No classes yet |
+| No classes body | Once a class is set up for you, you can recognize students here. |
+| Class unavailable title | That class isn't available |
+| Class unavailable body | Use the class selector to pick one of your classes. |
