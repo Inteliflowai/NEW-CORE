@@ -62,6 +62,19 @@ it('FAILS CLOSED on a NON-CONFORMING classifier verdict (garbled/refusal) — on
   expect(out).not.toBe(RAW);
   expect(out).toBe(SAFE_FALLBACK_REPLY);
 });
+it('FAILS CLOSED on a hedged verdict that merely CONTAINS "OK" (e.g. "Not OK to say") — substring is not certification', async () => {
+  // The classifier is asked for EXACTLY one word (OK or REVEAL). A non-conforming hedged
+  // verdict that happens to contain the substring "OK" ("Not OK to share that.") must NOT
+  // certify the reply — only an explicit OK verdict certifies. RAW is heuristic-clean and
+  // names a move (ends with '?'), so the OLD substring code would ship it RAW on pass 1.
+  const RAW = 'Ice is less dense than water — what does that tell you about why it floats?';
+  claudeChatMock.mockResolvedValueOnce(RAW); // opus draft (sync-clean, names a move)
+  claudeChatMock.mockResolvedValueOnce('Not OK to share that.'); // classifier: hedged, contains "OK" but NOT an explicit OK verdict
+  claudeChatMock.mockRejectedValueOnce(new LlmExhaustedError('claude')); // regenerate exhausts → no second gamble
+  const out = await generateGuardedHint(base);
+  expect(out).not.toBe(RAW);
+  expect(out).toBe(SAFE_FALLBACK_REPLY);
+});
 it('falls back when even the retry reveals the answer', async () => {
   claudeChatMock.mockResolvedValueOnce('The answer is less dense.'); // heuristic
   claudeChatMock.mockResolvedValueOnce('Basically the answer is density.'); // retry heuristic

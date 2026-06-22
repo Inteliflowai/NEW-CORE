@@ -61,12 +61,16 @@ async function classifyReveal(reply: string): Promise<'ok' | 'reveal' | 'unavail
     // LlmExhaustedError (retry exhaustion) → cannot verify → fail closed.
     return 'unavailable';
   }
-  // Only an EXPLICIT verdict certifies — anything ambiguous (garbled, refusal, truncated,
-  // e.g. ".", "Unsure", "I cannot determine") fails closed. A non-null but non-conforming
-  // verdict must NEVER certify an un-vetted reply.
+  // Only an EXPLICIT, EXACT one-word verdict certifies. The classifier is instructed to reply
+  // with EXACTLY one word; anything else (garbled, refusal, hedge, truncated — ".", "Unsure",
+  // "Not OK to share that", "Looks OK but…") fails closed. CERTIFICATION USES EXACT-WORD EQUALITY,
+  // never a substring \bOK\b: a hedged/negated string that merely CONTAINS "OK" is non-conforming
+  // and must NEVER certify an un-vetted reply (that path fails OPEN — the one defect this guards).
   if (verdict == null) return 'unavailable';
+  if (/^\s*REVEAL\b[.!]?\s*$/i.test(verdict)) return 'reveal';
+  if (/^\s*OK\b[.!]?\s*$/i.test(verdict)) return 'ok';
+  // REVEAL wins even if embedded — a verdict naming REVEAL anywhere is treated as a reveal (fail-safe).
   if (/\bREVEAL\b/i.test(verdict)) return 'reveal';
-  if (/\bOK\b/i.test(verdict)) return 'ok';
   return 'unavailable';
 }
 
