@@ -9,7 +9,7 @@ import { SidebarNav } from './SidebarNav';
 import { IconSignOut } from '@/components/core/icons';
 import { initialsOf } from './TeacherTopbar';
 
-export function TeacherSidebar({ userName }: { userName: string | null }) {
+export function TeacherSidebar({ userName, alertCount }: { userName: string | null; alertCount?: number }) {
   const initials = initialsOf(userName);
   return (
     <div className="sidebar-glow relative flex h-full flex-col overflow-hidden border-r-[3px] border-sidebar-edge bg-sidebar">
@@ -50,7 +50,7 @@ export function TeacherSidebar({ userName }: { userName: string | null }) {
         </div>
 
         {/* Nav */}
-        <SidebarNav />
+        <SidebarNav alertCount={alertCount} />
 
         {/* Footer: user + sign out */}
         <div className="flex flex-col gap-1.5 border-t border-sidebar-fg/20 p-2.5">

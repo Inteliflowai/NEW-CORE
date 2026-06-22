@@ -5,12 +5,16 @@
 
 import { TeacherShell } from './_components/TeacherShell';
 import { requireRole } from '@/lib/auth/requireRole';
+import { createAdminSupabaseClient } from '@/lib/supabase/server';
+import { openAlertCountForTeacher } from '@/lib/alerts/openAlertCount';
 
 export default async function TeacherLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { fullName } = await requireRole(['teacher']);
-  return <TeacherShell userName={fullName}>{children}</TeacherShell>;
+  const { fullName, userId } = await requireRole(['teacher']);
+  const admin = createAdminSupabaseClient();
+  const alertCount = await openAlertCountForTeacher(admin, userId);
+  return <TeacherShell userName={fullName} alertCount={alertCount}>{children}</TeacherShell>;
 }

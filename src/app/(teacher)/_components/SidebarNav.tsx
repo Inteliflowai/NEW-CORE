@@ -21,7 +21,7 @@ const ICON: Record<NavIconKey, (p: { className?: string }) => React.JSX.Element>
   upload: IconUpload,
 };
 
-function NavLink({ item }: { item: NavItem }) {
+function NavLink({ item, alertCount }: { item: NavItem; alertCount?: number }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const active = matchActive(pathname, item.href, item.alsoActiveWhen);
@@ -43,11 +43,17 @@ function NavLink({ item }: { item: NavItem }) {
     >
       <Icon className="size-[18px] shrink-0" />
       {item.label}
+      {item.badgeKey === 'alerts' && (alertCount ?? 0) > 0 && (
+        <span aria-label={`${alertCount} need attention`}
+          className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full border-2 border-sidebar-edge bg-risk px-1.5 text-xs font-bold text-fg">
+          {alertCount}
+        </span>
+      )}
     </Link>
   );
 }
 
-export function SidebarNav() {
+export function SidebarNav({ alertCount }: { alertCount?: number }) {
   return (
     <nav aria-label="Teacher navigation" className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3">
       {NAV_ENTRIES.map((entry) =>
@@ -57,11 +63,11 @@ export function SidebarNav() {
               {entry.groupLabel}
             </span>
             {entry.items.map((i) => (
-              <NavLink key={i.href} item={i} />
+              <NavLink key={i.href} item={i} alertCount={alertCount} />
             ))}
           </div>
         ) : (
-          <NavLink key={entry.href} item={entry} />
+          <NavLink key={entry.href} item={entry} alertCount={alertCount} />
         ),
       )}
     </nav>

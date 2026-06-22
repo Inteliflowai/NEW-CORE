@@ -7,9 +7,11 @@ import { TeacherTopbar } from './TeacherTopbar';
 
 export function TeacherShell({
   userName,
+  alertCount,
   children,
 }: {
   userName: string | null;
+  alertCount?: number;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -26,7 +28,7 @@ export function TeacherShell({
           `hidden`), so this single instance owns the class fetch + default ?class=.
           display:none also keeps it out of the a11y tree / tab order on small screens. */}
       <aside className="hidden w-64 shrink-0 lg:block">
-        <TeacherSidebar userName={userName} />
+        <TeacherSidebar userName={userName} alertCount={alertCount} />
       </aside>
 
       {/* Mobile drawer — mounted ONLY while open. Mounting on demand avoids a second
@@ -41,7 +43,7 @@ export function TeacherShell({
             aria-hidden
           />
           <aside className="fixed inset-y-0 left-0 z-50 w-64 lg:hidden">
-            <TeacherSidebar userName={userName} />
+            <TeacherSidebar userName={userName} alertCount={alertCount} />
           </aside>
         </>
       )}
