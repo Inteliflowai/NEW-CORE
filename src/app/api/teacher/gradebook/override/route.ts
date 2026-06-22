@@ -28,6 +28,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'invalid_score' }, { status: 400 });
     if (hasNotes && body.teacher_notes != null && (typeof body.teacher_notes !== 'string' || body.teacher_notes.length > MAX_NOTES))
       return NextResponse.json({ error: 'invalid_notes' }, { status: 400 });
+    if (hasRedo && typeof body.allow_redo !== 'boolean')
+      return NextResponse.json({ error: 'invalid_redo' }, { status: 400 });
 
     const admin = createAdminSupabaseClient();
     const { data: roleRow } = await admin.from('users').select('role').eq('id', user.id).maybeSingle();
@@ -53,7 +55,9 @@ export async function POST(req: Request) {
     if (hasScore) patch.teacher_score = body.teacher_score;
     if (hasNotes) patch.teacher_notes = body.teacher_notes;
     if (hasRedo) patch.allow_redo = body.allow_redo;
-    await admin.from('homework_attempts').update(patch).eq('id', attempt.id);
+    // Fail loud on a write error — never return 200 on a silent grade-write failure (I1).
+    const { error: writeErr } = await admin.from('homework_attempts').update(patch).eq('id', attempt.id);
+    if (writeErr) return NextResponse.json({ error: 'Server error' }, { status: 500 });
 
     after(async () => {
       try { await recomputeSkillStatesForStudent(admin, { studentId: attempt.student_id, schoolId: null }); }

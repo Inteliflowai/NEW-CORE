@@ -5,6 +5,7 @@ const guardClassAccess = vi.fn();
 const recompute = vi.fn().mockResolvedValue(undefined);
 const updates: Array<Record<string, unknown>> = [];
 let ATTEMPT: unknown; let ROLE: string; let ASG: unknown;
+let WRITE_ERROR: unknown; // when set, the homework_attempts UPDATE resolves with this .error
 
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: (cb: () => void) => { void Promise.resolve().then(cb); } }));
 vi.mock('@/lib/auth/roles', () => ({ STAFF_ROLES: new Set(['teacher', 'school_admin', 'sysadmin', 'platform_admin']) }));
@@ -18,7 +19,7 @@ vi.mock('@/lib/supabase/server', () => ({
       if (t === 'assignments') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: ASG }) }) }) };
       return { // homework_attempts
         select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: ATTEMPT }) }) }),
-        update: (p: Record<string, unknown>) => { updates.push(p); return { eq: async () => ({ error: null }) }; },
+        update: (p: Record<string, unknown>) => { updates.push(p); return { eq: async () => ({ error: WRITE_ERROR }) }; },
       };
     },
   }),
@@ -29,7 +30,7 @@ async function load() { vi.resetModules(); return (await import('@/app/api/teach
 
 beforeEach(() => {
   getUser.mockReset(); guardClassAccess.mockReset(); recompute.mockClear(); updates.length = 0;
-  ROLE = 'teacher'; ASG = { class_id: 'c1' };
+  ROLE = 'teacher'; ASG = { class_id: 'c1' }; WRITE_ERROR = null;
   ATTEMPT = { id: 'h1', assignment_id: 'a1', student_id: 's1', status: 'graded', score_pct: 70, teacher_score: null };
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
   guardClassAccess.mockResolvedValue(null); // access granted
@@ -58,4 +59,15 @@ describe('POST /api/teacher/gradebook/override', () => {
     expect(updates[0].teacher_score).toBeNull();
   });
   it('400 on teacher_notes over the length bound', async () => { expect((await (await load())(req({ attempt_id: 'h1', teacher_notes: 'x'.repeat(2001) }))).status).toBe(400); });
+
+  // I1 — the write error must NOT be swallowed (silent grade-write failure → false success).
+  it('500 when the homework_attempts UPDATE returns an error (fail loud, never silent)', async () => {
+    WRITE_ERROR = { message: 'db down' };
+    expect((await (await load())(req({ attempt_id: 'h1', teacher_score: 90 }))).status).toBe(500);
+  });
+
+  // I1 — allow_redo must be a boolean (type guard alongside score/notes validation).
+  it('400 when allow_redo is not a boolean', async () => {
+    expect((await (await load())(req({ attempt_id: 'h1', allow_redo: 'yes' }))).status).toBe(400);
+  });
 });

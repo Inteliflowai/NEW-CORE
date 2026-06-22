@@ -2,6 +2,7 @@
 // Pure gradebook loader — NO auth (caller guards via guardClassAccess). Mirrors loadRosterSignals.
 // 5 batched queries, no N+1. See spec 2026-06-22-teacher-gradebook-design.md §4.
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { computeEffortLabel, type EffortLabel } from '@/lib/signals/computeEffortLabel';
 
 export interface GradebookStudent { student_id: string; name: string; }
 export interface GradebookAssignmentCol { assignment_key: string; title: string; due_at: string | null; }
@@ -11,6 +12,10 @@ export interface GradebookCell {
   // The immutable AI grade — carried regardless of override so the drill-in's
   // "AI grade vs Your grade" comparison stays meaningful on overridden cells.
   score_pct: number | null;
+  // Coach-posture effort phrase source (graded cells only). From the graded attempt's
+  // stored effort_label when present, else recomputed from {displayed grade, teli hints};
+  // null on every non-graded cell. Drives the drill-in's effort line.
+  effort_label: EffortLabel | null;
   is_override: boolean; submitted_on_time: boolean | null; allow_redo: boolean;
 }
 export interface GradebookQuizCol { quiz_id: string; label: string; }
@@ -35,8 +40,8 @@ const MAX_ASSIGNMENT_COLS = 12;
 const MAX_QUIZ_COLS = 8;
 
 type AsgRow = { id: string; lesson_id: string | null; content: Record<string, unknown> | null; due_at: string | null; created_at: string | null; student_id: string };
-type HwRow = { id: string; assignment_id: string; student_id: string; status: string; score_pct: number | null; teacher_score: number | null; allow_redo: boolean | null; is_redo: boolean | null; attempt_no: number | null; submitted_on_time: boolean | null; submitted_at: string | null; graded_at: string | null };
-type QzRow = { id: string; title: string | null };
+type HwRow = { id: string; assignment_id: string; student_id: string; status: string; score_pct: number | null; teacher_score: number | null; effort_label: EffortLabel | null; teli_hint_count: number | null; allow_redo: boolean | null; is_redo: boolean | null; attempt_no: number | null; submitted_on_time: boolean | null; submitted_at: string | null; graded_at: string | null };
+type QzRow = { id: string; title: string | null; created_at: string | null };
 type QaRow = { id: string; quiz_id: string; student_id: string; score_pct: number | null; mastery_band: GradebookQuizCell['mastery_band']; is_complete: boolean | null; submitted_at: string | null };
 
 function colKey(a: AsgRow): string {
@@ -77,7 +82,13 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
   const groups = new Map<string, AsgRow[]>();
   for (const a of asgRows) { const k = colKey(a); (groups.get(k) ?? groups.set(k, []).get(k)!).push(a); }
   const colMeta = [...groups.entries()]
-    .map(([key, rows]) => ({ key, rows, maxCreated: rows.map(r => r.created_at ?? '').sort().at(-1) ?? '', due_at: rows[0].due_at }))
+    .map(([key, rows]) => ({
+      key, rows,
+      maxCreated: rows.map(r => r.created_at ?? '').sort().at(-1) ?? '',
+      // Deterministic column due_at: max non-null across the group (else null), so the
+      // missing/not_due derivation is stable regardless of DB row order (M1).
+      due_at: rows.map(r => r.due_at).filter((d): d is string => d != null).sort().at(-1) ?? null,
+    }))
     .sort((a, b) => b.maxCreated.localeCompare(a.maxCreated))
     .slice(0, MAX_ASSIGNMENT_COLS);
   const assignments: GradebookAssignmentCol[] = colMeta.map((c, i) => ({ assignment_key: c.key, title: dueLabel(c.due_at, i + 1), due_at: c.due_at }));
@@ -88,7 +99,7 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
 
   // 3. Attempts (cells).
   const { data: hwData } = await admin.from('homework_attempts')
-    .select('id, assignment_id, student_id, status, score_pct, teacher_score, effort_label, teli_hint_count, allow_redo, is_redo, attempt_no, submitted_on_time, submitted_at, graded_at, task_grades, teacher_notes, review_required')
+    .select('id, assignment_id, student_id, status, score_pct, teacher_score, effort_label, teli_hint_count, allow_redo, is_redo, attempt_no, submitted_on_time, submitted_at, graded_at')
     .in('assignment_id', assignmentIds.length ? assignmentIds : NONE)
     .in('student_id', studentIds.length ? studentIds : NONE);
   const hwRows = (hwData ?? []) as HwRow[];
@@ -118,12 +129,21 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
       const newest = latest(attempts);
       let status: CellStatus; let displayed_grade: number | null = null; let score_pct: number | null = null; let is_override = false;
       let allow_redo = false; let submitted_on_time: boolean | null = null; let attempt_id: string | null = null;
+      let effort_label: EffortLabel | null = null;
       if (graded) {
         score_pct = graded.score_pct ?? null; // immutable AI grade, carried regardless of override
         displayed_grade = (typeof graded.teacher_score === 'number') ? graded.teacher_score : score_pct;
         is_override = graded.teacher_score != null; allow_redo = !!graded.allow_redo;
         submitted_on_time = graded.submitted_on_time ?? null; attempt_id = graded.id;
+        // Effort phrase source: stored label when present, else recompute against the
+        // DISPLAYED grade (override-wins) + this attempt's Teli hint count (I4).
+        effort_label = graded.effort_label
+          ?? computeEffortLabel({ score: displayed_grade, teliHintCount: graded.teli_hint_count ?? 0 });
       }
+      // A non-graded attempt is "turned in" ONLY for the explicit submit-pipeline statuses.
+      // A lone `in_progress` (inserted the moment a student OPENS the work) must NOT read as
+      // submitted (I2): past-due → real miss, otherwise → not_due.
+      const TURNED_IN = newest != null && ['submitted', 'grading', 'pending_grade'].includes(newest.status);
       if (!attempts.length) {
         if (!assignedByCell.has(`${s.student_id}__${col.assignment_key}`)) {
           status = 'none'; // never assigned to this student → inert, not a miss
@@ -137,10 +157,14 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
         status = 'redo';
       } else if (newest?.status === 'graded') {
         status = 'graded';
-      } else {
+      } else if (TURNED_IN) {
         status = 'submitted'; attempt_id = newest?.id ?? null;
+      } else {
+        // A lone non-graded, not-turned-in attempt (e.g. opened-but-abandoned in_progress).
+        status = past ? 'missing' : 'not_due';
+        if (status === 'missing') missing_count++;
       }
-      cells[s.student_id][col.assignment_key] = { attempt_id, status, displayed_grade, score_pct, is_override, submitted_on_time, allow_redo };
+      cells[s.student_id][col.assignment_key] = { attempt_id, status, displayed_grade, score_pct, effort_label, is_override, submitted_on_time, allow_redo };
     }
   }
 
@@ -158,22 +182,36 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
   }
   const class_average = all.length ? Math.round(all.reduce((a, b) => a + b, 0) / all.length) : null;
 
-  // 5. Quizzes (diagnostic — keyed by quiz_id).
-  const { data: qzData } = await admin.from('quizzes').select('id, title').eq('class_id', classId);
+  // 5. Quizzes (diagnostic — keyed by quiz_id). Most-recent first (M5: created_at desc).
+  const { data: qzData } = await admin.from('quizzes')
+    .select('id, title, created_at')
+    .eq('class_id', classId)
+    .order('created_at', { ascending: false });
   const qzRows = (qzData ?? []) as QzRow[];
   const quizIds = qzRows.map(q => q.id);
   const { data: qaData } = await admin.from('quiz_attempts')
     .select('id, quiz_id, student_id, score_pct, mastery_band, is_complete, submitted_at')
     .in('quiz_id', quizIds.length ? quizIds : NONE)
-    .in('student_id', studentIds.length ? studentIds : NONE)
-    .order('submitted_at', { ascending: false });
+    .in('student_id', studentIds.length ? studentIds : NONE);
   const qaRows = (qaData ?? []) as QaRow[];
   const usedQuiz = new Set<string>();
   const quiz_cells: Gradebook['quiz_cells'] = {};
   for (const s of students) quiz_cells[s.student_id] = {};
-  for (const qa of qaRows) { // first seen per (student, quiz) is latest (ordered desc)
+  // The MEANINGFUL latest attempt per (student, quiz): prefer is_complete=true, then most-recent
+  // submitted_at. Decided in JS so it does not depend on Postgres NULLS-FIRST ordering — a newer
+  // in-progress retake (null submitted_at) must NOT mask the completed result (I3).
+  const better = (a: QaRow, b: QaRow): QaRow => {
+    if (!!a.is_complete !== !!b.is_complete) return a.is_complete ? a : b;
+    return String(a.submitted_at ?? '').localeCompare(String(b.submitted_at ?? '')) >= 0 ? a : b;
+  };
+  const pick = new Map<string, QaRow>(); // `${student}__${quiz}` → best attempt
+  for (const qa of qaRows) {
     if (!quiz_cells[qa.student_id]) continue;
-    if (quiz_cells[qa.student_id][qa.quiz_id]) continue;
+    const k = `${qa.student_id}__${qa.quiz_id}`;
+    const cur = pick.get(k);
+    pick.set(k, cur ? better(cur, qa) : qa);
+  }
+  for (const qa of pick.values()) {
     quiz_cells[qa.student_id][qa.quiz_id] = { quiz_attempt_id: qa.id, is_complete: !!qa.is_complete, score_pct: qa.score_pct ?? null, mastery_band: qa.mastery_band ?? null };
     usedQuiz.add(qa.quiz_id);
   }
