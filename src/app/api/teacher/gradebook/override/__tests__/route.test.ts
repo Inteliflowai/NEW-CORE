@@ -8,7 +8,9 @@ let ATTEMPT: unknown; let ROLE: string; let ASG: unknown;
 let WRITE_ERROR: unknown; // when set, the homework_attempts UPDATE resolves with this .error
 
 vi.mock('next/server', async (orig) => ({ ...(await orig<typeof import('next/server')>()), after: (cb: () => void) => { void Promise.resolve().then(cb); } }));
-vi.mock('@/lib/auth/roles', () => ({ STAFF_ROLES: new Set(['teacher', 'school_admin', 'sysadmin', 'platform_admin']) }));
+// Mirror the canonical STAFF_ROLES (src/lib/auth/roles.ts) EXACTLY — it is an array of
+// the real role strings ('school_sysadmin', not 'sysadmin'); the route wraps it in a Set.
+vi.mock('@/lib/auth/roles', () => ({ STAFF_ROLES: ['teacher', 'school_admin', 'school_sysadmin', 'platform_admin'] as const }));
 vi.mock('@/lib/auth/guards', () => ({ guardClassAccess }));
 vi.mock('@/lib/skills/recomputeSkillStates', () => ({ recomputeSkillStatesForStudent: recompute }));
 vi.mock('@/lib/supabase/server', () => ({

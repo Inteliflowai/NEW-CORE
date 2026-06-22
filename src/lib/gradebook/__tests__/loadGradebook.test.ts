@@ -214,6 +214,61 @@ describe('loadGradebook', () => {
     expect(keys).toContain('id:a_s3');
   });
 
+  // A-C3 — quiz_cells must be bounded to the KEPT quiz columns (MAX_QUIZ_COLS=8). With >8
+  // quizzes-with-attempts, quiz_cells keys must be a subset of the returned quizzes' ids, so
+  // the matrix can never carry orphaned cells for sliced-off columns.
+  it('bounds quiz_cells to the kept quiz columns (no orphaned cells past MAX_QUIZ_COLS)', async () => {
+    const N = 11; // > MAX_QUIZ_COLS (8)
+    QUIZZES = Array.from({ length: N }, (_, i) => ({
+      id: `q${i}`, title: `Quiz ${i}`,
+      // created_at descending so the slice keeps the highest-index quizzes deterministically.
+      created_at: `2026-06-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+    }));
+    QUIZ_ATTEMPTS = Array.from({ length: N }, (_, i) => ({
+      id: `qa${i}`, quiz_id: `q${i}`, student_id: 's1', score_pct: 80,
+      mastery_band: 'grade_level', is_complete: true, submitted_at: '2026-06-08T00:00:00Z',
+    }));
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.quizzes.length).toBe(8); // sliced to MAX_QUIZ_COLS
+    const keptIds = new Set(gb.quizzes.map((q) => q.quiz_id));
+    // Every quiz_cells key for every student must be one of the kept columns.
+    for (const sid of Object.keys(gb.quiz_cells)) {
+      for (const qid of Object.keys(gb.quiz_cells[sid])) {
+        expect(keptIds.has(qid), `orphaned quiz_cell ${qid} for ${sid}`).toBe(true);
+      }
+    }
+  });
+
+  // A-C6 / A-U5 / A-C7 — a graded cell carries its teacher_notes + submitted_at (now needed
+  // by the drill-in); non-graded / no-attempt cells carry null for both.
+  it('a graded cell carries teacher_notes and submitted_at; empty cells carry null', async () => {
+    HW = [
+      { id: 'h1', assignment_id: 'a_s1', student_id: 's1', status: 'graded', score_pct: 88, teacher_score: null, teacher_notes: 'great reasoning', allow_redo: false, is_redo: false, attempt_no: 1, submitted_on_time: true, submitted_at: '2026-06-09T00:00:00Z', graded_at: '2026-06-11T00:00:00Z' },
+    ];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    const graded = gb.cells['s1']['lesson:L1'];
+    expect(graded.teacher_notes).toBe('great reasoning');
+    expect(graded.submitted_at).toBe('2026-06-09T00:00:00Z');
+    // s2 has no attempt → both null.
+    const empty = gb.cells['s2']['lesson:L1'];
+    expect(empty.teacher_notes).toBeNull();
+    expect(empty.submitted_at).toBeNull();
+  });
+
+  // A-C4 — the loader takes an optional `now` (no globalThis seam). A past-due column with no
+  // attempt reads `missing` only relative to the injected clock.
+  it('honors an injected now: a column due before `now` is missing, after `now` is not_due', async () => {
+    ASSIGNMENTS = [
+      { id: 'a_s1', lesson_id: 'L1', content: {}, due_at: '2026-06-10T00:00:00Z', created_at: '2026-06-01T00:00:00Z', student_id: 's1' },
+      { id: 'a_s2', lesson_id: 'L1', content: {}, due_at: '2026-06-10T00:00:00Z', created_at: '2026-06-01T00:00:00Z', student_id: 's2' },
+    ];
+    HW = [];
+    const after = await loadGradebook(admin, { classId: 'c1', teacherId: 't1', now: new Date('2026-06-15T00:00:00Z') });
+    expect(after.cells['s1']['lesson:L1'].status).toBe('missing'); // now is past the due date
+    const before = await loadGradebook(admin, { classId: 'c1', teacherId: 't1', now: new Date('2026-06-05T00:00:00Z') });
+    expect(before.cells['s1']['lesson:L1'].status).toBe('not_due'); // now is before the due date
+  });
+
   // M1 — a logical column's due_at is deterministic across the group (max non-null), not row-order-dependent.
   it('picks a deterministic column due_at across the group regardless of row order', async () => {
     ASSIGNMENTS = [

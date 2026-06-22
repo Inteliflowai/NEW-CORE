@@ -9,7 +9,7 @@ import { EFFORT_LABELS } from '@/lib/signals/computeEffortLabel';
 const selected = {
   studentName: 'Ana Diaz',
   col: { assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z' },
-  cell: { attempt_id: 'h1', status: 'graded' as const, displayed_grade: 90, effort_label: null, is_override: true, submitted_on_time: true, allow_redo: false, score_pct: 70 },
+  cell: { attempt_id: 'h1', status: 'graded' as const, displayed_grade: 90, effort_label: null, teacher_notes: null, submitted_at: '2026-06-09T00:00:00Z', is_override: true, submitted_on_time: true, allow_redo: false, score_pct: 70 },
 };
 
 beforeEach(() => { vi.restoreAllMocks(); vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, displayed_grade: 95 }) })); });
