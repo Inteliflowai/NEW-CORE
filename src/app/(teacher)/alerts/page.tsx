@@ -41,7 +41,7 @@ export default async function AlertsPage({ searchParams }: { searchParams: Promi
   return (
     <div className="p-5 flex flex-col gap-5">
       <PageHeader title="Alerts" kicker="Things that just changed" accent="brand" />
-      <SummaryCallout>{summary(urgent, watch)}</SummaryCallout>
+      <div className="max-w-3xl"><SummaryCallout>{summary(urgent, watch)}</SummaryCallout></div>
       {alerts.length === 0
         ? <EmptyState variant="on-track" titleOverride="No new change events" bodyOverride="When something needs your eyes, it'll show up here." />
         : <AlertsList alerts={alerts} classId={classId} />}
