@@ -2,12 +2,20 @@
 
 // The signature moment, made to feel ALIVE: the coach NOTICES, SPEAKS, INVITES,
 // then DEFERS — one four-beat heartbeat, three emotional registers. Mock data,
-// no real signals. Motion comes from the design-token SoT (registers → tokens.motion);
-// colour from data-role / data-intensity. prefers-reduced-motion snaps every beat
-// to its end state. Token-only (no hardcoded hex).
+// no real signals. Motion comes from the shared coachMotion module (single
+// source of motion truth); colour from data-role / data-intensity.
+// prefers-reduced-motion snaps every beat to its end state. Token-only (no hardcoded hex).
 import React, { useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion, type Transition, type Variants } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { REGISTERS, ORDER, type RegisterKey } from './_registers';
+import {
+  COACH_MOTION,
+  coachTransition,
+  coachContainerVariants,
+  coachMarkVariants,
+  coachRiseVariants,
+  coachSparkVariants,
+} from '@/lib/design/coachMotion';
 
 export function SignatureMoment(): React.JSX.Element {
   const [key, setKey] = useState<RegisterKey>('teacher');
@@ -15,33 +23,16 @@ export function SignatureMoment(): React.JSX.Element {
   const [acted, setActed] = useState<null | 'yes' | 'dismiss'>(null);
   const reduce = useReducedMotion();
   const r = REGISTERS[key];
+  const cfg = COACH_MOTION[key];
 
   function select(k: RegisterKey) { setKey(k); setActed(null); setRun((x) => x + 1); }
   function replay() { setActed(null); setRun((x) => x + 1); }
 
-  // reduced-motion → instant (no animation, just the final state)
-  const T = (base: Transition): Transition => (reduce ? { duration: 0 } : base);
-  const EXIT_EASE: [number, number, number, number] = [0.4, 0, 1, 1];
-  const SPARK: Transition = { type: 'spring', stiffness: 500, damping: 16, delay: 0.1 };
-
   // NOTICE: the coach-mark leans in (x/rotate) and squares up. SPEAK + INVITE rise after it.
-  const container: Variants = {
-    hidden: {},
-    show: { transition: reduce ? {} : { staggerChildren: r.stagger, delayChildren: 0.05 } },
-    defer: { opacity: 0, y: 28, scale: 0.97, transition: T({ duration: r.rise.duration, ease: EXIT_EASE }) },
-  };
-  const coachMark: Variants = {
-    hidden: { opacity: 0, x: -18, y: 6, rotate: -5, scale: 0.9 },
-    show: { opacity: 1, x: 0, y: 0, rotate: 0, scale: 1, transition: T(r.entrance) },
-  };
-  const riseV: Variants = {
-    hidden: { opacity: 0, y: 14 },
-    show: { opacity: 1, y: 0, transition: T(r.rise) },
-  };
-  const sparkV: Variants = {
-    hidden: { opacity: 0, scale: 0, rotate: -30 },
-    show: { opacity: 1, scale: 1, rotate: 0, transition: T(SPARK) },
-  };
+  const container = coachContainerVariants(!!reduce, cfg);
+  const coachMark = coachMarkVariants(!!reduce, cfg);
+  const riseV = coachRiseVariants(!!reduce, cfg);
+  const sparkV = coachSparkVariants(!!reduce);
 
   return (
     <div
@@ -131,7 +122,7 @@ export function SignatureMoment(): React.JSX.Element {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              transition={T({ duration: 0.3, ease: r.rise.ease })}
+              transition={coachTransition(!!reduce, { duration: 0.3, ease: r.rise.ease })}
               className="text-fg-muted text-center text-sm"
             >
               {acted === 'yes' ? r.acceptedNote : r.dismissedNote}

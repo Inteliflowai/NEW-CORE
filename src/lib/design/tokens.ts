@@ -178,12 +178,12 @@ export const theme = {
  * The coach "arrives" (gentle ease-out) and a touch of spring in the student register.
  * DRAFT values → tuned during the signature-moment prototype; FEEL-DIRECTION.md will own them.
  */
-type Cubic = [number, number, number, number];
-type Spring = { type: 'spring'; stiffness: number; damping: number };
+export type Cubic = [number, number, number, number];
+export type Spring = { type: 'spring'; stiffness: number; damping: number };
 export const motion: {
   duration: { instant: number; fast: number; base: number; slow: number; ambient: number };
-  ease: { out: Cubic; inOut: Cubic; standard: Cubic };
-  spring: { calm: Spring; playful: Spring };
+  ease: { out: Cubic; inOut: Cubic; standard: Cubic; exit: Cubic };
+  spring: { calm: Spring; playful: Spring; spark: Spring };
 } = {
   /** seconds */
   duration: { instant: 0, fast: 0.18, base: 0.28, slow: 0.45, ambient: 0.9 },
@@ -192,11 +192,13 @@ export const motion: {
     out: [0.16, 1, 0.3, 1],   // soft "settle in"
     inOut: [0.65, 0, 0.35, 1],
     standard: [0.4, 0, 0.2, 1],
+    exit: [0.4, 0, 1, 1],      // accelerate away — the DEFER ease
   },
   /** framer-motion spring configs */
   spring: {
     calm: { type: 'spring', stiffness: 200, damping: 30 },     // teacher/parent — no bounce
     playful: { type: 'spring', stiffness: 380, damping: 22 },  // student — a touch of bounce
+    spark: { type: 'spring', stiffness: 500, damping: 16 },    // earned celebratory pop
   },
 };
 
