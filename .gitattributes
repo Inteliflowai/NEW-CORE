@@ -1,0 +1,7 @@
+# The generated design-token layer in globals.css is byte-compared by
+# `npm run tokens:check` (wired into prebuild). Pin it to LF on every platform
+# so a Windows/autocrlf checkout never reads as false drift and breaks the build.
+/src/app/globals.css text eol=lf
+/src/lib/design/tokens.ts text eol=lf
+/src/lib/design/generateTokensCss.ts text eol=lf
+/scripts/design/generate-tokens-css.ts text eol=lf

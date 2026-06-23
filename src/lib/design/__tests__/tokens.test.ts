@@ -5,16 +5,14 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ramps, oneOffs, semanticDefaults, roleBindings, intensityBindings, theme, motion } from '@/lib/design/tokens';
+import { buildTokenRegion, extractRegion, lf } from '@/lib/design/generateTokensCss';
 
-const css = readFileSync(resolve(process.cwd(), 'src/app/globals.css'), 'utf8');
-const begin = css.indexOf('TOKENS:GENERATED:BEGIN');
-const end = css.indexOf('TOKENS:GENERATED:END');
-const region = css.slice(begin, end);
+const css = lf(readFileSync(resolve(process.cwd(), 'src/app/globals.css'), 'utf8'));
+const region = extractRegion(css);
 
 describe('globals.css reflects tokens.ts (the SoT)', () => {
-  it('has the generated-region markers', () => {
-    expect(begin).toBeGreaterThan(-1);
-    expect(end).toBeGreaterThan(begin);
+  it('byte-equals the generated region (true drift lock, line-ending agnostic)', () => {
+    expect(region).toBe(buildTokenRegion());
   });
 
   it('emits every Tier-1 ramp stop verbatim', () => {
