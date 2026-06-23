@@ -21,7 +21,7 @@ describe('TaskCard image affordance', () => {
   });
   it('opening the canvas and using a drawing calls onSaveImage with a Blob', async () => {
     HTMLCanvasElement.prototype.toBlob = function (cb: BlobCallback) { cb(new Blob(['x'], { type: 'image/png' })); };
-    const onSaveImage = vi.fn(async () => {});
+    const onSaveImage = vi.fn(async (_blob: Blob) => {});
     render(<TaskCard {...base} imageUrl={null} onSaveImage={onSaveImage} onRemoveImage={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: /add a drawing/i }));
     fireEvent.click(await screen.findByRole('button', { name: /use this drawing/i }));

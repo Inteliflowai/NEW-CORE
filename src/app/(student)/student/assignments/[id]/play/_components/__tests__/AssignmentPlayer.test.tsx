@@ -180,6 +180,24 @@ describe('AssignmentPlayer — Teli signal isolation (final-review Fix 2)', () =
   });
 });
 
+describe('AssignmentPlayer — image-only answer (Task 6)', () => {
+  it('a task answered with only a drawing counts as complete (can advance / submit)', async () => {
+    // Single-task assignment where the response has an image_url but no text.
+    render(
+      <AssignmentPlayer
+        assignmentId="a1"
+        attemptId="att1"
+        content={content}
+        initialResponses={{ tasks: { '1': { text: '', image_url: '/api/attempts/drawing?path=x' } } } as ResponsesShape}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
+    // The submit button must be ENABLED — an image-only answer is complete.
+    const submit = screen.getByRole('button', { name: /turn in|submit/i });
+    expect(submit).toBeEnabled();
+  });
+});
+
 describe('AssignmentPlayer — autosave (8b)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
