@@ -1,9 +1,11 @@
 'use client';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/core/Card';
 import { SectionLabel } from '../../_components/SectionLabel';
 import type { HighFiveSuggestion } from '@/lib/highfives/suggestions';
+import { COACH_MOTION, coachTransition, coachContainerVariants, coachMarkVariants, coachRiseVariants } from '@/lib/design/coachMotion';
 
 interface Violation { phrase: string; suggestion: string }
 export interface RosterStudent { student_id: string; full_name: string }
@@ -25,6 +27,8 @@ export function HighFiveComposer({
   recent: RecentHighFive[];
 }): React.JSX.Element {
   const router = useRouter();
+  const reduce = useReducedMotion();
+  const cfg = COACH_MOTION.teacher;
   const [active, setActive] = useState<ActiveTarget | null>(null);
   const [pickedId, setPickedId] = useState('');
   const [text, setText] = useState('');
@@ -32,7 +36,14 @@ export function HighFiveComposer({
   const [busy, setBusy] = useState(false);
   const [violations, setViolations] = useState<Violation[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [sentName, setSentName] = useState<string | null>(null);
   const violationsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!sentName) return;
+    const t = setTimeout(() => setSentName(null), 2600);
+    return () => clearTimeout(t);
+  }, [sentName]);
 
   function open(t: ActiveTarget) { setActive(t); setText(''); setViolations([]); setErr(null); setAiDrafted(false); }
 
@@ -74,6 +85,7 @@ export function HighFiveComposer({
         return;
       }
       if (!res.ok) { setErr('Could not send — try again.'); setBusy(false); return; }
+      setSentName(active.full_name);
       setActive(null); setText(''); router.refresh();
     } catch { setErr('Could not send — try again.'); }
     setBusy(false);
@@ -122,45 +134,66 @@ export function HighFiveComposer({
         </Card>
       )}
 
-      {active && (
-        <Card tone="brand">
-          <div className="flex flex-col gap-3">
-            <p className="text-fg font-display font-bold">A note for {active.full_name}</p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={draft} disabled={busy}
-                className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker transition-colors hover:bg-brand-surface disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-                {busy ? 'Working…' : 'Draft with help'}
-              </button>
-            </div>
-            <label className="sr-only" htmlFor="hf-text">Note text</label>
-            <textarea id="hf-text" value={text} onChange={(e) => { setText(e.target.value); setAiDrafted(false); }}
-              maxLength={600} rows={3}
-              aria-invalid={violations.length > 0}
-              aria-describedby={violations.length > 0 ? 'hf-violations' : undefined}
-              className="w-full rounded-md border-2 border-sidebar-edge bg-surface p-2 text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" />
-            {violations.length > 0 && (
-              <div ref={violationsRef} id="hf-violations" role="alert" aria-live="assertive" tabIndex={-1}
-                className="rounded border-2 border-sidebar-edge bg-risk-surface p-2 text-fg">
-                <p className="text-sm font-bold">⚠ Let&apos;s reword this</p>
-                <ul className="mt-1 flex flex-col gap-1">
-                  {violations.map((v, i) => <li key={i} className="text-fg text-sm">Avoid &quot;{v.phrase}&quot; — {v.suggestion}</li>)}
-                </ul>
+      <AnimatePresence mode="wait">
+        {active ? (
+          <motion.div key="composer" variants={coachContainerVariants(!!reduce, cfg)} initial="hidden" animate="show" exit="defer">
+            <Card tone="brand">
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <motion.div
+                    variants={coachMarkVariants(!!reduce, cfg)}
+                    aria-hidden="true"
+                    className="grid size-9 shrink-0 place-items-center rounded-full border-2 border-sidebar-edge bg-brand font-display font-extrabold text-fg-on-brand shadow-sticker"
+                  >
+                    C
+                  </motion.div>
+                  <motion.p variants={coachRiseVariants(!!reduce, cfg)} className="text-fg font-display font-bold">A note for {active.full_name}</motion.p>
+                </div>
+                <motion.div variants={coachRiseVariants(!!reduce, cfg)} className="flex flex-wrap gap-2">
+                  <button type="button" onClick={draft} disabled={busy}
+                    className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker transition-colors hover:bg-brand-surface disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                    {busy ? 'Working…' : 'Draft with help'}
+                  </button>
+                </motion.div>
+                <motion.div variants={coachRiseVariants(!!reduce, cfg)} className="flex flex-col gap-3">
+                  <label className="sr-only" htmlFor="hf-text">Note text</label>
+                  <textarea id="hf-text" value={text} onChange={(e) => { setText(e.target.value); setAiDrafted(false); }}
+                    maxLength={600} rows={3}
+                    aria-invalid={violations.length > 0}
+                    aria-describedby={violations.length > 0 ? 'hf-violations' : undefined}
+                    className="w-full rounded-md border-2 border-sidebar-edge bg-surface p-2 text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand" />
+                  {violations.length > 0 && (
+                    <div ref={violationsRef} id="hf-violations" role="alert" aria-live="assertive" tabIndex={-1}
+                      className="rounded border-2 border-sidebar-edge bg-risk-surface p-2 text-fg">
+                      <p className="text-sm font-bold">⚠ Let&apos;s reword this</p>
+                      <ul className="mt-1 flex flex-col gap-1">
+                        {violations.map((v, i) => <li key={i} className="text-fg text-sm">Avoid &quot;{v.phrase}&quot; — {v.suggestion}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                  {err && <p className="text-fg text-sm">{err}</p>}
+                  <div className="flex gap-2">
+                    <button type="button" onClick={send} disabled={busy || text.trim().length === 0}
+                      className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-1 text-sm font-bold text-fg-on-brand shadow-sticker transition-transform hover:-translate-y-0.5 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                      Send
+                    </button>
+                    <button type="button" onClick={() => setActive(null)}
+                      className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker transition-colors hover:bg-brand-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
+                      Cancel
+                    </button>
+                  </div>
+                </motion.div>
               </div>
-            )}
-            {err && <p className="text-fg text-sm">{err}</p>}
-            <div className="flex gap-2">
-              <button type="button" onClick={send} disabled={busy || text.trim().length === 0}
-                className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-1 text-sm font-bold text-fg-on-brand shadow-sticker transition-transform hover:-translate-y-0.5 disabled:opacity-60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-                Send
-              </button>
-              <button type="button" onClick={() => setActive(null)}
-                className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker transition-colors hover:bg-brand-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </Card>
-      )}
+            </Card>
+          </motion.div>
+        ) : sentName ? (
+          <motion.p key="calm" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            transition={coachTransition(!!reduce, { duration: cfg.rise.duration, ease: cfg.rise.ease })}
+            className="text-fg-muted text-sm">
+            Sent to {sentName} — nice catch.
+          </motion.p>
+        ) : null}
+      </AnimatePresence>
 
       {recent.length > 0 && (
         <div className="flex flex-col gap-3">

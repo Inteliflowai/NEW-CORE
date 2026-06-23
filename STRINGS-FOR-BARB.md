@@ -459,6 +459,7 @@ These are teacher-facing context hints (shown in the composer card), derived fro
 | Cancel button | Cancel |
 | Send error message | Could not send — try again. |
 | 422 violation prefix | Avoid "{phrase}" — {suggestion} |
+| Post-send calm line (DEFER beat, shown briefly after a note is sent) | Sent to {name} — nice catch. |
 
 ### Page header + empty states (`src/app/(teacher)/high-fives/page.tsx`)
 

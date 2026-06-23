@@ -1,10 +1,21 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { HighFiveComposer } from '../HighFiveComposer';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (q: string) => ({
+      matches: q.includes('reduce'), media: q, onchange: null,
+      addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+      dispatchEvent() { return false; },
+    }),
+  });
+});
 
 const suggestions = [{ student_id: 's1', full_name: 'Ann Lee', reason: 'stretch' as const, context_hint: 'Ready for more.' }];
 const roster = [
@@ -58,5 +69,26 @@ describe('HighFiveComposer', () => {
     expect(screen.getByText(/loved how you stuck with the hard one/i)).toBeInTheDocument();
     // Ben Ortiz is named in the recent note (and as a picker option).
     expect(screen.getAllByText('Ben Ortiz').length).toBeGreaterThan(0);
+  });
+});
+
+const adaSuggestions = [{ student_id: 's1', full_name: 'Ada Lovelace', reason: 'persistence' as const, context_hint: 'stuck with it on the hard set' }];
+
+describe('HighFiveComposer — four-beat', () => {
+  it('opens the composer with a name heading and Send/Cancel actions', () => {
+    render(<HighFiveComposer classId="c1" suggestions={adaSuggestions as never} roster={[] as never} recent={[] as never} />);
+    fireEvent.click(screen.getByRole('button', { name: /write a note/i }));
+    expect(screen.getByText(/a note for ada lovelace/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+
+  it('settles a calm DEFER line after a successful send', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 })));
+    render(<HighFiveComposer classId="c1" suggestions={adaSuggestions as never} roster={[] as never} recent={[] as never} />);
+    fireEvent.click(screen.getByRole('button', { name: /write a note/i }));
+    fireEvent.change(screen.getByRole('textbox', { name: /note text/i }), { target: { value: 'You kept at it.' } });
+    fireEvent.click(screen.getByRole('button', { name: /^send$/i }));
+    await waitFor(() => expect(screen.getByText(/sent to ada lovelace — nice catch\./i)).toBeInTheDocument());
   });
 });
