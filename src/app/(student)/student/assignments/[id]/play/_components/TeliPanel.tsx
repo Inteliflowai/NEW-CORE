@@ -14,7 +14,9 @@
  */
 
 import React, { useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import type { HintRung } from '@/lib/teli/ladder';
+import { COACH_MOTION, coachMarkVariants, coachRiseVariants, coachStaggerVariants } from '@/lib/design/coachMotion';
 
 export interface TeliPanelProps {
   attemptId: string;
@@ -48,6 +50,8 @@ export function TeliPanel({ attemptId, step, taskDescription: _taskDescription }
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
   const [hintsRemaining, setHintsRemaining] = useState<number | null>(null);
+  const reduce = useReducedMotion();
+  const cfg = COACH_MOTION.student;
 
   // Reset the conversation when the step changes (ladder is per-task). Adjusting state DURING
   // render (React's documented "store info from previous renders" pattern) clears the previous
@@ -148,23 +152,39 @@ export function TeliPanel({ attemptId, step, taskDescription: _taskDescription }
       {/* Message thread */}
       {messages.length > 0 && (
         <ul className="flex flex-col gap-2" aria-label="Teli conversation">
-          {messages.map((msg, i) => (
-            <li
-              key={i}
-              className={
-                msg.role === 'student'
-                  ? 'self-end bg-brand-surface rounded-xl px-3 py-2 text-fg text-sm max-w-[80%]'
-                  : 'self-start bg-surface rounded-xl px-3 py-2 text-fg text-sm max-w-[80%]'
-              }
-            >
-              {msg.role === 'teli' && msg.rung && (
-                <span className="block text-xs text-fg-muted mb-1">
-                  {RUNG_LABELS[msg.rung]}
-                </span>
-              )}
-              {msg.content}
-            </li>
-          ))}
+          {messages.map((msg, i) => {
+            if (msg.role === 'student') {
+              return (
+                <li key={i} className="self-end bg-brand-surface rounded-xl px-3 py-2 text-fg text-sm max-w-[80%]">
+                  {msg.content}
+                </li>
+              );
+            }
+            // Teli turn — the coach SPEAKS: the bubble leans in, then rung + words rise.
+            return (
+              <motion.li
+                key={i}
+                initial="hidden"
+                animate="show"
+                variants={coachMarkVariants(!!reduce, cfg)}
+                className="self-start bg-surface rounded-xl px-3 py-2 text-fg text-sm max-w-[80%]"
+              >
+                <motion.span
+                  className="block"
+                  variants={coachStaggerVariants(!!reduce, cfg)}
+                >
+                  {msg.rung && (
+                    <motion.span variants={coachRiseVariants(!!reduce, cfg)} className="block text-xs text-fg-muted mb-1">
+                      {RUNG_LABELS[msg.rung]}
+                    </motion.span>
+                  )}
+                  <motion.span variants={coachRiseVariants(!!reduce, cfg)} className="block">
+                    {msg.content}
+                  </motion.span>
+                </motion.span>
+              </motion.li>
+            );
+          })}
         </ul>
       )}
 

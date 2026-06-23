@@ -1,9 +1,20 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { hasBannedWord } from '@/lib/copy/leakGuard';
 import { TeliPanel } from '../TeliPanel';
+
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (q: string) => ({
+      matches: q.includes('reduce'), media: q, onchange: null,
+      addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+      dispatchEvent() { return false; },
+    }),
+  });
+});
 
 function makeTeliResponse(overrides: Record<string, unknown> = {}) {
   return {
@@ -160,6 +171,18 @@ describe('TeliPanel', () => {
 
     // The panel is rendered and accessible
     expect(panelEl).toBeInTheDocument();
+  });
+
+  it('renders an incoming Teli hint with its rung label after a help request', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ reply: 'What do you already know about the prompt?', hint_rung: 'nudge', hints_remaining: 3 }),
+    } as Response);
+    render(<TeliPanel attemptId="a1" step={0} taskDescription="desc" />);
+    fireEvent.change(screen.getByLabelText('Ask Teli a question'), { target: { value: 'help' } });
+    fireEvent.click(screen.getByRole('button', { name: /get a hint/i }));
+    expect(await screen.findByText(/what do you already know/i)).toBeInTheDocument();
+    expect(screen.getByText('A nudge')).toBeInTheDocument();
   });
 
   it('resets the conversation when step changes', async () => {
