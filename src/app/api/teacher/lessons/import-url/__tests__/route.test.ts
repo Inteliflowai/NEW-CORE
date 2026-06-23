@@ -9,19 +9,10 @@ const lessonInserts: Array<Record<string, unknown>> = [];
 let ROLE: string;
 
 class UrlFetchError extends Error {}
-class LlmExhaustedError extends Error {
-  provider: string;
-  constructor(provider: string, message = 'LLM exhausted after retries') {
-    super(message);
-    this.provider = provider;
-    this.name = 'LlmExhaustedError';
-  }
-}
 
 vi.mock('@/lib/auth/guards', () => ({ guardClassAccess }));
 vi.mock('@/lib/engine/parseUrl', () => ({ extractTextFromUrl, UrlFetchError }));
 vi.mock('@/lib/engine/lessonParse', () => ({ parseLesson }));
-vi.mock('@/lib/ai/errors', () => ({ LlmExhaustedError }));
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: async () => ({ auth: { getUser } }),
   createAdminSupabaseClient: () => ({
@@ -33,7 +24,9 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const req = (b: unknown) => new NextRequest('http://x', { method: 'POST', body: JSON.stringify(b) });
-async function load() { vi.resetModules(); return (await import('@/app/api/teacher/lessons/import-url/route')).POST; }
+// No vi.resetModules() — keep a single LlmExhaustedError identity so respondEngineError's
+// instanceof check (the 503 path) works. Matches the lessons/parse route-test convention.
+async function load() { return (await import('@/app/api/teacher/lessons/import-url/route')).POST; }
 
 beforeEach(() => {
   getUser.mockReset(); guardClassAccess.mockReset(); extractTextFromUrl.mockReset(); parseLesson.mockReset();
@@ -73,6 +66,7 @@ describe('POST /api/teacher/lessons/import-url', () => {
     expect((await res.json()).code).toBe('url_fetch');
   });
   it('503 when parseLesson exhausts the LLM', async () => {
+    const { LlmExhaustedError } = await import('@/lib/ai/errors');
     parseLesson.mockRejectedValue(new LlmExhaustedError('openai'));
     expect((await (await load())(req({ url: 'https://x', class_id: 'c1' }))).status).toBe(503);
   });
