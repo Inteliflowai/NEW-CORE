@@ -122,7 +122,7 @@ export function SignatureMoment(): React.JSX.Element {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              transition={coachTransition(!!reduce, { duration: 0.3, ease: r.rise.ease })}
+              transition={coachTransition(!!reduce, { duration: r.rise.duration, ease: r.rise.ease })}
               className="text-fg-muted text-center text-sm"
             >
               {acted === 'yes' ? r.acceptedNote : r.dismissedNote}
