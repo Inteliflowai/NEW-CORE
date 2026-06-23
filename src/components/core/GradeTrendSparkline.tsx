@@ -49,14 +49,16 @@ export function GradeTrendSparkline({
       height={H}
       style={{ backgroundColor: 'var(--surface)', borderRadius: 'var(--radius)' }}
     >
-      <path d={d} fill="none" stroke="var(--brand-accent)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {/* --brand (cobalt-600, 5.17:1 on --surface) clears WCAG 1.4.11 3:1 for the essential graphic;
+          --brand-accent (cobalt-400, 2.54:1) does not. Last point stays distinct by radius. */}
+      <path d={d} fill="none" stroke="var(--brand)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
       {points.map((p, i) => (
         <circle
           key={i}
           cx={x(i)}
           cy={y(p.grade)}
           r={i === lastI ? 3.5 : 2}
-          fill={i === lastI ? 'var(--brand)' : 'var(--brand-accent)'}
+          fill="var(--brand)"
         >
           <title>{p.label ?? `${p.grade}%`}</title>
         </circle>

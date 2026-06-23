@@ -42,7 +42,7 @@ export interface Gradebook {
 }
 
 const NONE = ['__none__'];
-const MAX_ASSIGNMENT_COLS = 40; // raised: per-day columns produce more than the old 12 (grid windows to recent)
+const MAX_ASSIGNMENT_COLS = 60; // per-day columns produce many; keep the most-recent ~term (grid windows to ~12). Truncation past this is LOGGED, never silent (spec §4.3).
 const MAX_QUIZ_COLS = 8;
 
 type AsgRow = { id: string; lesson_id: string | null; due_at: string | null; assigned_at: string | null; created_at: string | null; student_id: string };
@@ -94,7 +94,7 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
   const asgRows = (asgData ?? []) as AsgRow[];
   const groups = new Map<string, AsgRow[]>();
   for (const a of asgRows) { const k = colKey(a); (groups.get(k) ?? groups.set(k, []).get(k)!).push(a); }
-  const colMeta = [...groups.entries()]
+  const allColMeta = [...groups.entries()]
     .map(([key, rows]) => ({
       key, rows,
       maxCreated: rows.map(r => r.created_at ?? '').sort().at(-1) ?? '',
@@ -107,9 +107,20 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
         ?? (rows.map(r => r.created_at).filter((d): d is string => d != null).sort().at(0) ?? null),
       lesson_id: rows.find(r => r.lesson_id)?.lesson_id ?? null,
     }))
-    // Keep the most-recent N (sort desc by assigned day, then created), then present chronologically.
-    .sort((a, b) => (b.assigned_at ?? b.maxCreated).localeCompare(a.assigned_at ?? a.maxCreated))
+    // Most-recent first (by assigned day, then created) so the cap keeps recent work.
+    .sort((a, b) => (b.assigned_at ?? b.maxCreated).localeCompare(a.assigned_at ?? a.maxCreated));
+  // Non-silent cap (spec §4.3): if a class has more dated columns than the cap, keep the most-recent
+  // and LOG what was hidden — never drop columns without a trace.
+  if (allColMeta.length > MAX_ASSIGNMENT_COLS) {
+    console.warn(
+      `[loadGradebook] class ${classId}: ${allColMeta.length} assignment columns exceed the ` +
+      `${MAX_ASSIGNMENT_COLS}-column cap — showing the most-recent ${MAX_ASSIGNMENT_COLS}, ` +
+      `hiding the oldest ${allColMeta.length - MAX_ASSIGNMENT_COLS}.`,
+    );
+  }
+  const colMeta = allColMeta
     .slice(0, MAX_ASSIGNMENT_COLS)
+    // Present chronologically (oldest → newest) so a row reads as a timeline.
     .sort((a, b) => (a.assigned_at ?? a.maxCreated).localeCompare(b.assigned_at ?? b.maxCreated));
   const lessonIds = [...new Set(colMeta.map(c => c.lesson_id).filter((x): x is string => x != null))];
   const { data: lessonData } = await admin.from('lessons')

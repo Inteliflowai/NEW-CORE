@@ -185,3 +185,24 @@ describe('GradebookGrid — windowing', () => {
     expect(screen.getAllByText(/Assigned Jun|Due Jun/).length).toBeGreaterThan(0);
   });
 });
+
+describe('GradebookGrid — cell tooltip a11y', () => {
+  // Whole-branch review (a11y lens): the date detail must reach AT users (not only sighted hover),
+  // and the tooltip must be Escape-dismissible (WCAG 1.4.13).
+  it('folds the submitted + due dates into the cell aria-label (screen-reader path)', () => {
+    render(<GradebookGrid data={data} />);
+    const btn = screen.getByRole('button', { name: /Ana Diaz.*Due Jun 10/i });
+    const label = btn.getAttribute('aria-label') || '';
+    expect(label).toMatch(/Turned in Jun 9/);
+    expect(label).toMatch(/Due Jun 10/);
+    expect(hasBannedWord(label)).toBe(false);
+  });
+  it('opens the tooltip on focus and dismisses it on Escape (WCAG 1.4.13)', () => {
+    render(<GradebookGrid data={data} />);
+    const btn = screen.getByRole('button', { name: /Ana Diaz.*Due Jun 10/i });
+    fireEvent.focus(btn);
+    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    fireEvent.keyDown(btn, { key: 'Escape' });
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+});

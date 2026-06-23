@@ -237,13 +237,17 @@ export function GradebookGrid({ data }: GradebookGridProps) {
                   const grade = safeCell.displayed_grade;
                   const showGrade = grade != null && (status === 'graded' || status === 'redo' || status === 'redo_in_progress');
                   const interactive = INTERACTIVE.has(status);
-                  // B-A1: fold cell state into the accessible name (banned-word-free).
+                  // Tooltip lines (assignment name + submitted/due dates), reused as the SR path so
+                  // keyboard/AT users get the same dates the hover/focus tooltip shows the sighted user.
+                  const tipLines = cellTooltipLines(col, safeCell);
+                  // B-A1: fold cell state + the tooltip's date detail into the accessible name (banned-word-free).
                   const stateSuffix =
                     (showGrade ? `, ${grade} percent` : '')
                     + (safeCell.submitted_on_time === false ? ', late' : '')
                     + (safeCell.is_override ? ', grade changed by teacher' : '')
                     + (status === 'redo_in_progress' ? ', redo open' : '');
-                  const ariaLabel = `${s.name} — ${col.title} — ${STATUS_WORD[status]}${stateSuffix}`;
+                  const ariaLabel = `${s.name} — ${col.title} — ${STATUS_WORD[status]}${stateSuffix}`
+                    + tipLines.slice(1).map((l) => `, ${l}`).join('');
 
                   const inner = (
                     <span className="flex flex-col items-center gap-0.5">
@@ -274,13 +278,15 @@ export function GradebookGrid({ data }: GradebookGridProps) {
                         <button
                           type="button"
                           aria-label={ariaLabel}
-                          onMouseEnter={(e) => setTip({ lines: cellTooltipLines(col, safeCell), x: e.clientX, y: e.clientY })}
+                          onMouseEnter={(e) => setTip({ lines: tipLines, x: e.clientX, y: e.clientY })}
                           onMouseLeave={() => setTip(null)}
                           onFocus={(e) => {
                             const r = e.currentTarget.getBoundingClientRect();
-                            setTip({ lines: cellTooltipLines(col, safeCell), x: r.left + r.width / 2, y: r.top });
+                            setTip({ lines: tipLines, x: r.left + r.width / 2, y: r.top });
                           }}
                           onBlur={() => setTip(null)}
+                          // WCAG 1.4.13 Dismissible: Escape hides the tooltip without moving focus.
+                          onKeyDown={(e) => { if (e.key === 'Escape') setTip(null); }}
                           onClick={() => setSelected({ studentName: s.name, studentId: s.student_id, classId: data.class_id, col, cell: toDrillCell(safeCell) })}
                           className="flex w-full cursor-pointer items-center justify-center rounded-md p-1 text-fg ring-1 ring-sidebar-edge/40 hover:shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                         >
