@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/auth/requireRole';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { Card } from '@/components/core/Card';
 import { loadStudentHighFives } from '@/lib/highfives/loadStudentHighFives';
+import { HighFiveNote } from './_components/HighFiveNote';
 
 export default async function StudentHome(): Promise<React.JSX.Element> {
   const { userId } = await requireRole(['student']);
@@ -17,7 +18,7 @@ export default async function StudentHome(): Promise<React.JSX.Element> {
           <div className="flex flex-col gap-3">
             <p className="text-fg text-xs font-bold uppercase tracking-wide">A note from your teacher</p>
             {notes.map((n) => (
-              <p key={n.id} className="text-fg text-base leading-relaxed">{n.note_text}</p>
+              <HighFiveNote key={n.id} text={n.note_text} />
             ))}
           </div>
         </Card>
