@@ -58,6 +58,22 @@ async function main() {
     .maybeSingle();
 
   if (school) {
+    // The school cascade can't follow quiz_questions.skill_id → skills (that FK is NO ACTION), so
+    // deleting the school's skills fails while its quiz_questions still reference them. Null those
+    // refs first (skill_id is nullable); the quiz_questions rows are still removed by the quizzes
+    // cascade. Without this, the whole school delete aborts and stale demo data accumulates.
+    const { data: demoClasses } = await admin.from('classes').select('id').eq('school_id', school.id);
+    const classIds = ((demoClasses ?? []) as Array<{ id: string }>).map(c => c.id);
+    if (classIds.length) {
+      const { data: demoQuizzes } = await admin.from('quizzes').select('id').in('class_id', classIds);
+      const quizIds = ((demoQuizzes ?? []) as Array<{ id: string }>).map(q => q.id);
+      if (quizIds.length) {
+        const { error: nullErr } = await admin.from('quiz_questions').update({ skill_id: null }).in('quiz_id', quizIds);
+        if (nullErr) console.warn('[reset] Could not null quiz_questions.skill_id (cascade may fail):', nullErr.message);
+        else console.log(`[reset] Cleared skill_id on quiz_questions for ${quizIds.length} demo quiz(zes)`);
+      }
+    }
+
     const { error } = await admin
       .from('schools')
       .delete()
