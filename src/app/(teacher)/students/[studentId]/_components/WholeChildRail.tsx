@@ -20,6 +20,7 @@ import type { StudentSignals } from '@/lib/signals/loadStudentSignals';
 import type { PriorityCta } from '../_lib/priorityCta';
 import { PriorityRecommendation } from './PriorityRecommendation';
 import { SectionLabel } from '../../../_components/SectionLabel';
+import { CoachObservationCard } from './CoachObservationCard';
 
 interface WholeChildRailProps {
   signals: StudentSignals;
@@ -66,18 +67,8 @@ export function WholeChildRail({
         <p className="text-fg-muted text-xs mt-2">vs your own past, never classmates</p>
       </Card>
 
-      {/* Worth a look? — EMA coach-read; #at-risk anchor stays (priority CTA target) */}
-      <div id="at-risk">
-        <Card tone={signals.coach_read.tone}>
-          <Eyebrow tone={signals.coach_read.tone}>{signals.coach_read.eyebrow}</Eyebrow>
-          <div className="flex flex-col gap-1.5">
-            <p className="text-fg text-[13px]">{signals.coach_read.line}</p>
-            {signals.coach_read.suggestion && (
-              <p className="text-fg text-[13px]">{signals.coach_read.suggestion}</p>
-            )}
-          </div>
-        </Card>
-      </div>
+      {/* Worth a look? — EMA coach-read; #at-risk anchor lives on the animated card (priority CTA target) */}
+      <CoachObservationCard coach={signals.coach_read} />
 
       {/* Effort */}
       <Card tone="warn">

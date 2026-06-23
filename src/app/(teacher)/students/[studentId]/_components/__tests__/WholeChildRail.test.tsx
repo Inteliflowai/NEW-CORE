@@ -1,11 +1,25 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { WholeChildRail } from '../WholeChildRail';
 import { hasLeak, hasBannedWord } from '@/lib/copy/leakGuard';
 import type { StudentSignals } from '@/lib/signals/loadStudentSignals';
 import type { CoachObservation } from '@/lib/copy/coachObservation';
+
+// CoachObservationCard (the client island for the "Worth a look?" block) calls
+// useReducedMotion() which needs matchMedia. Force it to report reduced-motion so
+// framer-motion snaps to end state instantly in jsdom (same pattern as other tests).
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (q: string) => ({
+      matches: q.includes('reduce'), media: q, onchange: null,
+      addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {},
+      dispatchEvent() { return false; },
+    }),
+  });
+});
 
 /** Spec-promised DOM audit: no number and no banned word may reach the teacher DOM. */
 function expectCleanDom(text: string) {
