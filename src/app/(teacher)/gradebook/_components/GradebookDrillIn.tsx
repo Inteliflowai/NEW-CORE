@@ -26,6 +26,7 @@ import type { GradebookCell, GradebookAssignmentCol } from '@/lib/gradebook/load
 import { effortLabelPhrase } from '@/lib/copy/effortLabelPhrase';
 import { GradeTrendSparkline } from '@/components/core/GradeTrendSparkline';
 import type { StudentGradeTrend } from '@/lib/gradebook/loadStudentGradeTrend';
+import { MathText } from '@/components/core/MathText';
 
 /** The drill-in renders the loader's GradebookCell verbatim — it already carries the immutable
  * AI grade (score_pct), the effort label, the teacher note and the submission date. */
@@ -79,6 +80,13 @@ function trendDirectionPhrase(d: StudentGradeTrend['direction']): string {
 
 const FOCUSABLE = 'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])';
 
+interface AttemptWork {
+  tasks: { step: number; description: string }[];
+  responses: { tasks: Record<string, { text?: string; image_url?: string | null }> };
+  ai_feedback: { overall?: string } | null;
+  status: string;
+}
+
 export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillInProps) {
   const { studentName, studentId, classId, col, cell } = selected;
 
@@ -93,6 +101,27 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
       .catch(() => { if (live) setTrend(null); });
     return () => { live = false; };
   }, [studentId, classId]);
+
+  const [work, setWork] = useState<AttemptWork | null>(null);
+  const [expandedImg, setExpandedImg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!cell.attempt_id) { setWork(null); return; }
+    let live = true;
+    fetch(`/api/teacher/gradebook/attempt?attemptId=${encodeURIComponent(cell.attempt_id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((w) => { if (live) setWork(w); })
+      .catch(() => { if (live) setWork(null); });
+    return () => { live = false; };
+  }, [cell.attempt_id]);
+
+  // Esc closes the enlarged-drawing overlay (it renders outside the panel's focus trap).
+  useEffect(() => {
+    if (!expandedImg) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpandedImg(null); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [expandedImg]);
 
   const isGradedFamily = GRADED_FAMILY.has(cell.status);
   // A grade override needs a graded attempt; a note needs ANY attempt (submitted included).
@@ -308,6 +337,44 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
         {/* Effort line — only shown when an effort label is available */}
         {effortPhrase && <p className="text-sm text-fg-muted">{effortPhrase}</p>}
 
+        {/* Student's work — the actual submitted answers + drawings (teacher-only; fetched on open). */}
+        {work && work.tasks?.length > 0 && (
+          <section className="flex flex-col gap-3 border-t-2 border-sidebar-edge pt-4">
+            <h3 className="font-display text-sm font-extrabold uppercase tracking-wide text-fg">Student&apos;s work</h3>
+            {work.tasks.map((t) => {
+              const r = work.responses?.tasks?.[String(t.step)] ?? {};
+              const text = (r.text ?? '').trim();
+              const img = r.image_url ?? null;
+              return (
+                <div key={t.step} className="flex flex-col gap-1">
+                  <div className="text-sm font-bold text-fg"><MathText>{t.description}</MathText></div>
+                  {text ? (
+                    <p className="whitespace-pre-wrap text-sm text-fg">{text}</p>
+                  ) : !img ? (
+                    <p className="text-sm text-fg-muted">No written answer.</p>
+                  ) : null}
+                  {img && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedImg(img)}
+                      aria-label={`Enlarge the drawing for question ${t.step}`}
+                      className="self-start rounded-md border-2 border-sidebar-edge bg-bg p-1 shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                    >
+                      <img src={img} alt={`Drawing for question ${t.step}`} className="max-h-40 w-auto rounded" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {work.ai_feedback?.overall && (
+              <div className="rounded-lg border-2 border-sidebar-edge bg-brand-surface p-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-fg-muted">What the AI noted</p>
+                <p className="text-sm text-fg">{work.ai_feedback.overall}</p>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* No-attempt empty-state: nothing to grade, no write controls (B-C1). */}
         {!canEditNote && (
           <p className="border-t-2 border-sidebar-edge pt-4 text-sm text-fg-muted">
@@ -395,6 +462,17 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
           </div>
         )}
       </aside>
+      {expandedImg && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Student drawing"
+          onClick={() => setExpandedImg(null)}
+          className="fixed inset-0 z-40 flex items-center justify-center bg-fg/60 p-6"
+        >
+          <img src={expandedImg} alt="Student drawing, enlarged" className="max-h-[90vh] max-w-[90vw] rounded-lg border-2 border-sidebar-edge bg-bg" />
+        </div>
+      )}
     </>
   );
 }
