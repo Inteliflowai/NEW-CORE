@@ -528,11 +528,20 @@ DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-mom
 | Page kicker | Your lessons |
 | Search field label | Search |
 | Search placeholder | Find a lesson |
+| Class filter label (shown when teacher has 2+ classes) | Class |
+| Subject filter label | Subject |
+| Subject filter — all | All subjects |
+| Grade filter label | Grade |
+| Grade filter — all | All grades |
+| Grade option (per value) | Grade {N} |
 | Date filter label | Added |
 | Date filter — all | All time |
 | Date filter — month | This month |
 | Date filter — week | This week |
 | Date filter — today | Today |
+| Section header (subject + grade) | {SUBJECT} · GRADE {N} |
+| Section header (subject only) | {SUBJECT} |
+| Section header (no subject) | OTHER |
 | Status pill — published | Published |
 | Status pill — ready | Ready to review |
 | Status pill — draft | Draft |
@@ -540,13 +549,14 @@ DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-mom
 | Quiz state — one | 1 quiz ready |
 | Quiz state — many | {N} quizzes ready |
 | Quiz state — none | No quiz yet |
+| Row action — view the lesson plan | View lesson |
 | Row action — has quiz | Open quiz |
 | Row action — no quiz | Make a quiz |
 | Cold start — title | No lessons yet |
 | Cold start — body | Upload a lesson and we'll draft a quiz you can review. |
 | Cold start — CTA | Upload a lesson |
 | No-match — title | Nothing matches |
-| No-match — body | Try a different search or date. |
+| No-match — body | Try a different search, subject, grade, or date. |
 
 ### Quiz Library (DRAFT)
 | Key | Draft |
@@ -555,11 +565,19 @@ DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-mom
 | Page kicker | Your checks |
 | Search field label | Search |
 | Search placeholder | Find a check… |
+| Class filter label (shown when teacher has 2+ classes) | Class |
+| Subject filter label | Subject |
+| Subject filter — all | All subjects |
+| Grade filter label | Grade |
+| Grade filter — all | All grades |
+| Grade option (per value) | Grade {N} |
 | Date filter label | When |
 | Date filter — all | All time |
 | Date filter — month | This month |
 | Date filter — week | This week |
 | Date filter — today | Today |
+| Section header (subject + grade) | {SUBJECT} · GRADE {N} |
+| Section header (no subject) | OTHER |
 | Status pill — published | Published |
 | Status pill — draft | Draft |
 | Row meta — question count (one) | 1 question |
@@ -579,6 +597,19 @@ DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-mom
 | Action — unpublish | Unpublish |
 | Action — archive | Archive |
 | Write error | That didn't save — try again in a moment. |
+
+### Lesson plan viewer (DRAFT — read-only side panel; teacher-only)
+| Key | Draft |
+|---|---|
+| Panel aria-label | Lesson plan — {title} |
+| Close button label | Close |
+| Status pill — published / ready / draft | Published / Ready to review / Draft |
+| Section — summary | Summary |
+| Section — objectives | Learning goals |
+| Section — key concepts | Key ideas |
+| Section — vocabulary | Vocabulary |
+| Section — misconceptions (teacher-only lens) | Watch for these mix-ups |
+| No-plan-yet note | This lesson hasn't been processed yet, so there's no lesson plan to show. Once it's processed, the objectives and key ideas appear here. |
 
 ### Upload (orchestrator) (DRAFT)
 | Key | Draft |
