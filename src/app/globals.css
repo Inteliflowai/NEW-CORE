@@ -2,12 +2,16 @@
 @import "katex/dist/katex.min.css";
 
 /* ============================================================
-   TIER 1 — PRIMITIVE RAMPS
-   The ONLY place hex literals live. All other selectors use var().
+   DESIGN TOKENS — Tier 1 (ramps) / Tier 2 (semantic) / Tier 3
+   (role × intensity) / @theme. This region is GENERATED from the
+   single source of truth src/lib/design/tokens.ts.
+   Do NOT hand-edit between the markers — edit tokens.ts and run
+   `npm run tokens:gen`. `npm run tokens:check` guards against drift.
    ============================================================ */
+/* TOKENS:GENERATED:BEGIN — do not edit; source: src/lib/design/tokens.ts · run `npm run tokens:gen` */
 :root {
-  /* Emerald ramp (Student brand) */
-  --emerald-50:  #ecfdf5;
+  /* Tier 1 — primitive ramps (the only hex) */
+  --emerald-50: #ecfdf5;
   --emerald-100: #d1fae5;
   --emerald-200: #a7f3d0;
   --emerald-300: #6ee7b7;
@@ -18,9 +22,7 @@
   --emerald-800: #065f46;
   --emerald-900: #064e3b;
   --emerald-950: #022c22;
-
-  /* Lime ramp (Student accent) */
-  --lime-50:  #f7fee7;
+  --lime-50: #f7fee7;
   --lime-100: #ecfccb;
   --lime-200: #d9f99d;
   --lime-300: #bef264;
@@ -31,9 +33,7 @@
   --lime-800: #3f6212;
   --lime-900: #365314;
   --lime-950: #1a2e05;
-
-  /* Cobalt ramp (Teacher brand) */
-  --cobalt-50:  #eff6ff;
+  --cobalt-50: #eff6ff;
   --cobalt-100: #dbeafe;
   --cobalt-200: #bfdbfe;
   --cobalt-300: #93c5fd;
@@ -44,9 +44,7 @@
   --cobalt-800: #1e40af;
   --cobalt-900: #1e3a8a;
   --cobalt-950: #172554;
-
-  /* Coral ramp (Parent brand) */
-  --coral-50:  #fff1ee;
+  --coral-50: #fff1ee;
   --coral-100: #ffe0d9;
   --coral-200: #ffc5b8;
   --coral-300: #ff9d87;
@@ -57,9 +55,7 @@
   --coral-800: #8a271a;
   --coral-900: #72261c;
   --coral-950: #3e0f09;
-
-  /* Amber ramp (Super-admin signal) */
-  --amber-50:  #fffbeb;
+  --amber-50: #fffbeb;
   --amber-100: #fef3c7;
   --amber-200: #fde68a;
   --amber-300: #fcd34d;
@@ -70,9 +66,7 @@
   --amber-800: #92400e;
   --amber-900: #78350f;
   --amber-950: #451a03;
-
-  /* Ink ramp (neutral — readability anchor) */
-  --ink-50:  #f8f8f8;
+  --ink-50: #f8f8f8;
   --ink-100: #f0f0f0;
   --ink-200: #e4e4e4;
   --ink-300: #d1d1d1;
@@ -83,234 +77,198 @@
   --ink-800: #262626;
   --ink-900: #171717;
   --ink-950: #0a0a0a;
-
-  /* Dark canvas tokens (command-center roles) */
-  --canvas-admin:    #14132b;
+  /* Tier 1 — one-offs */
+  --canvas-admin: #14132b;
   --canvas-platform: #18181b;
-
-  /* White — sole non-ramp hex, referenced via var() everywhere outside :root */
   --white: #ffffff;
-
-  /* Admin surface dark */
   --surface-admin: #1e1d3a;
-
-  /* Super-admin surface dark */
   --surface-platform: #27272a;
-
-  /* ============================================================
-     TIER 2 — SEMANTIC SLOTS (default: light, teacher/calm baseline)
-     Components reference ONLY these — never the Tier-1 ramps directly.
-     ============================================================ */
-  --bg:           var(--ink-50);
-  --surface:      #ffffff;
-  --fg:           var(--ink-900);
-  --fg-muted:     var(--ink-600);
-  --brand:        var(--cobalt-600);
+  /* Tier 2 — semantic slots (light / teacher-calm baseline) */
+  --bg: var(--ink-50);
+  --surface: #ffffff;
+  --fg: var(--ink-900);
+  --fg-muted: var(--ink-600);
+  --brand: var(--cobalt-600);
   --brand-accent: var(--cobalt-400);
-  --fg-on-brand:  var(--white);
-  --ok:           var(--emerald-600);
-  --warn:         var(--amber-500);
-  --risk:         var(--coral-500);
-  --ok-surface:     var(--emerald-50);
-  --ok-fg:          var(--emerald-800);
-  --warn-surface:   var(--amber-50);
-  --warn-fg:        var(--amber-900);
-  --risk-surface:   var(--coral-50);
-  --risk-fg:        var(--coral-900);
-  --brand-surface:  var(--cobalt-50);
-  --brand-fg:       var(--cobalt-800);
-  --radius:         0.5rem;
-  --radius-lg:    1rem;
-  --shadow:       0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
-  --shadow-pop:   0 8px 24px -4px rgb(0 0 0 / 0.16), 0 4px 8px -2px rgb(0 0 0 / 0.10);
-
-  /* Sidebar (teacher "pop-art" rail) — references Tier-1 ramps; consumed via bg-sidebar etc. */
-  --sidebar:           var(--cobalt-700);
-  --sidebar-fg:        var(--white);
-  --sidebar-fg-muted:  var(--cobalt-100);
-  --sidebar-active:    var(--lime-400);
+  --fg-on-brand: var(--white);
+  --ok: var(--emerald-600);
+  --warn: var(--amber-500);
+  --risk: var(--coral-500);
+  --ok-surface: var(--emerald-50);
+  --ok-fg: var(--emerald-800);
+  --warn-surface: var(--amber-50);
+  --warn-fg: var(--amber-900);
+  --risk-surface: var(--coral-50);
+  --risk-fg: var(--coral-900);
+  --brand-surface: var(--cobalt-50);
+  --brand-fg: var(--cobalt-800);
+  --radius: 0.5rem;
+  --radius-lg: 1rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  --shadow-pop: 0 8px 24px -4px rgb(0 0 0 / 0.16), 0 4px 8px -2px rgb(0 0 0 / 0.10);
+  --sidebar: var(--cobalt-700);
+  --sidebar-fg: var(--white);
+  --sidebar-fg-muted: var(--cobalt-100);
+  --sidebar-active: var(--lime-400);
   --sidebar-active-fg: var(--ink-950);
-  --sidebar-edge:      var(--ink-950);
-  --sidebar-plate:     var(--white);
-  --sidebar-danger:    var(--coral-600);
+  --sidebar-edge: var(--ink-950);
+  --sidebar-plate: var(--white);
+  --sidebar-danger: var(--coral-600);
 }
 
-/* ============================================================
-   TIER 3 — ROLE/INTENSITY BINDING
-   Sets Tier-2 slots from the role's primitive ramp.
-   data-role + data-intensity are set by RoleLayout.
-   ============================================================ */
-
-/* --- Student (loud) --- */
 [data-role="student"] {
-  --brand:         var(--emerald-600);
-  --brand-accent:  var(--lime-500);
-  --fg-on-brand:   var(--white);
-  --ok:            var(--emerald-600);
-  --bg:            var(--ink-50);
-  --surface:       var(--white);
-  --fg:            var(--ink-900);
-  --fg-muted:      var(--ink-600);
+  --brand: var(--emerald-600);
+  --brand-accent: var(--lime-500);
+  --fg-on-brand: var(--white);
+  --ok: var(--emerald-600);
+  --bg: var(--ink-50);
+  --surface: var(--white);
+  --fg: var(--ink-900);
+  --fg-muted: var(--ink-600);
   --brand-surface: var(--emerald-50);
-  --brand-fg:      var(--emerald-800);
+  --brand-fg: var(--emerald-800);
+}
+
+[data-role="teacher"] {
+  --brand: var(--cobalt-600);
+  --brand-accent: var(--cobalt-400);
+  --fg-on-brand: var(--white);
+  --ok: var(--emerald-600);
+  --bg: var(--ink-50);
+  --surface: var(--white);
+  --fg: var(--ink-900);
+  --fg-muted: var(--ink-600);
+  --brand-surface: var(--cobalt-50);
+  --brand-fg: var(--cobalt-800);
+}
+
+[data-role="parent"] {
+  --brand: var(--coral-500);
+  --brand-accent: var(--coral-300);
+  --fg-on-brand: var(--white);
+  --ok: var(--emerald-600);
+  --bg: var(--ink-50);
+  --surface: var(--white);
+  --fg: var(--ink-900);
+  --fg-muted: var(--ink-600);
+  --brand-surface: var(--coral-50);
+  --brand-fg: var(--coral-900);
+}
+
+[data-role="admin"] {
+  --bg: var(--canvas-admin);
+  --surface: var(--surface-admin);
+  --fg: var(--ink-100);
+  --fg-muted: var(--ink-400);
+  --brand: var(--cobalt-400);
+  --brand-accent: var(--cobalt-300);
+  --fg-on-brand: var(--ink-950);
+  --ok: var(--emerald-400);
+  --warn: var(--amber-400);
+  --risk: var(--coral-400);
+  --ok-surface: var(--emerald-950);
+  --ok-fg: var(--emerald-300);
+  --warn-surface: var(--amber-950);
+  --warn-fg: var(--amber-300);
+  --risk-surface: var(--coral-950);
+  --risk-fg: var(--coral-300);
+  --brand-surface: var(--cobalt-950);
+  --brand-fg: var(--cobalt-300);
+}
+
+[data-role="super-admin"] {
+  --bg: var(--canvas-platform);
+  --surface: var(--surface-platform);
+  --fg: var(--ink-100);
+  --fg-muted: var(--ink-400);
+  --brand: var(--amber-500);
+  --brand-accent: var(--amber-300);
+  --fg-on-brand: var(--ink-950);
+  --ok: var(--emerald-400);
+  --warn: var(--amber-400);
+  --risk: var(--coral-400);
+  --ok-surface: var(--emerald-950);
+  --ok-fg: var(--emerald-300);
+  --warn-surface: var(--amber-950);
+  --warn-fg: var(--amber-300);
+  --risk-surface: var(--coral-950);
+  --risk-fg: var(--coral-300);
+  --brand-surface: var(--amber-950);
+  --brand-fg: var(--amber-300);
 }
 
 [data-role="student"][data-intensity="loud"] {
-  --radius:      0.75rem;
-  --radius-lg:   1.25rem;
-  --shadow:      0 2px 6px 0 rgb(5 150 105 / 0.12);
-  --shadow-pop:  0 10px 28px -4px rgb(5 150 105 / 0.22), 0 4px 10px -2px rgb(5 150 105 / 0.14);
-}
-
-/* --- Teacher (calm) --- */
-[data-role="teacher"] {
-  --brand:         var(--cobalt-600);
-  --brand-accent:  var(--cobalt-400);
-  --fg-on-brand:   var(--white);
-  --ok:            var(--emerald-600);
-  --bg:            var(--ink-50);
-  --surface:       var(--white);
-  --fg:            var(--ink-900);
-  --fg-muted:      var(--ink-600);
-  --brand-surface: var(--cobalt-50);
-  --brand-fg:      var(--cobalt-800);
+  --radius: 0.75rem;
+  --radius-lg: 1.25rem;
+  --shadow: 0 2px 6px 0 rgb(5 150 105 / 0.12);
+  --shadow-pop: 0 10px 28px -4px rgb(5 150 105 / 0.22), 0 4px 10px -2px rgb(5 150 105 / 0.14);
 }
 
 [data-role="teacher"][data-intensity="calm"] {
-  --radius:     0.5rem;
-  --radius-lg:  0.875rem;
-  --shadow:     0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  --radius: 0.5rem;
+  --radius-lg: 0.875rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
   --shadow-pop: 0 6px 16px -3px rgb(37 99 235 / 0.12), 0 3px 6px -2px rgb(0 0 0 / 0.08);
 }
 
-/* --- Parent (calm) --- */
-[data-role="parent"] {
-  --brand:         var(--coral-500);
-  --brand-accent:  var(--coral-300);
-  --fg-on-brand:   var(--white);
-  --ok:            var(--emerald-600);
-  --bg:            var(--ink-50);
-  --surface:       var(--white);
-  --fg:            var(--ink-900);
-  --fg-muted:      var(--ink-600);
-  --brand-surface: var(--coral-50);
-  --brand-fg:      var(--coral-900);
-}
-
 [data-role="parent"][data-intensity="calm"] {
-  --radius:     0.5rem;
-  --radius-lg:  0.875rem;
-  --shadow:     0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
+  --radius: 0.5rem;
+  --radius-lg: 0.875rem;
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.10), 0 1px 2px -1px rgb(0 0 0 / 0.08);
   --shadow-pop: 0 6px 16px -3px rgb(224 83 63 / 0.12), 0 3px 6px -2px rgb(0 0 0 / 0.08);
 }
 
-/* --- School Admin (calm-on-dark) --- */
-[data-role="admin"] {
-  --bg:            var(--canvas-admin);
-  --surface:       var(--surface-admin);
-  --fg:            var(--ink-100);
-  --fg-muted:      var(--ink-400);
-  --brand:         var(--cobalt-400);
-  --brand-accent:  var(--cobalt-300);
-  --fg-on-brand:   var(--ink-950);
-  --ok:            var(--emerald-400);
-  --warn:          var(--amber-400);
-  --risk:          var(--coral-400);
-  --ok-surface:    var(--emerald-950);
-  --ok-fg:         var(--emerald-300);
-  --warn-surface:  var(--amber-950);
-  --warn-fg:       var(--amber-300);
-  --risk-surface:  var(--coral-950);
-  --risk-fg:       var(--coral-300);
-  --brand-surface: var(--cobalt-950);
-  --brand-fg:      var(--cobalt-300);
-}
-
 [data-role="admin"][data-intensity="calm"] {
-  --radius:     0.5rem;
-  --radius-lg:  0.75rem;
-  --shadow:     0 1px 4px 0 rgb(0 0 0 / 0.40);
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
+  --shadow: 0 1px 4px 0 rgb(0 0 0 / 0.40);
   --shadow-pop: 0 6px 20px -4px rgb(0 0 0 / 0.50);
 }
 
-/* --- Super-admin (calm-on-dark, charcoal + amber) --- */
-[data-role="super-admin"] {
-  --bg:            var(--canvas-platform);
-  --surface:       var(--surface-platform);
-  --fg:            var(--ink-100);
-  --fg-muted:      var(--ink-400);
-  --brand:         var(--amber-500);
-  --brand-accent:  var(--amber-300);
-  --fg-on-brand:   var(--ink-950);
-  --ok:            var(--emerald-400);
-  --warn:          var(--amber-400);
-  --risk:          var(--coral-400);
-  --ok-surface:    var(--emerald-950);
-  --ok-fg:         var(--emerald-300);
-  --warn-surface:  var(--amber-950);
-  --warn-fg:       var(--amber-300);
-  --risk-surface:  var(--coral-950);
-  --risk-fg:       var(--coral-300);
-  --brand-surface: var(--amber-950);
-  --brand-fg:      var(--amber-300);
-}
-
 [data-role="super-admin"][data-intensity="calm"] {
-  --radius:     0.375rem;
-  --radius-lg:  0.625rem;
-  --shadow:     0 1px 4px 0 rgb(0 0 0 / 0.50);
+  --radius: 0.375rem;
+  --radius-lg: 0.625rem;
+  --shadow: 0 1px 4px 0 rgb(0 0 0 / 0.50);
   --shadow-pop: 0 6px 20px -4px rgb(0 0 0 / 0.60);
 }
 
-/* ============================================================
-   @THEME — Expose Tier-2 slots as Tailwind v4 design tokens.
-   Use bg-brand, text-fg, shadow-pop, rounded, rounded-lg, etc.
-   ============================================================ */
 @theme inline {
-  /* Colors */
-  --color-bg:           var(--bg);
-  --color-surface:      var(--surface);
-  --color-fg:           var(--fg);
-  --color-fg-muted:     var(--fg-muted);
-  --color-brand:         var(--brand);
-  --color-brand-accent:  var(--brand-accent);
-  --color-fg-on-brand:   var(--fg-on-brand);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-brand: var(--brand);
+  --color-brand-accent: var(--brand-accent);
+  --color-fg-on-brand: var(--fg-on-brand);
   --color-brand-surface: var(--brand-surface);
-  --color-brand-fg:      var(--brand-fg);
-  --color-ok:           var(--ok);
-  --color-warn:         var(--warn);
-  --color-risk:         var(--risk);
-  --color-ok-surface:   var(--ok-surface);
-  --color-ok-fg:        var(--ok-fg);
+  --color-brand-fg: var(--brand-fg);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-risk: var(--risk);
+  --color-ok-surface: var(--ok-surface);
+  --color-ok-fg: var(--ok-fg);
   --color-warn-surface: var(--warn-surface);
-  --color-warn-fg:      var(--warn-fg);
+  --color-warn-fg: var(--warn-fg);
   --color-risk-surface: var(--risk-surface);
-  --color-risk-fg:      var(--risk-fg);
-
-  /* Sidebar (teacher rail) tokens */
-  --color-sidebar:            var(--sidebar);
-  --color-sidebar-fg:         var(--sidebar-fg);
-  --color-sidebar-fg-muted:   var(--sidebar-fg-muted);
-  --color-sidebar-active:     var(--sidebar-active);
-  --color-sidebar-active-fg:  var(--sidebar-active-fg);
-  --color-sidebar-edge:       var(--sidebar-edge);
-  --color-sidebar-plate:      var(--sidebar-plate);
-  --color-sidebar-danger:     var(--sidebar-danger);
-
-  /* Radius — rounded / rounded-lg utilities */
+  --color-risk-fg: var(--risk-fg);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-fg: var(--sidebar-fg);
+  --color-sidebar-fg-muted: var(--sidebar-fg-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-fg: var(--sidebar-active-fg);
+  --color-sidebar-edge: var(--sidebar-edge);
+  --color-sidebar-plate: var(--sidebar-plate);
+  --color-sidebar-danger: var(--sidebar-danger);
   --radius-DEFAULT: var(--radius);
-  --radius-lg:      var(--radius-lg);
-
-  /* Shadows */
+  --radius-lg: var(--radius-lg);
   --shadow-DEFAULT: var(--shadow);
-  --shadow-pop:     var(--shadow-pop);
+  --shadow-pop: var(--shadow-pop);
   --shadow-sticker: 3px 3px 0 var(--sidebar-edge);
   --shadow-sticker-lg: 6px 6px 0 var(--sidebar-edge);
-
-  /* Fonts (set by layout.tsx via next/font/google) */
   --font-display: var(--font-bricolage);
-  --font-sans:    var(--font-inter);
+  --font-sans: var(--font-inter);
 }
+/* TOKENS:GENERATED:END */
 
 /* ============================================================
    BASE STYLES
@@ -361,4 +319,3 @@ body {
   background-image: radial-gradient(color-mix(in srgb, var(--brand) 10%, transparent) 1.5px, transparent 1.7px);
   background-size: 18px 18px;
 }
-

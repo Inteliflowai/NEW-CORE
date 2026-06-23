@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "npm run a11y",
+    "tokens:gen": "npx tsx scripts/design/generate-tokens-css.ts",
+    "tokens:check": "npx tsx scripts/design/generate-tokens-css.ts --check",
+    "prebuild": "npm run tokens:check && npm run a11y",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
