@@ -1,12 +1,18 @@
 'use client';
 import React from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { ALERT_BUCKETS } from '@/lib/copy/alertTriggerLabel';
 import { SectionLabel } from '../../_components/SectionLabel';
 import { AlertRow, type AlertRowItem } from './AlertRow';
+import { COACH_MOTION, coachRiseVariants, coachStaggerVariants } from '@/lib/design/coachMotion';
 
 export function AlertsList({ alerts, classId }: { alerts: AlertRowItem[]; classId: string }): React.JSX.Element {
   const router = useRouter();
+  const reduce = useReducedMotion();
+  const cfg = COACH_MOTION.teacher;
+  const rise = coachRiseVariants(!!reduce, cfg);
+  const stagger = coachStaggerVariants(!!reduce, cfg);
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       {ALERT_BUCKETS.map((bucket) => {
@@ -18,7 +24,13 @@ export function AlertsList({ alerts, classId }: { alerts: AlertRowItem[]; classI
               <SectionLabel tone={bucket.severity === 'urgent' ? 'risk' : bucket.severity === 'watch' ? 'warn' : 'brand'}>{bucket.label}</SectionLabel>
               <span className="text-fg text-xs">{bucket.subline}</span>
             </div>
-            {rows.map((a) => <AlertRow key={a.id} alert={a} classId={classId} onResolved={() => router.refresh()} />)}
+            <motion.div className="flex flex-col gap-3" variants={stagger} initial="hidden" animate="show">
+              {rows.map((a) => (
+                <motion.div key={a.id} variants={rise}>
+                  <AlertRow alert={a} classId={classId} onResolved={() => router.refresh()} />
+                </motion.div>
+              ))}
+            </motion.div>
           </section>
         );
       })}
