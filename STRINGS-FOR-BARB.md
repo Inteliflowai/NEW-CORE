@@ -761,3 +761,5 @@ Students can answer a task by drawing or attaching a photo; teachers see the act
 | AI feedback label | What the AI noted |
 
 Note: the "Student's work" panel is teacher-only; it shows the student's own answers + the AI grading feedback (no band/risk machinery).
+
+**Seg 5 review update (2026-06-23):** teacher review image labels are now NEUTRAL (a photo isn't a "drawing"): enlarge button "Enlarge the answer image for question N", thumbnail alt "Answer image for question N", overlay "Student work" / "Answer image, enlarged". Student-side preview alt stays "Your drawing or photo".
