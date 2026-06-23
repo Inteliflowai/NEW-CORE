@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { computeEffortLabel, type EffortLabel } from '@/lib/signals/computeEffortLabel';
 
 export interface GradebookStudent { student_id: string; name: string; }
-export interface GradebookAssignmentCol { assignment_key: string; title: string; due_at: string | null; }
+export interface GradebookAssignmentCol { assignment_key: string; title: string; due_at: string | null; assigned_at: string | null; }
 export type CellStatus = 'graded' | 'submitted' | 'not_due' | 'missing' | 'redo' | 'redo_in_progress' | 'none';
 export interface GradebookCell {
   attempt_id: string | null; status: CellStatus; displayed_grade: number | null;
@@ -42,16 +42,21 @@ export interface Gradebook {
 }
 
 const NONE = ['__none__'];
-const MAX_ASSIGNMENT_COLS = 12;
+const MAX_ASSIGNMENT_COLS = 40; // raised: per-day columns produce more than the old 12 (grid windows to recent)
 const MAX_QUIZ_COLS = 8;
 
-type AsgRow = { id: string; lesson_id: string | null; due_at: string | null; created_at: string | null; student_id: string };
+type AsgRow = { id: string; lesson_id: string | null; due_at: string | null; assigned_at: string | null; created_at: string | null; student_id: string };
 type HwRow = { id: string; assignment_id: string; student_id: string; status: string; score_pct: number | null; teacher_score: number | null; effort_label: EffortLabel | null; teli_hint_count: number | null; teacher_notes: string | null; allow_redo: boolean | null; is_redo: boolean | null; attempt_no: number | null; submitted_on_time: boolean | null; submitted_at: string | null; graded_at: string | null };
 type QzRow = { id: string; title: string | null; created_at: string | null };
 type QaRow = { id: string; quiz_id: string; student_id: string; score_pct: number | null; mastery_band: GradebookQuizCell['mastery_band']; is_complete: boolean | null; submitted_at: string | null };
 
+/** UTC calendar day ('YYYY-MM-DD') of the assigned date (assigned_at, falling back to created_at). */
+function assignedDay(a: AsgRow): string {
+  const iso = a.assigned_at ?? a.created_at;
+  return iso ? iso.slice(0, 10) : '';
+}
 function colKey(a: AsgRow): string {
-  if (a.lesson_id) return `lesson:${a.lesson_id}`;
+  if (a.lesson_id) return `lesson:${a.lesson_id}:${assignedDay(a)}`; // split same-lesson work by assigned day
   if (a.due_at) return `due:${a.due_at}`;
   return `id:${a.id}`;
 }
@@ -84,7 +89,7 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
 
   // 2. Assignment columns (collapse per-student fan-out).
   const { data: asgData } = await admin.from('assignments')
-    .select('id, lesson_id, due_at, created_at, student_id')
+    .select('id, lesson_id, due_at, assigned_at, created_at, student_id')
     .eq('class_id', classId).order('created_at', { ascending: false });
   const asgRows = (asgData ?? []) as AsgRow[];
   const groups = new Map<string, AsgRow[]>();
@@ -96,10 +101,29 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
       // Deterministic column due_at: max non-null across the group (else null), so the
       // missing/not_due derivation is stable regardless of DB row order (M1).
       due_at: rows.map(r => r.due_at).filter((d): d is string => d != null).sort().at(-1) ?? null,
+      // Column assigned date: min non-null across the group (the batch's assigned day), falling
+      // back to the column's created day so historical (pre-assigned_at) columns still date. Stable.
+      assigned_at: rows.map(r => r.assigned_at).filter((d): d is string => d != null).sort().at(0)
+        ?? (rows.map(r => r.created_at).filter((d): d is string => d != null).sort().at(0) ?? null),
+      lesson_id: rows.find(r => r.lesson_id)?.lesson_id ?? null,
     }))
-    .sort((a, b) => b.maxCreated.localeCompare(a.maxCreated))
-    .slice(0, MAX_ASSIGNMENT_COLS);
-  const assignments: GradebookAssignmentCol[] = colMeta.map((c, i) => ({ assignment_key: c.key, title: dueLabel(c.due_at, i + 1), due_at: c.due_at }));
+    // Keep the most-recent N (sort desc by assigned day, then created), then present chronologically.
+    .sort((a, b) => (b.assigned_at ?? b.maxCreated).localeCompare(a.assigned_at ?? a.maxCreated))
+    .slice(0, MAX_ASSIGNMENT_COLS)
+    .sort((a, b) => (a.assigned_at ?? a.maxCreated).localeCompare(b.assigned_at ?? b.maxCreated));
+  const lessonIds = [...new Set(colMeta.map(c => c.lesson_id).filter((x): x is string => x != null))];
+  const { data: lessonData } = await admin.from('lessons')
+    .select('id, title')
+    .in('id', lessonIds.length ? lessonIds : NONE);
+  const lessonTitle = new Map<string, string>(
+    ((lessonData ?? []) as Array<{ id: string; title: string | null }>)
+      .map(l => [l.id, l.title ?? ''] as const));
+  const assignments: GradebookAssignmentCol[] = colMeta.map((c, i) => ({
+    assignment_key: c.key,
+    title: (c.lesson_id && lessonTitle.get(c.lesson_id)) || dueLabel(c.due_at, i + 1),
+    due_at: c.due_at,
+    assigned_at: c.assigned_at,
+  }));
   // assignment_id → column key (for cell mapping).
   const idToKey = new Map<string, string>();
   for (const c of colMeta) for (const r of c.rows) idToKey.set(r.id, c.key);

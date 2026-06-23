@@ -3,7 +3,7 @@ import { loadGradebook } from '@/lib/gradebook/loadGradebook';
 
 // Scriptable tables.
 let ENROLLMENTS: unknown[]; let ASSIGNMENTS: unknown[]; let HW: unknown[];
-let QUIZZES: unknown[]; let QUIZ_ATTEMPTS: unknown[];
+let QUIZZES: unknown[]; let QUIZ_ATTEMPTS: unknown[]; let LESSONS: unknown[];
 
 // Minimal chainable query stub: every filter returns `this`; awaiting yields { data }.
 function table(rows: () => unknown[]) {
@@ -21,11 +21,13 @@ const admin = {
     if (t === 'homework_attempts') return table(() => HW);
     if (t === 'quizzes') return table(() => QUIZZES);
     if (t === 'quiz_attempts') return table(() => QUIZ_ATTEMPTS);
+    if (t === 'lessons') return table(() => LESSONS);
     return table(() => []);
   },
 } as unknown as Parameters<typeof loadGradebook>[0];
 
 beforeEach(() => {
+  LESSONS = [];
   ENROLLMENTS = [
     { student_id: 's1', users: { id: 's1', full_name: 'Ana Diaz', display_name: null } },
     { student_id: 's2', users: { id: 's2', full_name: 'Ben Cole', display_name: null } },
@@ -45,13 +47,13 @@ describe('loadGradebook', () => {
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
     expect(gb.students.map(s => s.name)).toEqual(['Ana Diaz', 'Ben Cole']);
     expect(gb.assignments).toHaveLength(1);              // a_s1 + a_s2 collapse to ONE column
-    expect(gb.assignments[0].assignment_key).toBe('lesson:L1');
+    expect(gb.assignments[0].assignment_key).toBe('lesson:L1:2026-06-01');
   });
 
   it('override-wins: displayed_grade = teacher_score ?? score_pct, is_override set', async () => {
     HW = [{ id: 'h1', assignment_id: 'a_s1', student_id: 's1', status: 'graded', score_pct: 70, teacher_score: 90, allow_redo: false, is_redo: false, attempt_no: 1, submitted_on_time: true, graded_at: '2026-06-11T00:00:00Z' }];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    const cell = gb.cells['s1']['lesson:L1'];
+    const cell = gb.cells['s1']['lesson:L1:2026-06-01'];
     expect(cell.status).toBe('graded');
     expect(cell.displayed_grade).toBe(90);
     expect(cell.is_override).toBe(true);
@@ -60,9 +62,9 @@ describe('loadGradebook', () => {
   it('submitted-but-ungraded is its own status, excluded from the average', async () => {
     HW = [{ id: 'h2', assignment_id: 'a_s1', student_id: 's1', status: 'submitted', score_pct: null, teacher_score: null, allow_redo: false, is_redo: false, attempt_no: 1, submitted_on_time: true, submitted_at: '2026-06-09T00:00:00Z' }];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    expect(gb.cells['s1']['lesson:L1'].status).toBe('submitted');
-    expect(gb.cells['s1']['lesson:L1'].displayed_grade).toBeNull();
-    expect(gb.column_averages['lesson:L1']).toBeNull(); // nothing graded → excluded
+    expect(gb.cells['s1']['lesson:L1:2026-06-01'].status).toBe('submitted');
+    expect(gb.cells['s1']['lesson:L1:2026-06-01'].displayed_grade).toBeNull();
+    expect(gb.column_averages['lesson:L1:2026-06-01']).toBeNull(); // nothing graded → excluded
   });
 
   it('redo_in_progress keeps the prior graded grade visible', async () => {
@@ -71,7 +73,7 @@ describe('loadGradebook', () => {
       { id: 'g2', assignment_id: 'a_s1', student_id: 's1', status: 'in_progress', score_pct: null, teacher_score: null, allow_redo: false, is_redo: true, attempt_no: 2, created_at: '2026-06-12T00:00:00Z' },
     ];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    const cell = gb.cells['s1']['lesson:L1'];
+    const cell = gb.cells['s1']['lesson:L1:2026-06-01'];
     expect(cell.status).toBe('redo_in_progress');
     expect(cell.displayed_grade).toBe(80); // prior grade NOT lost
   });
@@ -95,8 +97,8 @@ describe('loadGradebook', () => {
     ];
     HW = [];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    expect(gb.cells['s1']['lesson:L1'].status).toBe('missing'); // assigned + past + no attempt → real miss
-    expect(gb.cells['s2']['lesson:L1'].status).toBe('none');    // never assigned → inert, NOT a miss
+    expect(gb.cells['s1']['lesson:L1:2026-06-01'].status).toBe('missing'); // assigned + past + no attempt → real miss
+    expect(gb.cells['s2']['lesson:L1:2026-06-01'].status).toBe('none');    // never assigned → inert, NOT a miss
     expect(gb.missing_count).toBe(1);                            // s2's `none` excluded from the count
   });
 
@@ -120,8 +122,8 @@ describe('loadGradebook', () => {
     ];
     HW = [{ id: 'ip1', assignment_id: 'a_s1', student_id: 's1', status: 'in_progress', score_pct: null, teacher_score: null, allow_redo: false, is_redo: false, attempt_no: 1, created_at: '2026-06-09T00:00:00Z' }];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    expect(gb.cells['s1']['lesson:L1'].status).toBe('missing'); // opened-but-never-submitted, past due → miss
-    expect(gb.cells['s2']['lesson:L1'].status).toBe('none');    // s2 never assigned → inert, not counted
+    expect(gb.cells['s1']['lesson:L1:2026-06-01'].status).toBe('missing'); // opened-but-never-submitted, past due → miss
+    expect(gb.cells['s2']['lesson:L1:2026-06-01'].status).toBe('none');    // s2 never assigned → inert, not counted
     expect(gb.missing_count).toBe(1);                            // only the lone in_progress is counted
   });
 
@@ -133,7 +135,7 @@ describe('loadGradebook', () => {
     ];
     HW = [{ id: 'ip1', assignment_id: 'a_s1', student_id: 's1', status: 'in_progress', score_pct: null, teacher_score: null, allow_redo: false, is_redo: false, attempt_no: 1, created_at: '2026-06-09T00:00:00Z' }];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    expect(gb.cells['s1']['lesson:L1'].status).toBe('not_due');
+    expect(gb.cells['s1']['lesson:L1:2026-06-01'].status).toBe('not_due');
     expect(gb.missing_count).toBe(0);
   });
 
@@ -163,8 +165,8 @@ describe('loadGradebook', () => {
       { id: 'h2', assignment_id: 'a_s2', student_id: 's2', status: 'graded', score_pct: 60, teacher_score: null, effort_label: null, teli_hint_count: 2, allow_redo: false, is_redo: false, attempt_no: 1, graded_at: '2026-06-11T00:00:00Z' },
     ];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    expect(gb.cells['s1']['lesson:L1'].effort_label).toBe('effortful_success');
-    expect(gb.cells['s2']['lesson:L1'].effort_label).toBe('struggling_trying'); // recomputed
+    expect(gb.cells['s1']['lesson:L1:2026-06-01'].effort_label).toBe('effortful_success');
+    expect(gb.cells['s2']['lesson:L1:2026-06-01'].effort_label).toBe('struggling_trying'); // recomputed
   });
 
   it('effort_label recompute uses the override grade (teacher_score) when present', async () => {
@@ -173,13 +175,13 @@ describe('loadGradebook', () => {
       { id: 'h1', assignment_id: 'a_s1', student_id: 's1', status: 'graded', score_pct: 60, teacher_score: 90, effort_label: null, teli_hint_count: 0, allow_redo: false, is_redo: false, attempt_no: 1, graded_at: '2026-06-11T00:00:00Z' },
     ];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    expect(gb.cells['s1']['lesson:L1'].effort_label).toBe('independent_success');
+    expect(gb.cells['s1']['lesson:L1:2026-06-01'].effort_label).toBe('independent_success');
   });
 
   it('non-graded cells carry no effort_label (null)', async () => {
     HW = [{ id: 'h2', assignment_id: 'a_s1', student_id: 's1', status: 'submitted', score_pct: null, teacher_score: null, effort_label: null, teli_hint_count: null, allow_redo: false, is_redo: false, attempt_no: 1, submitted_at: '2026-06-09T00:00:00Z' }];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    expect(gb.cells['s1']['lesson:L1'].effort_label).toBeNull();
+    expect(gb.cells['s1']['lesson:L1:2026-06-01'].effort_label).toBeNull();
   });
 
   // M7 — a not_due cell (no attempt, future due) and a redo cell (graded + allow_redo, no newer attempt).
@@ -193,9 +195,9 @@ describe('loadGradebook', () => {
       { id: 'h2', assignment_id: 'a_s2', student_id: 's2', status: 'graded', score_pct: 75, teacher_score: null, allow_redo: true, is_redo: false, attempt_no: 1, graded_at: '2026-06-11T00:00:00Z' },
     ];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    expect(gb.cells['s1']['lesson:L1'].status).toBe('not_due');   // no attempt, future due
-    expect(gb.cells['s2']['lesson:L1'].status).toBe('redo');      // graded + allow_redo, no newer attempt
-    expect(gb.cells['s2']['lesson:L1'].displayed_grade).toBe(75); // prior grade retained
+    expect(gb.cells['s1']['lesson:L1:2026-06-01'].status).toBe('not_due');   // no attempt, future due
+    expect(gb.cells['s2']['lesson:L1:2026-06-01'].status).toBe('redo');      // graded + allow_redo, no newer attempt
+    expect(gb.cells['s2']['lesson:L1:2026-06-01'].displayed_grade).toBe(75); // prior grade retained
   });
 
   // M7 — the `due:` key (null lesson_id, collapse by due_at) and `id:` key (both null) derivations.
@@ -246,11 +248,11 @@ describe('loadGradebook', () => {
       { id: 'h1', assignment_id: 'a_s1', student_id: 's1', status: 'graded', score_pct: 88, teacher_score: null, teacher_notes: 'great reasoning', allow_redo: false, is_redo: false, attempt_no: 1, submitted_on_time: true, submitted_at: '2026-06-09T00:00:00Z', graded_at: '2026-06-11T00:00:00Z' },
     ];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
-    const graded = gb.cells['s1']['lesson:L1'];
+    const graded = gb.cells['s1']['lesson:L1:2026-06-01'];
     expect(graded.teacher_notes).toBe('great reasoning');
     expect(graded.submitted_at).toBe('2026-06-09T00:00:00Z');
     // s2 has no attempt → both null.
-    const empty = gb.cells['s2']['lesson:L1'];
+    const empty = gb.cells['s2']['lesson:L1:2026-06-01'];
     expect(empty.teacher_notes).toBeNull();
     expect(empty.submitted_at).toBeNull();
   });
@@ -264,9 +266,9 @@ describe('loadGradebook', () => {
     ];
     HW = [];
     const after = await loadGradebook(admin, { classId: 'c1', teacherId: 't1', now: new Date('2026-06-15T00:00:00Z') });
-    expect(after.cells['s1']['lesson:L1'].status).toBe('missing'); // now is past the due date
+    expect(after.cells['s1']['lesson:L1:2026-06-01'].status).toBe('missing'); // now is past the due date
     const before = await loadGradebook(admin, { classId: 'c1', teacherId: 't1', now: new Date('2026-06-05T00:00:00Z') });
-    expect(before.cells['s1']['lesson:L1'].status).toBe('not_due'); // now is before the due date
+    expect(before.cells['s1']['lesson:L1:2026-06-01'].status).toBe('not_due'); // now is before the due date
   });
 
   // M1 — a logical column's due_at is deterministic across the group (max non-null), not row-order-dependent.
@@ -279,5 +281,37 @@ describe('loadGradebook', () => {
     HW = [];
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
     expect(gb.assignments[0].due_at).toBe('2026-06-20T00:00:00Z'); // max non-null, stable
+  });
+
+  it('splits same-lesson assignments by assigned day into separate dated columns', async () => {
+    ASSIGNMENTS = [
+      // Same lesson L1, two distinct assigned days → two columns; per-student fan-out within a day stays one.
+      { id: 'd1_s1', lesson_id: 'L1', content: {}, due_at: '2026-06-12T00:00:00Z', assigned_at: '2026-06-10T00:00:00Z', created_at: '2026-06-10T00:00:00Z', student_id: 's1' },
+      { id: 'd1_s2', lesson_id: 'L1', content: {}, due_at: '2026-06-12T00:00:00Z', assigned_at: '2026-06-10T00:00:00Z', created_at: '2026-06-10T00:00:00Z', student_id: 's2' },
+      { id: 'd2_s1', lesson_id: 'L1', content: {}, due_at: '2026-06-14T00:00:00Z', assigned_at: '2026-06-13T00:00:00Z', created_at: '2026-06-13T00:00:00Z', student_id: 's1' },
+      { id: 'd2_s2', lesson_id: 'L1', content: {}, due_at: '2026-06-14T00:00:00Z', assigned_at: '2026-06-13T00:00:00Z', created_at: '2026-06-13T00:00:00Z', student_id: 's2' },
+    ];
+    HW = [];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    const keys = gb.assignments.map(a => a.assignment_key);
+    expect(keys).toEqual(['lesson:L1:2026-06-10', 'lesson:L1:2026-06-13']); // chronological asc
+    expect(gb.assignments).toHaveLength(2);
+  });
+
+  it('orders columns oldest → newest by assigned day', async () => {
+    ASSIGNMENTS = [
+      { id: 'late_s1', lesson_id: 'L1', content: {}, due_at: null, assigned_at: '2026-06-15T00:00:00Z', created_at: '2026-06-15T00:00:00Z', student_id: 's1' },
+      { id: 'early_s1', lesson_id: 'L2', content: {}, due_at: null, assigned_at: '2026-06-05T00:00:00Z', created_at: '2026-06-05T00:00:00Z', student_id: 's1' },
+    ];
+    HW = [];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.assignments.map(a => a.assignment_key)).toEqual(['lesson:L2:2026-06-05', 'lesson:L1:2026-06-15']);
+  });
+
+  it('uses the lesson title as the column title when available', async () => {
+    LESSONS = [{ id: 'L1', title: 'Fractions' }];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.assignments[0].title).toBe('Fractions');
+    expect(gb.assignments[0].assigned_at).toBe('2026-06-01T00:00:00Z');
   });
 });
