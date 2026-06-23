@@ -73,4 +73,28 @@ describe('POST /api/teacher/lessons/manage', () => {
     LESSON_WRITE_ERROR = { message: 'db down' };
     expect((await (await load())(req({ lesson_id: 'L1', action: 'archive' }))).status).toBe(500);
   });
+
+  it('edit updates only provided fields (title, parsed_content, standards)', async () => {
+    const res = await (await load())(req({
+      lesson_id: 'L1', action: 'edit',
+      title: 'New title', standard_codes: ['CCSS.4.NF.1', 7 as unknown as string],
+      standard_framework: 'TEKS', parsed_content: { summary: 's' },
+    }));
+    expect(res.status).toBe(200);
+    const p = lessonUpdates[0];
+    expect(p.title).toBe('New title');
+    expect(p.standard_codes).toEqual(['CCSS.4.NF.1']); // non-strings filtered
+    expect(p.standard_framework).toBe('TEKS');
+    expect(p.parsed_content).toEqual({ summary: 's' });
+    expect('status' in p).toBe(false); // edit never touches status
+  });
+
+  it('edit with nothing to update → 400', async () => {
+    expect((await (await load())(req({ lesson_id: 'L1', action: 'edit' }))).status).toBe(400);
+  });
+
+  it('edit still enforces guardClassAccess', async () => {
+    guardClassAccess.mockResolvedValue(new Response(null, { status: 403 }));
+    expect((await (await load())(req({ lesson_id: 'L1', action: 'edit', title: 'x' }))).status).toBe(403);
+  });
 });
