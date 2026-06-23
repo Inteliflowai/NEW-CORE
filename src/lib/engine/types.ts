@@ -155,3 +155,29 @@ export const AssignmentSchema = z.object({
   ib_attributes: z.array(z.string()).default([]),
 });
 export type Assignment = z.infer<typeof AssignmentSchema>;
+
+// ── #6 Lesson generate (Seg 2) — reuses the parse contract + AI-proposed standards ──
+export const ProposedStandardSchema = z.object({
+  code: z.string(),
+  description: z.string(),
+});
+export type ProposedStandard = z.infer<typeof ProposedStandardSchema>;
+
+export const GeneratedLessonSchema = ParsedLessonSchema.extend({
+  proposed_standards: z.array(ProposedStandardSchema).default([]),
+});
+export type GeneratedLesson = z.infer<typeof GeneratedLessonSchema>;
+
+// ── #7 Unit segmentation (Seg 2 multi-day) ──
+export const UnitSegmentSchema = z.object({
+  day: z.number().int(),
+  title: z.string(),
+  focus: z.string(),
+});
+export type UnitSegment = z.infer<typeof UnitSegmentSchema>;
+
+export const UnitSegmentsSchema = z.object({
+  unit_title: z.string(),
+  days: z.array(UnitSegmentSchema).min(1),
+});
+export type UnitSegments = z.infer<typeof UnitSegmentsSchema>;
