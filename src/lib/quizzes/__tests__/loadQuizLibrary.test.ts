@@ -33,8 +33,8 @@ beforeEach(() => {
     { id: 'qq4', quiz_id: 'q2' }, { id: 'qq5', quiz_id: 'q2' },
   ];
   LESSONS = [
-    { id: 'L1', title: 'Photosynthesis Basics' },
-    { id: 'L2', title: 'Cell Structure' },
+    { id: 'L1', title: 'Photosynthesis Basics', subject: 'Science', grade_level: '7' },
+    { id: 'L2', title: 'Cell Structure', subject: 'Science', grade_level: '8' },
   ];
 });
 
@@ -77,5 +77,21 @@ describe('loadQuizLibrary', () => {
     const lib = await loadQuizLibrary(admin, { classId: 'c1' });
     expect(lib.quizzes[0].lesson_title).toBeNull();
     expect(lib.quizzes[0].question_count).toBe(0);
+  });
+
+  it('inherits subject + grade from the linked lesson; standalone quiz → null/null', async () => {
+    QUIZZES = QUIZZES.filter((q) => (q as { status: string }).status !== 'archived');
+    const lib = await loadQuizLibrary(admin, { classId: 'c1' });
+    const q1 = lib.quizzes.find((q) => q.id === 'q1')!;
+    expect(q1.subject).toBe('Science');
+    expect(q1.grade_level).toBe('7');
+    const q2 = lib.quizzes.find((q) => q.id === 'q2')!;
+    expect(q2.grade_level).toBe('8');
+
+    QUIZZES = [{ id: 'q9', title: 'Standalone', lesson_id: null, status: 'draft', published_at: null, created_at: '2026-06-09T00:00:00Z' }];
+    LESSONS = [];
+    const lib2 = await loadQuizLibrary(admin, { classId: 'c1' });
+    expect(lib2.quizzes[0].subject).toBeNull();
+    expect(lib2.quizzes[0].grade_level).toBeNull();
   });
 });

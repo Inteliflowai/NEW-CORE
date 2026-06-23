@@ -13,6 +13,7 @@ import { firstClassIdForTeacher } from '@/lib/teacher/firstClassIdForTeacher';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { loadQuizLibrary } from '@/lib/quizzes/loadQuizLibrary';
+import { teacherClassOptions } from '@/lib/teacher/teacherClasses';
 import { EmptyState } from '@/components/core/EmptyState';
 import { PageHeader } from '../../_components/PageHeader';
 import { QuizLibrary, type QuizQuestionLite } from './_components/QuizLibrary';
@@ -35,8 +36,8 @@ export default async function QuizLibraryPage({
 }): Promise<React.JSX.Element> {
   // 1. Resolve classId — default to the teacher's first class when absent.
   const { class: classId } = await searchParams;
+  const { userId } = await requireRole(['teacher']);
   if (!classId) {
-    const { userId } = await requireRole(['teacher']);
     const firstId = await firstClassIdForTeacher(userId);
     if (!firstId) return <div className="p-6">{NO_CLASSES}</div>;
     redirect(`/library/quizzes?class=${firstId}`);
@@ -47,8 +48,12 @@ export default async function QuizLibraryPage({
   if (guard) return <div className="p-6">{CLASS_UNAVAILABLE}</div>;
 
   // 3. Load via admin client (RLS-bypassed; the guard above is the backstop).
+  //    teacherClassOptions is scoped to userId, so it only surfaces this teacher's own classes.
   const admin = createAdminSupabaseClient();
-  const data = await loadQuizLibrary(admin, { classId });
+  const [data, classes] = await Promise.all([
+    loadQuizLibrary(admin, { classId }),
+    teacherClassOptions(admin, userId),
+  ]);
 
   // 3b. Fetch the questions for the (non-archived) quizzes so the edit panel can edit them
   // without a second round-trip. Scoped to the class's quizzes only.
@@ -74,7 +79,7 @@ export default async function QuizLibraryPage({
   return (
     <div className="p-5 flex flex-col gap-5">
       <PageHeader title="Quiz Library" kicker="Your checks" accent="brand" />
-      <QuizLibrary data={data} classId={classId} questions={questions} />
+      <QuizLibrary data={data} classId={classId} questions={questions} classes={classes} />
     </div>
   );
 }

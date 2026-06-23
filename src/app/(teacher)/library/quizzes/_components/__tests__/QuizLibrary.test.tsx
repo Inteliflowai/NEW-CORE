@@ -15,9 +15,9 @@ function data(): QuizLibraryData {
   return {
     class_id: 'c1',
     quizzes: [
-      { id: 'q1', title: 'Photosynthesis — Check', lesson_title: 'Photosynthesis Basics', status: 'published', question_count: 5, published_at: '2026-06-22T00:00:00Z', created_at: '2026-06-20T00:00:00Z' },
-      { id: 'q2', title: 'Cells — Check', lesson_title: 'Cell Structure', status: 'draft', question_count: 5, published_at: null, created_at: '2026-06-10T00:00:00Z' },
-      { id: 'q3', title: 'Revolution — Check', lesson_title: null, status: 'draft', question_count: 5, published_at: null, created_at: '2026-05-15T00:00:00Z' },
+      { id: 'q1', title: 'Photosynthesis — Check', lesson_title: 'Photosynthesis Basics', subject: 'Science', grade_level: '7', status: 'published', question_count: 5, published_at: '2026-06-22T00:00:00Z', created_at: '2026-06-20T00:00:00Z' },
+      { id: 'q2', title: 'Cells — Check', lesson_title: 'Cell Structure', subject: 'Science', grade_level: '8', status: 'draft', question_count: 5, published_at: null, created_at: '2026-06-10T00:00:00Z' },
+      { id: 'q3', title: 'Revolution — Check', lesson_title: null, subject: null, grade_level: null, status: 'draft', question_count: 5, published_at: null, created_at: '2026-05-15T00:00:00Z' },
     ],
   };
 }
@@ -106,5 +106,23 @@ describe('QuizLibrary', () => {
   it('renders EmptyState when there are no quizzes', () => {
     render(<QuizLibrary data={{ class_id: 'c1', quizzes: [] }} classId="c1" now={FIXED_NOW} />);
     expect(screen.getByText(/No checks yet/i)).toBeInTheDocument();
+  });
+
+  it('groups rows under Subject · Grade headers and the Subject filter narrows the list', () => {
+    render(<QuizLibrary data={data()} classId="c1" now={FIXED_NOW} />);
+    expect(screen.getByText('SCIENCE · GRADE 7')).toBeInTheDocument();
+    expect(screen.getByText('SCIENCE · GRADE 8')).toBeInTheDocument();
+    expect(screen.getByText('OTHER')).toBeInTheDocument();
+    // Narrow to grade 8 → only the Cells check remains.
+    fireEvent.change(screen.getByLabelText('Grade'), { target: { value: '8' } });
+    expect(screen.getByText('Cells — Check')).toBeInTheDocument();
+    expect(screen.queryByText('Photosynthesis — Check')).toBeNull();
+  });
+
+  it('shows a Class selector only when the teacher has more than one class', () => {
+    const { rerender } = render(<QuizLibrary data={data()} classId="c1" now={FIXED_NOW} classes={[{ id: 'c1', label: 'Bio' }]} />);
+    expect(screen.queryByLabelText('Class')).toBeNull();
+    rerender(<QuizLibrary data={data()} classId="c1" now={FIXED_NOW} classes={[{ id: 'c1', label: 'Bio' }, { id: 'c2', label: 'Chem' }]} />);
+    expect(screen.getByLabelText('Class')).toBeInTheDocument();
   });
 });

@@ -12,6 +12,7 @@ import { firstClassIdForTeacher } from '@/lib/teacher/firstClassIdForTeacher';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { loadLessonLibrary } from '@/lib/lessons/loadLessonLibrary';
+import { teacherClassOptions } from '@/lib/teacher/teacherClasses';
 import { EmptyState } from '@/components/core/EmptyState';
 import { PageHeader } from '../../_components/PageHeader';
 import { LessonLibrary } from './_components/LessonLibrary';
@@ -32,8 +33,8 @@ export default async function LessonLibraryPage({
 }): Promise<React.JSX.Element> {
   // 1. Resolve classId — default to the teacher's first class when absent.
   const { class: classId } = await searchParams;
+  const { userId } = await requireRole(['teacher']);
   if (!classId) {
-    const { userId } = await requireRole(['teacher']);
     const firstId = await firstClassIdForTeacher(userId);
     if (!firstId) return <div className="p-6">{NO_CLASSES}</div>;
     redirect(`/library/lessons?class=${firstId}`);
@@ -44,13 +45,17 @@ export default async function LessonLibraryPage({
   if (guard) return <div className="p-6">{CLASS_UNAVAILABLE}</div>;
 
   // 3. Load via admin client (RLS-bypassed; the guard above is the backstop).
+  //    teacherClassOptions is scoped to userId, so it only surfaces this teacher's own classes.
   const admin = createAdminSupabaseClient();
-  const data = await loadLessonLibrary(admin, { classId });
+  const [data, classes] = await Promise.all([
+    loadLessonLibrary(admin, { classId }),
+    teacherClassOptions(admin, userId),
+  ]);
 
   return (
     <div className="p-5 flex flex-col gap-5">
       <PageHeader title="Lesson Library" kicker="Your lessons" accent="brand" />
-      <LessonLibrary data={data} />
+      <LessonLibrary data={data} classes={classes} />
     </div>
   );
 }

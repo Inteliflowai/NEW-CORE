@@ -59,4 +59,20 @@ describe('loadLessonLibrary', () => {
     const lib = await loadLessonLibrary(admin, { classId: 'c1' });
     expect(lib.lessons).toEqual([]);
   });
+
+  it('exposes a validated parsed_content (the lesson plan) per row; null when absent/malformed', async () => {
+    LESSONS = [
+      { id: 'L1', title: 'Photosynthesis', subject: 'Science', grade_level: '7', status: 'published', created_at: '2026-06-10T00:00:00Z',
+        parsed_content: { title: 'Photosynthesis', objectives: ['Explain photosynthesis'], key_concepts: ['chlorophyll'], vocabulary: [{ term: 'stomata', definition: 'leaf pores' }], misconception_risks: ['plants eat soil'], summary: 'Plants make food.' } },
+      { id: 'L2', title: 'No plan', subject: null, grade_level: null, status: 'draft', created_at: '2026-06-09T00:00:00Z', parsed_content: null },
+      { id: 'L3', title: 'Garbage plan', subject: null, grade_level: null, status: 'draft', created_at: '2026-06-08T00:00:00Z', parsed_content: 'not-an-object' },
+    ];
+    QUIZZES = [];
+    const lib = await loadLessonLibrary(admin, { classId: 'c1' });
+    const byId = Object.fromEntries(lib.lessons.map((l) => [l.id, l]));
+    expect(byId['L1'].parsed_content?.objectives).toEqual(['Explain photosynthesis']);
+    expect(byId['L1'].parsed_content?.vocabulary).toEqual([{ term: 'stomata', definition: 'leaf pores' }]);
+    expect(byId['L2'].parsed_content).toBeNull();
+    expect(byId['L3'].parsed_content).toBeNull();
+  });
 });

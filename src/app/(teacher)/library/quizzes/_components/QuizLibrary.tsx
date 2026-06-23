@@ -24,8 +24,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { EmptyState } from '@/components/core/EmptyState';
 import { SectionLabel } from '../../../_components/SectionLabel';
+import { CategoryFilterBar } from '../../_components/CategoryFilterBar';
 import type { QuizLibrary as QuizLibraryData, QuizLibRow } from '@/lib/quizzes/loadQuizLibrary';
+import type { LibraryClassOption } from '@/lib/teacher/teacherClasses';
 import { inBucket, type DateBucket } from '@/lib/content/dateBucket';
+import { distinctValues, groupByCategory } from '@/lib/content/category';
 
 /** A quiz question, as the edit panel needs it (subset of quiz_questions). */
 export interface QuizQuestionLite {
@@ -43,6 +46,8 @@ export interface QuizLibraryProps {
   /** Per-quiz question rows for the edit panel (keyed by quiz_id). Optional — when a quiz's
    *  questions aren't supplied, the panel still edits the title + runs lifecycle actions. */
   questions?: Record<string, QuizQuestionLite[]>;
+  /** The teacher's classes for the Class selector (rendered only when >1). Optional. */
+  classes?: LibraryClassOption[];
   /** Injectable clock (tests pass a fixed date); defaults to real now. */
   now?: Date;
 }
@@ -61,23 +66,31 @@ function statusWord(status: string): string {
   return 'Draft';
 }
 
-export function QuizLibrary({ data, classId, questions, now }: QuizLibraryProps) {
+export function QuizLibrary({ data, classId, questions, classes = [], now }: QuizLibraryProps) {
   const clock = now ?? new Date();
   const [search, setSearch] = useState('');
   // Calendar buckets (shared with the Lesson Library) so "Today"/"This week" mean the same on both.
   const [granularity, setGranularity] = useState<DateBucket>('all');
+  const [subject, setSubject] = useState('all');
+  const [grade, setGrade] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const subjectOptions = useMemo(() => distinctValues(data.quizzes, (q) => q.subject), [data.quizzes]);
+  const gradeOptions = useMemo(() => distinctValues(data.quizzes, (q) => q.grade_level), [data.quizzes]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return data.quizzes.filter((row) => {
       if (!inBucket(row.created_at, granularity, clock)) return false;
+      if (subject !== 'all' && (row.subject ?? '') !== subject) return false;
+      if (grade !== 'all' && (row.grade_level ?? '') !== grade) return false;
       if (!q) return true;
       const hay = `${row.title} ${row.lesson_title ?? ''}`.toLowerCase();
       return hay.includes(q);
     });
-  }, [data.quizzes, search, granularity, clock]);
+  }, [data.quizzes, search, granularity, subject, grade, clock]);
 
+  const groups = useMemo(() => groupByCategory(filtered), [filtered]);
   const selected = selectedId ? data.quizzes.find((r) => r.id === selectedId) ?? null : null;
 
   if (data.quizzes.length === 0) {
@@ -92,72 +105,65 @@ export function QuizLibrary({ data, classId, questions, now }: QuizLibraryProps)
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Filter bar — search + date granularity */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="quiz-search" className="text-xs font-bold uppercase tracking-wide text-fg-muted">
-            Search
-          </label>
-          <input
-            id="quiz-search"
-            type="search"
-            role="searchbox"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Find a check…"
-            className="rounded-md border-2 border-sidebar-edge bg-bg px-3 py-1.5 text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="quiz-when" className="text-xs font-bold uppercase tracking-wide text-fg-muted">
-            When
-          </label>
-          <select
-            id="quiz-when"
-            value={granularity}
-            onChange={(e) => setGranularity(e.target.value as DateBucket)}
-            className="rounded-md border-2 border-sidebar-edge bg-bg px-3 py-1.5 text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-          >
-            <option value="all">All time</option>
-            <option value="month">This month</option>
-            <option value="week">This week</option>
-            <option value="today">Today</option>
-          </select>
-        </div>
-      </div>
+      <CategoryFilterBar
+        classes={classes}
+        currentClassId={classId}
+        classBasePath="/library/quizzes"
+        search={search}
+        onSearch={setSearch}
+        searchPlaceholder="Find a check…"
+        subjects={subjectOptions}
+        subject={subject}
+        onSubject={setSubject}
+        grades={gradeOptions}
+        grade={grade}
+        onGrade={setGrade}
+        bucket={granularity}
+        onBucket={setGranularity}
+        dateLabel="When"
+      />
 
-      {/* Flat list */}
+      {/* Grouped list — Subject · Grade section headers */}
       {filtered.length === 0 ? (
         <p className="text-sm text-fg-muted">Nothing matches that. Try a different search.</p>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {filtered.map((row) => (
-            <li key={row.id}>
-              <button
-                type="button"
-                onClick={() => setSelectedId(row.id)}
-                aria-label={`${row.title} — ${statusWord(row.status)}`}
-                className="flex w-full flex-col gap-1 rounded-lg border-2 border-sidebar-edge bg-surface p-4 text-left shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-              >
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="font-display text-base font-extrabold text-fg">{row.title}</span>
-                  <SectionLabel tone={row.status === 'published' ? 'ok' : 'warn'}>
-                    {statusWord(row.status)}
-                  </SectionLabel>
-                </span>
-                <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg">
-                  {row.lesson_title && <span>{row.lesson_title}</span>}
-                  <span className="text-fg-muted">
-                    {row.question_count === 1 ? '1 question' : `${row.question_count} questions`}
-                  </span>
-                  {row.published_at && (
-                    <span className="text-fg-muted">{publishedDateLabel(row.published_at)}</span>
-                  )}
-                </span>
-              </button>
-            </li>
+        <div className="flex flex-col gap-5">
+          {groups.map((group) => (
+            <section key={group.key} className="flex flex-col gap-3">
+              <h2 className="font-display text-xs font-extrabold uppercase tracking-[0.16em] text-fg-muted">
+                {group.label}
+              </h2>
+              <ul className="flex flex-col gap-3">
+                {group.items.map((row) => (
+                  <li key={row.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(row.id)}
+                      aria-label={`${row.title} — ${statusWord(row.status)}`}
+                      className="flex w-full flex-col gap-1 rounded-lg border-2 border-sidebar-edge bg-surface p-4 text-left shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                    >
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="font-display text-base font-extrabold text-fg">{row.title}</span>
+                        <SectionLabel tone={row.status === 'published' ? 'ok' : 'warn'}>
+                          {statusWord(row.status)}
+                        </SectionLabel>
+                      </span>
+                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg">
+                        {row.lesson_title && <span>{row.lesson_title}</span>}
+                        <span className="text-fg-muted">
+                          {row.question_count === 1 ? '1 question' : `${row.question_count} questions`}
+                        </span>
+                        {row.published_at && (
+                          <span className="text-fg-muted">{publishedDateLabel(row.published_at)}</span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
 
       {selected && (

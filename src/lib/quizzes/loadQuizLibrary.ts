@@ -15,6 +15,9 @@ export interface QuizLibRow {
   id: string;
   title: string;
   lesson_title: string | null;
+  /** Subject + grade are inherited from the linked lesson, for Subject·Grade categorization. */
+  subject: string | null;
+  grade_level: string | null;
   status: string;
   question_count: number;
   published_at: string | null;
@@ -29,7 +32,7 @@ const NONE = ['__none__'];
 
 type QzRow = { id: string; title: string | null; lesson_id: string | null; status: string; published_at: string | null; created_at: string | null };
 type QqRow = { id: string; quiz_id: string };
-type LessonRow = { id: string; title: string | null };
+type LessonRow = { id: string; title: string | null; subject: string | null; grade_level: string | null };
 
 export async function loadQuizLibrary(admin: SupabaseClient, args: { classId: string }): Promise<QuizLibrary> {
   const { classId } = args;
@@ -53,20 +56,25 @@ export async function loadQuizLibrary(admin: SupabaseClient, args: { classId: st
   // 3. Lesson titles (per lesson_id).
   const lessonIds = [...new Set(qzRows.map((q) => q.lesson_id).filter((x): x is string => x != null))];
   const { data: lessonData } = await admin.from('lessons')
-    .select('id, title')
+    .select('id, title, subject, grade_level')
     .in('id', lessonIds.length ? lessonIds : NONE);
-  const lessonTitle = new Map<string, string | null>(
-    ((lessonData ?? []) as LessonRow[]).map((l) => [l.id, l.title ?? null] as const));
+  const lessonById = new Map<string, LessonRow>(
+    ((lessonData ?? []) as LessonRow[]).map((l) => [l.id, l] as const));
 
-  const quizzes: QuizLibRow[] = qzRows.map((q) => ({
+  const quizzes: QuizLibRow[] = qzRows.map((q) => {
+    const lesson = q.lesson_id ? lessonById.get(q.lesson_id) ?? null : null;
+    return {
     id: q.id,
     title: q.title ?? 'Untitled check',
-    lesson_title: q.lesson_id ? (lessonTitle.get(q.lesson_id) ?? null) : null,
+    lesson_title: lesson?.title ?? null,
+    subject: lesson?.subject ?? null,
+    grade_level: lesson?.grade_level ?? null,
     status: q.status,
     question_count: countByQuiz.get(q.id) ?? 0,
     published_at: q.published_at ?? null,
     created_at: q.created_at ?? '',
-  }));
+    };
+  });
 
   // Order: published-first (published_at desc, nulls last), then created_at desc.
   quizzes.sort((a, b) => {

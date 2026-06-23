@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { STAFF_ROLES } from '@/lib/auth/roles';
-
-// ── Label helper (exported for unit tests) ────────────────────────────────────
-
-export function formatClassLabel(c: { name: string; period?: string | null }): string {
-  return c.period ? `${c.name} — Period ${c.period}` : c.name;
-}
+// Single source of truth — also used by the library Class selector. Re-exported so existing
+// callers/tests can keep importing it from this route module.
+import { formatClassLabel } from '@/lib/teacher/classLabel';
+export { formatClassLabel };
 
 type ClassRow = { id: string; name: string; period: string | null; subject: string | null };
 

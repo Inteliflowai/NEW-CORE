@@ -14,9 +14,9 @@ const NOW = new Date('2026-06-23T12:00:00Z');
 const data: LessonLibraryData = {
   class_id: 'c1',
   lessons: [
-    { id: 'L1', title: 'Photosynthesis', subject: 'Science', grade_level: '7', status: 'pending_review', quiz_count: 1, created_at: '2026-06-23T08:00:00Z' }, // today
-    { id: 'L2', title: 'Fractions', subject: 'Math', grade_level: '6', status: 'draft', quiz_count: 0, created_at: '2026-06-21T08:00:00Z' }, // this week
-    { id: 'L3', title: 'The Revolution', subject: 'History', grade_level: '8', status: 'pending_review', quiz_count: 2, created_at: '2026-05-02T08:00:00Z' }, // older month
+    { id: 'L1', title: 'Photosynthesis', subject: 'Science', grade_level: '7', status: 'pending_review', quiz_count: 1, created_at: '2026-06-23T08:00:00Z', parsed_content: { objectives: ['Explain photosynthesis'], key_concepts: ['chlorophyll'], vocabulary: [], misconception_risks: [] } }, // today
+    { id: 'L2', title: 'Fractions', subject: 'Math', grade_level: '6', status: 'draft', quiz_count: 0, created_at: '2026-06-21T08:00:00Z', parsed_content: null }, // this week
+    { id: 'L3', title: 'The Revolution', subject: 'History', grade_level: '8', status: 'pending_review', quiz_count: 2, created_at: '2026-05-02T08:00:00Z', parsed_content: null }, // older month
   ],
 };
 
@@ -66,6 +66,43 @@ describe('LessonLibrary', () => {
     // Cold-start EmptyState + an "Upload a lesson" affordance carrying ?class=.
     const upload = within(container).getByRole('link', { name: /upload a lesson/i });
     expect(upload).toHaveAttribute('href', expect.stringContaining('class=c1'));
+  });
+
+  it('groups rows under Subject · Grade section headers', () => {
+    render(<LessonLibrary data={data} now={NOW} />);
+    expect(screen.getByText('SCIENCE · GRADE 7')).toBeInTheDocument();
+    expect(screen.getByText('MATH · GRADE 6')).toBeInTheDocument();
+    expect(screen.getByText('HISTORY · GRADE 8')).toBeInTheDocument();
+  });
+
+  it('the Subject filter narrows the list', () => {
+    render(<LessonLibrary data={data} now={NOW} />);
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Science' } });
+    expect(screen.getByText('Photosynthesis')).toBeInTheDocument();
+    expect(screen.queryByText('Fractions')).not.toBeInTheDocument();
+    expect(screen.queryByText('The Revolution')).not.toBeInTheDocument();
+  });
+
+  it('the Grade filter narrows the list', () => {
+    render(<LessonLibrary data={data} now={NOW} />);
+    fireEvent.change(screen.getByLabelText('Grade'), { target: { value: '8' } });
+    expect(screen.getByText('The Revolution')).toBeInTheDocument();
+    expect(screen.queryByText('Photosynthesis')).not.toBeInTheDocument();
+  });
+
+  it('a "View lesson" button opens the lesson-plan dialog', () => {
+    render(<LessonLibrary data={data} now={NOW} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    const viewButtons = screen.getAllByRole('button', { name: /view lesson/i });
+    fireEvent.click(viewButtons[0]);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('shows a Class selector only when the teacher has more than one class', () => {
+    const { rerender } = render(<LessonLibrary data={data} now={NOW} classes={[{ id: 'c1', label: 'Bio' }]} />);
+    expect(screen.queryByLabelText('Class')).toBeNull();
+    rerender(<LessonLibrary data={data} now={NOW} classes={[{ id: 'c1', label: 'Bio' }, { id: 'c2', label: 'Chem' }]} />);
+    expect(screen.getByLabelText('Class')).toBeInTheDocument();
   });
 
   it('carries no banned coach-posture words in any rendered prose', () => {
