@@ -44,7 +44,10 @@ export async function generateLesson(input: GenerateLessonInput): Promise<Genera
     response_format: { type: 'json_object' },
   });
   if (!completion) throw new LlmExhaustedError('openai');
-  const raw = completion.choices[0]?.message?.content || '{}';
+  const raw = completion.choices[0]?.message?.content;
+  // Empty/blank content would parse to '{}', which — because GeneratedLessonSchema extends the
+  // all-optional ParsedLessonSchema — validates to a hollow lesson. Treat empty content as a failure.
+  if (!raw || !raw.trim()) throw new LlmExhaustedError('openai');
   try {
     return GeneratedLessonSchema.parse(JSON.parse(raw));
   } catch (err) {
@@ -59,7 +62,12 @@ export async function segmentUnit(input: {
   subject?: string | null;
   grade_level?: string | null;
 }): Promise<UnitSegments> {
-  const numDays = Math.min(Math.max(2, Math.floor(input.numDays)), MAX_GENERATE_DAYS);
+  // Honest contract: callers branch on resolveNumDays (1 → single lesson, no segmentation), so
+  // segmentUnit is only ever for real multi-day units. Reject < 2 instead of silently upgrading.
+  if (!Number.isInteger(input.numDays) || input.numDays < 2) {
+    throw new Error('segmentUnit requires an integer numDays >= 2');
+  }
+  const numDays = Math.min(input.numDays, MAX_GENERATE_DAYS);
   const completion = await resilientChatCompletion({
     model: OPENAI_GEN_MODEL,
     messages: [
@@ -71,7 +79,8 @@ export async function segmentUnit(input: {
     response_format: { type: 'json_object' },
   });
   if (!completion) throw new LlmExhaustedError('openai');
-  const raw = completion.choices[0]?.message?.content || '{}';
+  const raw = completion.choices[0]?.message?.content;
+  if (!raw || !raw.trim()) throw new LlmExhaustedError('openai');
   try {
     return UnitSegmentsSchema.parse(JSON.parse(raw));
   } catch (err) {

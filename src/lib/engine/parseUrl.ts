@@ -45,7 +45,14 @@ export async function extractTextFromUrl(rawUrl: string): Promise<string> {
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(url.toString(), { signal: controller.signal, redirect: 'follow' });
+    res = await fetch(url.toString(), {
+      signal: controller.signal,
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; CORE-ContentStudio/1.0; +https://inteliflowai.com)',
+        Accept: 'text/html,application/xhtml+xml',
+      },
+    });
   } catch {
     throw new UrlFetchError("We couldn't reach that link.");
   } finally {
