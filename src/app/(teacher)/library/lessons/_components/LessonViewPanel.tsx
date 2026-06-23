@@ -68,11 +68,16 @@ export function LessonViewPanel({ lesson, onClose }: LessonViewPanelProps): Reac
 
   const meta = [lesson.subject, lesson.grade_level ? `Grade ${lesson.grade_level}` : null].filter(Boolean).join(' · ');
 
-  const hasPlan = plan != null;
   const objectives = plan?.objectives ?? [];
   const concepts = plan?.key_concepts ?? [];
   const vocab = plan?.vocabulary ?? [];
   const misconceptions = plan?.misconception_risks ?? [];
+  const summary = plan?.summary?.trim() ?? '';
+  // ParsedLessonSchema defaults every field, so a valid-but-empty object ({}) parses non-null;
+  // treat "no displayable content" the same as "no plan" so we never show an empty-bodied dialog.
+  const hasPlan =
+    plan != null &&
+    (summary.length > 0 || objectives.length > 0 || concepts.length > 0 || vocab.length > 0 || misconceptions.length > 0);
 
   return (
     <>
@@ -106,14 +111,14 @@ export function LessonViewPanel({ lesson, onClose }: LessonViewPanelProps): Reac
 
         {!hasPlan && (
           <p className="text-sm text-fg">
-            This lesson hasn&rsquo;t been processed yet, so there&rsquo;s no lesson plan to show. Once it&rsquo;s
-            processed, the objectives and key ideas appear here.
+            There&rsquo;s no lesson plan to show for this lesson yet. Once it&rsquo;s processed, the
+            objectives and key ideas appear here.
           </p>
         )}
 
-        {hasPlan && plan?.summary && (
+        {hasPlan && summary && (
           <Section title="Summary">
-            <p className="text-fg text-sm leading-relaxed">{plan.summary}</p>
+            <p className="text-fg text-sm leading-relaxed">{summary}</p>
           </Section>
         )}
 

@@ -66,6 +66,9 @@ describe('loadLessonLibrary', () => {
         parsed_content: { title: 'Photosynthesis', objectives: ['Explain photosynthesis'], key_concepts: ['chlorophyll'], vocabulary: [{ term: 'stomata', definition: 'leaf pores' }], misconception_risks: ['plants eat soil'], summary: 'Plants make food.' } },
       { id: 'L2', title: 'No plan', subject: null, grade_level: null, status: 'draft', created_at: '2026-06-09T00:00:00Z', parsed_content: null },
       { id: 'L3', title: 'Garbage plan', subject: null, grade_level: null, status: 'draft', created_at: '2026-06-08T00:00:00Z', parsed_content: 'not-an-object' },
+      // A real OBJECT that fails the Zod schema (vocabulary entry missing `definition`) — exercises
+      // the safeParse rejection path, distinct from the non-object guard above.
+      { id: 'L4', title: 'Schema-fail plan', subject: null, grade_level: null, status: 'draft', created_at: '2026-06-07T00:00:00Z', parsed_content: { vocabulary: [{ term: 'x' }] } },
     ];
     QUIZZES = [];
     const lib = await loadLessonLibrary(admin, { classId: 'c1' });
@@ -73,6 +76,7 @@ describe('loadLessonLibrary', () => {
     expect(byId['L1'].parsed_content?.objectives).toEqual(['Explain photosynthesis']);
     expect(byId['L1'].parsed_content?.vocabulary).toEqual([{ term: 'stomata', definition: 'leaf pores' }]);
     expect(byId['L2'].parsed_content).toBeNull();
-    expect(byId['L3'].parsed_content).toBeNull();
+    expect(byId['L3'].parsed_content).toBeNull(); // non-object
+    expect(byId['L4'].parsed_content).toBeNull(); // object that fails ParsedLessonSchema.safeParse
   });
 });

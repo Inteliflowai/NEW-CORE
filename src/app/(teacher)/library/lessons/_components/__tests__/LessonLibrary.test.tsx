@@ -98,6 +98,20 @@ describe('LessonLibrary', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
+  it('Subject filter still matches a row whose stored subject has surrounding whitespace', () => {
+    const padded: LessonLibraryData = {
+      class_id: 'c1',
+      lessons: [
+        { id: 'P1', title: 'Padded Science', subject: '  Science  ', grade_level: '7', status: 'draft', quiz_count: 0, created_at: '2026-06-23T08:00:00Z', parsed_content: null },
+      ],
+    };
+    render(<LessonLibrary data={padded} now={NOW} />);
+    // The dropdown option is the trimmed "Science"; selecting it must not filter the padded row out.
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Science' } });
+    expect(screen.getByText('Padded Science')).toBeInTheDocument();
+    expect(screen.queryByText(/nothing matches/i)).not.toBeInTheDocument();
+  });
+
   it('shows a Class selector only when the teacher has more than one class', () => {
     const { rerender } = render(<LessonLibrary data={data} now={NOW} classes={[{ id: 'c1', label: 'Bio' }]} />);
     expect(screen.queryByLabelText('Class')).toBeNull();

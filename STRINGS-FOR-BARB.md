@@ -609,7 +609,7 @@ DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-mom
 | Section — key concepts | Key ideas |
 | Section — vocabulary | Vocabulary |
 | Section — misconceptions (teacher-only lens) | Watch for these mix-ups |
-| No-plan-yet note | This lesson hasn't been processed yet, so there's no lesson plan to show. Once it's processed, the objectives and key ideas appear here. |
+| No-plan-yet note (shown for un-parsed AND empty-parse lessons) | There's no lesson plan to show for this lesson yet. Once it's processed, the objectives and key ideas appear here. |
 
 ### Upload (orchestrator) (DRAFT)
 | Key | Draft |

@@ -119,6 +119,18 @@ describe('QuizLibrary', () => {
     expect(screen.queryByText('Photosynthesis — Check')).toBeNull();
   });
 
+  it('Subject filter still matches a quiz whose inherited subject has surrounding whitespace', () => {
+    const padded: QuizLibraryData = {
+      class_id: 'c1',
+      quizzes: [
+        { id: 'qp', title: 'Padded — Check', lesson_title: 'L', subject: '  Science  ', grade_level: '7', status: 'draft', question_count: 3, published_at: null, created_at: '2026-06-20T00:00:00Z' },
+      ],
+    };
+    render(<QuizLibrary data={padded} classId="c1" now={FIXED_NOW} />);
+    fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'Science' } });
+    expect(screen.getByText('Padded — Check')).toBeInTheDocument();
+  });
+
   it('shows a Class selector only when the teacher has more than one class', () => {
     const { rerender } = render(<QuizLibrary data={data()} classId="c1" now={FIXED_NOW} classes={[{ id: 'c1', label: 'Bio' }]} />);
     expect(screen.queryByLabelText('Class')).toBeNull();

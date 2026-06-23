@@ -41,7 +41,14 @@ describe('LessonViewPanel', () => {
 
   it('shows a dignified note when the lesson has no parsed plan yet', () => {
     render(<LessonViewPanel lesson={{ ...lesson, parsed_content: null }} onClose={vi.fn()} />);
-    expect(screen.getByText(/hasn.t been processed yet|not been processed|no lesson plan/i)).toBeInTheDocument();
+    expect(screen.getByText(/no lesson plan to show/i)).toBeInTheDocument();
+  });
+
+  it('shows the note (not an empty body) when parsed_content is a valid-but-empty object', () => {
+    const empty = { objectives: [], key_concepts: [], vocabulary: [], misconception_risks: [] };
+    render(<LessonViewPanel lesson={{ ...lesson, parsed_content: empty }} onClose={vi.fn()} />);
+    expect(screen.getByText(/no lesson plan to show/i)).toBeInTheDocument();
+    expect(screen.queryByText('Learning goals')).not.toBeInTheDocument();
   });
 
   it('closes on Escape', () => {

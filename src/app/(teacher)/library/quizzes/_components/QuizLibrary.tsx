@@ -28,7 +28,7 @@ import { CategoryFilterBar } from '../../_components/CategoryFilterBar';
 import type { QuizLibrary as QuizLibraryData, QuizLibRow } from '@/lib/quizzes/loadQuizLibrary';
 import type { LibraryClassOption } from '@/lib/teacher/teacherClasses';
 import { inBucket, type DateBucket } from '@/lib/content/dateBucket';
-import { distinctValues, groupByCategory } from '@/lib/content/category';
+import { clean, distinctValues, groupByCategory } from '@/lib/content/category';
 
 /** A quiz question, as the edit panel needs it (subset of quiz_questions). */
 export interface QuizQuestionLite {
@@ -82,8 +82,9 @@ export function QuizLibrary({ data, classId, questions, classes = [], now }: Qui
     const q = search.trim().toLowerCase();
     return data.quizzes.filter((row) => {
       if (!inBucket(row.created_at, granularity, clock)) return false;
-      if (subject !== 'all' && (row.subject ?? '') !== subject) return false;
-      if (grade !== 'all' && (row.grade_level ?? '') !== grade) return false;
+      // Compare via clean() so a whitespace-bearing inherited value matches its trimmed dropdown option.
+      if (subject !== 'all' && clean(row.subject) !== subject) return false;
+      if (grade !== 'all' && clean(row.grade_level) !== grade) return false;
       if (!q) return true;
       const hay = `${row.title} ${row.lesson_title ?? ''}`.toLowerCase();
       return hay.includes(q);

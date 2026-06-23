@@ -25,7 +25,7 @@ import { EmptyState } from '@/components/core/EmptyState';
 import { SectionLabel } from '../../../_components/SectionLabel';
 import { CategoryFilterBar } from '../../_components/CategoryFilterBar';
 import { inBucket, type DateBucket } from '@/lib/content/dateBucket';
-import { distinctValues, groupByCategory } from '@/lib/content/category';
+import { clean, distinctValues, groupByCategory } from '@/lib/content/category';
 import { LessonViewPanel } from './LessonViewPanel';
 
 /** Status → a plain, label-only pill (NO diagnostic enum, NO band machinery). DRAFT → Barb. */
@@ -64,13 +64,15 @@ function LessonRow({ lesson, classId, onView }: { lesson: LessonLibRow; classId:
         <button
           type="button"
           onClick={onView}
+          aria-label={`View lesson — ${lesson.title}`}
           className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1.5 font-display text-sm font-bold text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           View lesson
         </button>
         <Link
           href={quizHref}
-          className="rounded-md border-2 border-sidebar-edge bg-brand px-3 py-1.5 font-display text-sm font-bold text-fg-on-brand shadow-sticker"
+          aria-label={`${hasQuiz ? 'Open quiz' : 'Make a quiz'} — ${lesson.title}`}
+          className="rounded-md border-2 border-sidebar-edge bg-brand px-3 py-1.5 font-display text-sm font-bold text-fg-on-brand shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         >
           {hasQuiz ? 'Open quiz' : 'Make a quiz'}
         </Link>
@@ -102,8 +104,9 @@ export function LessonLibrary({
     const q = query.trim().toLowerCase();
     return data.lessons.filter((l) => {
       if (!inBucket(l.created_at, bucket, clock)) return false;
-      if (subject !== 'all' && (l.subject ?? '') !== subject) return false;
-      if (grade !== 'all' && (l.grade_level ?? '') !== grade) return false;
+      // Compare via clean() so a whitespace-bearing stored value matches its trimmed dropdown option.
+      if (subject !== 'all' && clean(l.subject) !== subject) return false;
+      if (grade !== 'all' && clean(l.grade_level) !== grade) return false;
       if (!q) return true;
       const hay = `${l.title} ${l.subject ?? ''}`.toLowerCase();
       return hay.includes(q);

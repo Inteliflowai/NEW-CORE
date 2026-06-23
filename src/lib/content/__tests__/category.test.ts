@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { categoryLabel, distinctValues, groupByCategory } from '@/lib/content/category';
+import { categoryLabel, clean, distinctValues, groupByCategory } from '@/lib/content/category';
 
 describe('categoryLabel', () => {
   it('uppercases subject and appends a Grade-prefixed grade', () => {
@@ -52,5 +52,31 @@ describe('groupByCategory', () => {
     const groups = groupByCategory([{ subject: null, grade_level: null }]);
     expect(groups).toHaveLength(1);
     expect(groups[0].label).toBe('OTHER');
+  });
+
+  it('orders multi-digit grades numerically (Grade 7 before Grade 10), not lexically', () => {
+    const items = [
+      { subject: 'Science', grade_level: '10' },
+      { subject: 'Science', grade_level: '7' },
+      { subject: 'Science', grade_level: '8' },
+    ];
+    expect(groupByCategory(items).map((g) => g.label)).toEqual([
+      'SCIENCE · GRADE 7', 'SCIENCE · GRADE 8', 'SCIENCE · GRADE 10',
+    ]);
+  });
+});
+
+describe('clean (exported for filter normalization)', () => {
+  it('trims and maps blank to null', () => {
+    expect(clean('  Science  ')).toBe('Science');
+    expect(clean('   ')).toBeNull();
+    expect(clean(null)).toBeNull();
+  });
+});
+
+describe('distinctValues numeric ordering', () => {
+  it('sorts grade values numerically (7 before 10)', () => {
+    const items = [{ g: '10' }, { g: '7' }, { g: '8' }];
+    expect(distinctValues(items, (i) => i.g)).toEqual(['7', '8', '10']);
   });
 });

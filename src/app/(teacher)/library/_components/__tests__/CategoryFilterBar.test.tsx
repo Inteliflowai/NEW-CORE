@@ -60,4 +60,13 @@ describe('CategoryFilterBar', () => {
     setup({ dateLabel: 'When' });
     expect(screen.getByLabelText('When')).toBeInTheDocument();
   });
+
+  it('hides the Subject/Grade dropdowns when there are no values (cold start)', () => {
+    setup({ subjects: [], grades: [] });
+    expect(screen.queryByLabelText('Subject')).toBeNull();
+    expect(screen.queryByLabelText('Grade')).toBeNull();
+    // search + date filters remain.
+    expect(screen.getByRole('searchbox')).toBeInTheDocument();
+    expect(screen.getByLabelText('Added')).toBeInTheDocument();
+  });
 });
