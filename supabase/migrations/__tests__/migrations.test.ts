@@ -720,3 +720,12 @@ describe('0016 tutor_tables', () => {
     expect(s()).toMatch(/CREATE INDEX IF NOT EXISTS .*tutor_messages.*session_id/);
   });
 });
+
+describe('0019 content_studio', () => {
+  const s = () => sql('0019_content_studio.sql');
+  it('0019 adds lessons.file_hash + source and provisions the lesson-uploads bucket', () => {
+    expect(s()).toMatch(/add column if not exists file_hash text/i);
+    expect(s()).toMatch(/add column if not exists source\s+text default 'upload'/i);
+    expect(s()).toMatch(/insert into storage\.buckets[\s\S]*'lesson-uploads'[\s\S]*false/i);
+  });
+});
