@@ -178,21 +178,27 @@ export const theme = {
  * The coach "arrives" (gentle ease-out) and a touch of spring in the student register.
  * DRAFT values → tuned during the signature-moment prototype; FEEL-DIRECTION.md will own them.
  */
-export const motion = {
+type Cubic = [number, number, number, number];
+type Spring = { type: 'spring'; stiffness: number; damping: number };
+export const motion: {
+  duration: { instant: number; fast: number; base: number; slow: number; ambient: number };
+  ease: { out: Cubic; inOut: Cubic; standard: Cubic };
+  spring: { calm: Spring; playful: Spring };
+} = {
   /** seconds */
   duration: { instant: 0, fast: 0.18, base: 0.28, slow: 0.45, ambient: 0.9 },
-  /** cubic-bezier control points [x1,y1,x2,y2] */
+  /** cubic-bezier control points [x1,y1,x2,y2] (mutable tuples — framer-motion Easing) */
   ease: {
-    out: [0.16, 1, 0.3, 1] as [number, number, number, number],   // soft "settle in"
-    inOut: [0.65, 0, 0.35, 1] as [number, number, number, number],
-    standard: [0.4, 0, 0.2, 1] as [number, number, number, number],
+    out: [0.16, 1, 0.3, 1],   // soft "settle in"
+    inOut: [0.65, 0, 0.35, 1],
+    standard: [0.4, 0, 0.2, 1],
   },
   /** framer-motion spring configs */
   spring: {
     calm: { type: 'spring', stiffness: 200, damping: 30 },     // teacher/parent — no bounce
     playful: { type: 'spring', stiffness: 380, damping: 22 },  // student — a touch of bounce
   },
-} as const;
+};
 
 export type Ramp = keyof typeof ramps;
 export type SemanticSlot = keyof typeof semanticDefaults;
