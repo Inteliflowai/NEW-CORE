@@ -17,7 +17,9 @@ export interface DrawingCanvasProps {
 }
 
 const COLORS = ['#1b1b1f', '#2563eb', '#dc2626', '#16a34a']; // ink/cobalt/red/green — canvas pixels, not UI tokens
+const COLOR_NAMES = ['Black', 'Blue', 'Red', 'Green']; // index-aligned with COLORS — accessible names
 const WIDTHS = [2, 4, 7];
+const WIDTH_NAMES = ['Thin pen', 'Medium pen', 'Thick pen']; // index-aligned with WIDTHS — accessible names
 const MAX_UNDO = 20;
 
 export function DrawingCanvas({ onComplete, onCancel, onDraw, width = 560, height = 340 }: DrawingCanvasProps): React.JSX.Element {
@@ -103,15 +105,15 @@ export function DrawingCanvas({ onComplete, onCancel, onDraw, width = 560, heigh
         <button type="button" aria-pressed={tool === 'pen'} onClick={() => setTool('pen')} className={toolBtn(tool === 'pen')}>Pen</button>
         <button type="button" aria-pressed={tool === 'eraser'} onClick={() => setTool('eraser')} className={toolBtn(tool === 'eraser')}>Eraser</button>
         <span className="mx-1 inline-flex gap-1" role="group" aria-label="Color">
-          {COLORS.map((c) => (
-            <button key={c} type="button" aria-label={`Color ${c}`} aria-pressed={color === c} onClick={() => setColor(c)}
+          {COLORS.map((c, i) => (
+            <button key={c} type="button" aria-label={`${COLOR_NAMES[i]} pen`} aria-pressed={color === c} onClick={() => setColor(c)}
               style={{ backgroundColor: c }}
               className={`h-6 w-6 rounded-full border-2 ${color === c ? 'border-fg' : 'border-sidebar-edge'} focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand`} />
           ))}
         </span>
         <span className="mx-1 inline-flex gap-1" role="group" aria-label="Stroke width">
-          {WIDTHS.map((w) => (
-            <button key={w} type="button" aria-label={`Width ${w}`} aria-pressed={strokeWidth === w} onClick={() => setStrokeWidth(w)} className={toolBtn(strokeWidth === w)}>{w}</button>
+          {WIDTHS.map((w, i) => (
+            <button key={w} type="button" aria-label={WIDTH_NAMES[i]} aria-pressed={strokeWidth === w} onClick={() => setStrokeWidth(w)} className={toolBtn(strokeWidth === w)}>{w}</button>
           ))}
         </span>
         <button type="button" onClick={undo} className={toolBtn(false)}>Undo</button>

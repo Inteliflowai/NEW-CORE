@@ -7,8 +7,8 @@ import DrawingCanvas from '../DrawingCanvas';
 describe('DrawingCanvas', () => {
   it('renders the lean toolbar (pen, eraser, undo, clear) + actions', () => {
     render(<DrawingCanvas onComplete={() => {}} onCancel={() => {}} />);
-    expect(screen.getByRole('button', { name: /pen/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /eraser/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Pen' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Eraser' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /undo/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /clear/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /use this drawing/i })).toBeInTheDocument();
@@ -28,5 +28,13 @@ describe('DrawingCanvas', () => {
     fireEvent.click(screen.getByRole('button', { name: /use this drawing/i }));
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(onComplete.mock.calls[0][0]).toBeInstanceOf(Blob);
+  });
+
+  it('color swatches have accessible names and width buttons have human-readable labels', () => {
+    render(<DrawingCanvas onComplete={() => {}} onCancel={() => {}} />);
+    // Color name assertions
+    expect(screen.getByRole('button', { name: 'Blue pen' })).toBeInTheDocument();
+    // Width name assertions
+    expect(screen.getByRole('button', { name: 'Medium pen' })).toBeInTheDocument();
   });
 });

@@ -27,6 +27,7 @@ import { effortLabelPhrase } from '@/lib/copy/effortLabelPhrase';
 import { GradeTrendSparkline } from '@/components/core/GradeTrendSparkline';
 import type { StudentGradeTrend } from '@/lib/gradebook/loadStudentGradeTrend';
 import { MathText } from '@/components/core/MathText';
+import { isProxyImageUrl } from '@/lib/assignments/imageUrlGuard';
 
 /** The drill-in renders the loader's GradebookCell verbatim — it already carries the immutable
  * AI grade (score_pct), the effort label, the teacher note and the submission date. */
@@ -104,6 +105,8 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
 
   const [work, setWork] = useState<AttemptWork | null>(null);
   const [expandedImg, setExpandedImg] = useState<string | null>(null);
+  const overlayCloseRef = useRef<HTMLButtonElement>(null);
+  const enlargeTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!cell.attempt_id) { setWork(null); return; }
@@ -115,12 +118,14 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
     return () => { live = false; };
   }, [cell.attempt_id]);
 
-  // Esc closes the enlarged-drawing overlay (it renders outside the panel's focus trap).
+  // Focus the overlay close button when the overlay opens; restore focus to the enlarge trigger on close.
   useEffect(() => {
-    if (!expandedImg) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpandedImg(null); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    if (expandedImg) {
+      overlayCloseRef.current?.focus();
+    } else {
+      // Restore focus to the enlarge button that opened the overlay (if any).
+      (enlargeTriggerRef.current as HTMLElement | null)?.focus?.();
+    }
   }, [expandedImg]);
 
   const isGradedFamily = GRADED_FAMILY.has(cell.status);
@@ -160,6 +165,10 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
   function onKeyDown(e: React.KeyboardEvent<HTMLElement>) {
     if (e.key === 'Escape') {
       e.stopPropagation();
+      if (expandedImg) {
+        setExpandedImg(null);
+        return;
+      }
       onClose();
       return;
     }
@@ -353,14 +362,15 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
                   ) : !img ? (
                     <p className="text-sm text-fg-muted">No written answer.</p>
                   ) : null}
-                  {img && (
+                  {img && isProxyImageUrl(img) && (
                     <button
                       type="button"
-                      onClick={() => setExpandedImg(img)}
-                      aria-label={`Enlarge the drawing for question ${t.step}`}
+                      onClick={(e) => { enlargeTriggerRef.current = e.currentTarget; setExpandedImg(img); }}
+                      aria-label={`Enlarge the answer image for question ${t.step}`}
                       className="self-start rounded-md border-2 border-sidebar-edge bg-bg p-1 shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                     >
-                      <img src={img} alt={`Drawing for question ${t.step}`} className="max-h-40 w-auto rounded" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img} alt={`Answer image for question ${t.step}`} className="max-h-40 w-auto rounded" />
                     </button>
                   )}
                 </div>
@@ -462,15 +472,30 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
           </div>
         )}
       </aside>
-      {expandedImg && (
+      {expandedImg && isProxyImageUrl(expandedImg) && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Student drawing"
+          aria-label="Student work"
           onClick={() => setExpandedImg(null)}
           className="fixed inset-0 z-40 flex items-center justify-center bg-fg/60 p-6"
         >
-          <img src={expandedImg} alt="Student drawing, enlarged" className="max-h-[90vh] max-w-[90vw] rounded-lg border-2 border-sidebar-edge bg-bg" />
+          <button
+            ref={overlayCloseRef}
+            type="button"
+            aria-label="Close"
+            onClick={() => setExpandedImg(null)}
+            className="absolute right-4 top-4 rounded-md border-2 border-sidebar-edge bg-surface px-2 py-1 text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
+            ✕
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={expandedImg}
+            alt="Answer image, enlarged"
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[90vh] max-w-[90vw] rounded-lg border-2 border-sidebar-edge bg-bg"
+          />
         </div>
       )}
     </>

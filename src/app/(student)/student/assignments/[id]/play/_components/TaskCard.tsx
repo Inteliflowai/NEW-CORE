@@ -66,6 +66,7 @@ export function TaskCard({ step, description, value, onChange, onFirstInput, ima
       {/* Optional drawing / photo answer */}
       {imageUrl ? (
         <div className="flex flex-col gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageUrl} alt="Your drawing or photo" className="max-h-72 w-auto rounded-lg border-2 border-sidebar-edge bg-bg" />
           <div>
             <button type="button" onClick={onRemoveImage} className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">Remove</button>

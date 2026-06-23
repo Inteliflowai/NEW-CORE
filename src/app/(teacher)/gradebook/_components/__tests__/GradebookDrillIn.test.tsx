@@ -221,27 +221,71 @@ describe('GradebookDrillIn — student work review', () => {
     },
   };
 
-  it('shows the student\'s submitted work (text + an enlargeable drawing) for a graded cell', async () => {
-    // global fetch mock answers BOTH /trend (null ok) and /attempt:
+  const PROXY_IMG_URL = '/api/attempts/drawing?path=stu1%2FA1%2Ftask-1-1.png';
+
+  function setupWorkFetch(imageUrl = PROXY_IMG_URL) {
     globalThis.fetch = vi.fn(async (url: string) => {
       if (String(url).includes('/api/teacher/gradebook/attempt')) {
         return new Response(JSON.stringify({
           tasks: [{ step: 1, description: 'Sketch the force diagram.' }],
-          responses: { tasks: { '1': { text: 'Here is my reasoning.', image_url: '/api/attempts/drawing?path=stu1%2FA1%2Ftask-1-1.png' } } },
+          responses: { tasks: { '1': { text: 'Here is my reasoning.', image_url: imageUrl } } },
           ai_feedback: { overall: 'Clear diagram and explanation.' }, status: 'graded',
         }), { status: 200 });
       }
       return new Response('null', { status: 200 }); // /trend
     }) as unknown as typeof fetch;
+  }
 
+  it('shows the student\'s submitted work (text + an enlargeable answer image) for a graded cell', async () => {
+    setupWorkFetch();
     render(<GradebookDrillIn selected={gradedSelection} onClose={() => {}} onWrite={() => {}} />);
     expect(await screen.findByText(/student's work/i)).toBeInTheDocument();
     expect(screen.getByText(/here is my reasoning/i)).toBeInTheDocument();
-    const img = screen.getByRole('img', { name: /drawing for question 1/i });
+    // Neutral label: "answer image for question 1"
+    const img = screen.getByRole('img', { name: /answer image for question 1/i });
     expect(img).toBeInTheDocument();
     expect(screen.getByText(/clear diagram and explanation/i)).toBeInTheDocument();
-    // Enlarge: clicking the thumbnail opens the overlay dialog.
-    fireEvent.click(screen.getByRole('button', { name: /enlarge the drawing for question 1/i }));
-    expect(screen.getByRole('dialog', { name: /student drawing/i })).toBeInTheDocument();
+    // Enlarge button uses neutral label
+    fireEvent.click(screen.getByRole('button', { name: /enlarge the answer image for question 1/i }));
+    // Overlay dialog uses neutral label
+    expect(screen.getByRole('dialog', { name: /student work/i })).toBeInTheDocument();
+  });
+
+  it('pressing Escape with the overlay open closes ONLY the overlay, panel stays open', async () => {
+    setupWorkFetch();
+    const onClose = vi.fn();
+    render(<GradebookDrillIn selected={gradedSelection} onClose={onClose} onWrite={() => {}} />);
+    await screen.findByText(/student's work/i);
+    fireEvent.click(screen.getByRole('button', { name: /enlarge the answer image for question 1/i }));
+    expect(screen.getByRole('dialog', { name: /student work/i })).toBeInTheDocument();
+    // Escape on the panel dialog — should close overlay, NOT the panel
+    fireEvent.keyDown(screen.getByRole('dialog', { name: /ana diaz/i }), { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: /student work/i })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    // Panel dialog should still be present
+    expect(screen.getByRole('dialog', { name: /ana diaz/i })).toBeInTheDocument();
+  });
+
+  it('clicking the backdrop closes the overlay', async () => {
+    setupWorkFetch();
+    render(<GradebookDrillIn selected={gradedSelection} onClose={() => {}} onWrite={() => {}} />);
+    await screen.findByText(/student's work/i);
+    fireEvent.click(screen.getByRole('button', { name: /enlarge the answer image for question 1/i }));
+    const overlay = screen.getByRole('dialog', { name: /student work/i });
+    fireEvent.click(overlay);
+    expect(screen.queryByRole('dialog', { name: /student work/i })).toBeNull();
+  });
+
+  it('an external image_url is NOT rendered as an img element (render-guard)', async () => {
+    setupWorkFetch('https://evil/x.gif');
+    render(<GradebookDrillIn selected={gradedSelection} onClose={() => {}} onWrite={() => {}} />);
+    await screen.findByText(/student's work/i);
+    // No img with the external src should appear
+    const imgs = screen.queryAllByRole('img');
+    for (const img of imgs) {
+      expect((img as HTMLImageElement).src).not.toContain('evil');
+    }
+    // No enlarge button for question 1 should appear
+    expect(screen.queryByRole('button', { name: /enlarge the answer image for question 1/i })).toBeNull();
   });
 });
