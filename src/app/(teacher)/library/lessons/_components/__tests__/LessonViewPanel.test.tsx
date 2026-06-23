@@ -14,6 +14,10 @@ const lesson: LessonLibRow = {
   status: 'published',
   quiz_count: 1,
   created_at: '2026-06-23T08:00:00Z',
+  standard_codes: ['NGSS.MS-LS1-6'],
+  standard_framework: 'NGSS',
+  chapter_title: null,
+  day_index: null,
   parsed_content: {
     title: 'Photosynthesis: How Plants Make Food',
     objectives: ['Explain how plants convert light to energy'],
@@ -37,6 +41,18 @@ describe('LessonViewPanel', () => {
     expect(screen.getByText('tiny pores in a leaf')).toBeInTheDocument();
     expect(screen.getByText('Plants get their food from the soil')).toBeInTheDocument();
     expect(screen.getByText('Plants turn light energy into stored chemical energy.')).toBeInTheDocument();
+  });
+
+  it('renders a teacher-only Standards section with the framework + confirmed codes', () => {
+    render(<LessonViewPanel lesson={lesson} onClose={vi.fn()} />);
+    expect(screen.getByText('Standards')).toBeInTheDocument();
+    expect(screen.getByText('NGSS')).toBeInTheDocument();
+    expect(screen.getByText('NGSS.MS-LS1-6')).toBeInTheDocument();
+  });
+
+  it('omits the Standards section when no codes were confirmed', () => {
+    render(<LessonViewPanel lesson={{ ...lesson, standard_codes: [] }} onClose={vi.fn()} />);
+    expect(screen.queryByText('Standards')).not.toBeInTheDocument();
   });
 
   it('shows a dignified note when the lesson has no parsed plan yet', () => {

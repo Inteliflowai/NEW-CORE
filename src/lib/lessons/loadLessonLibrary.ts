@@ -15,13 +15,25 @@ export interface LessonLibRow {
   /** The parsed lesson plan (objectives/concepts/vocabulary/…), for the read-only viewer.
    *  null when the lesson hasn't been parsed yet or the stored JSON fails validation. */
   parsed_content: ParsedLesson | null;
+  /** Teacher-confirmed standards (codes + framework). Teacher-only display; safe — never shown to
+   *  students/parents. Empty / null when none were confirmed. */
+  standard_codes: string[];
+  standard_framework: string | null;
+  /** Multi-day unit grouping: a unit title + the lesson's day position within it. null when the
+   *  lesson isn't part of a unit. */
+  chapter_title: string | null;
+  day_index: number | null;
 }
 export interface LessonLibrary {
   class_id: string;
   lessons: LessonLibRow[];
 }
 
-type LessonRow = { id: string; title: string | null; subject: string | null; grade_level: string | null; status: string | null; created_at: string | null; parsed_content: unknown };
+type LessonRow = {
+  id: string; title: string | null; subject: string | null; grade_level: string | null;
+  status: string | null; created_at: string | null; parsed_content: unknown;
+  standard_codes: unknown; standard_framework: string | null; chapter_title: string | null; day_index: number | null;
+};
 type QuizRow = { id: string; lesson_id: string | null };
 
 /** Coerce the stored jsonb back into a validated ParsedLesson, or null if absent/malformed. */
@@ -36,7 +48,7 @@ export async function loadLessonLibrary(admin: SupabaseClient, args: { classId: 
 
   // 1. Lessons for the class — soft-deleted (archived) excluded; newest-first.
   const { data: lessonData } = await admin.from('lessons')
-    .select('id, title, subject, grade_level, status, created_at, parsed_content')
+    .select('id, title, subject, grade_level, status, created_at, parsed_content, standard_codes, standard_framework, chapter_title, day_index')
     .eq('class_id', classId)
     .neq('status', 'archived')
     .order('created_at', { ascending: false });
@@ -64,6 +76,10 @@ export async function loadLessonLibrary(admin: SupabaseClient, args: { classId: 
       quiz_count: quizCount.get(l.id) ?? 0,
       created_at: l.created_at ?? '',
       parsed_content: safeParsedContent(l.parsed_content),
+      standard_codes: Array.isArray(l.standard_codes) ? (l.standard_codes as string[]) : [],
+      standard_framework: l.standard_framework ?? null,
+      chapter_title: l.chapter_title ?? null,
+      day_index: typeof l.day_index === 'number' ? l.day_index : null,
     }))
     // Newest-first — the query already orders, but sort in JS too so the result is
     // deterministic regardless of DB row order (mirrors loadGradebook's JS-side ordering).

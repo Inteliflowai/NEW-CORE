@@ -62,7 +62,9 @@ function toDraft(d: GeneratedDay): DayDraft {
     title: d.title ?? p.title ?? '', subject: d.subject ?? p.subject ?? '', grade_level: d.grade_level ?? p.grade_level ?? '',
     summary: p.summary ?? '', objectives: arrayToLines(p.objectives), concepts: arrayToLines(p.key_concepts),
     vocab: vocabToLines(p.vocabulary), misconceptions: arrayToLines(p.misconception_risks),
-    proposed: p.proposed_standards ?? [], checked: {},
+    proposed: p.proposed_standards ?? [],
+    // AI-proposed standards default to CHECKED (opt-out confirm) — the teacher unchecks to drop one.
+    checked: Object.fromEntries((p.proposed_standards ?? []).map((s) => [s.code, true])),
   };
 }
 
@@ -85,7 +87,6 @@ export function LessonReviewEditor({ days, chapterTitle, framework, classId }: L
   const [phase, setPhase] = useState<'edit' | 'saving' | 'done' | 'error'>('edit');
   const [progress, setProgress] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [lastQuizId, setLastQuizId] = useState<string | null>(null);
 
   const multi = drafts.length > 1;
   const d = drafts[active];
@@ -102,7 +103,6 @@ export function LessonReviewEditor({ days, chapterTitle, framework, classId }: L
   async function saveAll() {
     setPhase('saving'); setError(null);
     try {
-      let quizId: string | null = null;
       for (let i = 0; i < drafts.length; i++) {
         const draft = drafts[i];
         setProgress(multi ? `Saving day ${i + 1} of ${drafts.length}…` : 'Saving your lesson…');
@@ -122,10 +122,7 @@ export function LessonReviewEditor({ days, chapterTitle, framework, classId }: L
           body: JSON.stringify({ lesson_id: draft.lesson_id }),
         });
         if (!genRes.ok) throw new Error('quiz');
-        const genBody = (await genRes.json().catch(() => ({}))) as { quiz_id?: string };
-        quizId = genBody.quiz_id ?? quizId;
       }
-      setLastQuizId(quizId);
       setPhase('done');
     } catch {
       setError("That didn't finish — give it another try in a moment.");
@@ -143,7 +140,7 @@ export function LessonReviewEditor({ days, chapterTitle, framework, classId }: L
         <p className="text-fg text-sm">Review and publish each quiz when it&apos;s ready for students.</p>
         <div className="flex flex-wrap gap-2">
           <Link href={quizzesHref} className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker">
-            {lastQuizId && !multi ? 'Open the quiz' : 'Open the Quiz Library'}
+            Open the Quiz Library
           </Link>
           <Link href={lessonsHref} className="rounded-md border-2 border-sidebar-edge bg-surface px-4 py-2 font-display text-sm font-bold text-fg shadow-sticker">
             Back to the Lesson Library
@@ -163,7 +160,7 @@ export function LessonReviewEditor({ days, chapterTitle, framework, classId }: L
       )}
 
       {multi && (
-        <div aria-label="Days in this unit" className="flex flex-wrap gap-2">
+        <div role="group" aria-label="Days in this unit" className="flex flex-wrap gap-2">
           {drafts.map((dr, i) => (
             <button
               key={dr.lesson_id} type="button" aria-pressed={i === active}
@@ -225,7 +222,7 @@ export function LessonReviewEditor({ days, chapterTitle, framework, classId }: L
         {d.proposed.length === 0 && <p className="text-fg text-sm">No standards were proposed for this lesson. You can publish without them.</p>}
         {d.proposed.map((s) => (
           <label key={s.code} className="flex items-start gap-2 text-fg text-sm">
-            <input type="checkbox" checked={!!d.checked[s.code]} onChange={() => toggleStandard(s.code)} aria-label={s.code} className="mt-1" />
+            <input type="checkbox" checked={!!d.checked[s.code]} onChange={() => toggleStandard(s.code)} className="mt-1" />
             <span><span className="font-bold">{s.code}</span> — {s.description}</span>
           </label>
         ))}

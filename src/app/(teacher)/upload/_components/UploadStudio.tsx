@@ -30,6 +30,7 @@ import { EmptyState } from '@/components/core/EmptyState';
 import { SectionLabel } from '../../_components/SectionLabel';
 import { detectDuplicates, type LessonRowLite } from '@/lib/lessons/duplicateDetect';
 import { DupModal } from './DupModal';
+import { readErrorMessage } from './errorMessage';
 
 /** A teacher's existing lesson, trimmed to what the fuzzy check needs (concept_tags from
  *  parsed_content.key_concepts). Supplied by the server page (archived excluded). */
@@ -78,9 +79,6 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  // Result links shown on the done state.
-  const [quizId, setQuizId] = useState<string | null>(null);
-
   // Modal state — exact (server 409) + fuzzy (detectDuplicates) dups.
   const [exactDup, setExactDup] = useState<ExactDup | null>(null);
   const [fuzzyMatch, setFuzzyMatch] = useState<LessonRowLite | null>(null);
@@ -98,7 +96,6 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
     setError(null);
     setExactDup(null);
     setFuzzyMatch(null);
-    setQuizId(null);
   }
 
   // ── Step 1: upload (multipart). force re-POSTs past an exact dup. ──────────
@@ -124,8 +121,8 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
       return;
     }
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      fail(body?.error ?? "That didn't go through — try again in a moment.");
+      const body = await res.json().catch(() => null);
+      fail(readErrorMessage(body, "That didn't go through — try again in a moment."));
       return;
     }
 
@@ -144,7 +141,8 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
       body: JSON.stringify({ lesson_id: lessonId }),
     });
     if (!res.ok) {
-      fail("We couldn't read that file — try a clearer copy.");
+      const errBody = await res.json().catch(() => null);
+      fail(readErrorMessage(errBody, "We couldn't read that file — try a clearer copy."));
       return;
     }
     const body = (await res.json()) as {
@@ -176,11 +174,10 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
       body: JSON.stringify({ lesson_id: lessonId }),
     });
     if (!res.ok) {
-      fail("The quiz didn't draft — try again — re-drop the file here.");
+      const errBody = await res.json().catch(() => null);
+      fail(readErrorMessage(errBody, "The quiz didn't draft — try again — re-drop the file here."));
       return;
     }
-    const body = (await res.json()) as { quiz_id?: string };
-    setQuizId(body.quiz_id ?? null);
     setPhase('done');
   }
 
@@ -324,7 +321,7 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
               href={quizzesHref}
               className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker"
             >
-              {quizId ? 'Open the quiz' : 'Open the Quiz Library'}
+              Open the Quiz Library
             </Link>
             <Link
               href={lessonsHref}

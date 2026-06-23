@@ -9,6 +9,7 @@ import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { detectDuplicates, type LessonRowLite } from '@/lib/lessons/duplicateDetect';
 import { DupModal } from './DupModal';
+import { readErrorMessage } from './errorMessage';
 import type { UploadLessonLite } from './UploadStudio';
 import { SectionLabel } from '../../_components/SectionLabel';
 
@@ -25,7 +26,6 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
   const [url, setUrl] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [quizId, setQuizId] = useState<string | null>(null);
   const [fuzzyMatch, setFuzzyMatch] = useState<LessonRowLite | null>(null);
   const lessonIdRef = useRef<string | null>(null);
 
@@ -46,7 +46,7 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
 
   async function onImport() {
     if (!url.trim() || busy) return;
-    setError(null); setFuzzyMatch(null); setQuizId(null);
+    setError(null); setFuzzyMatch(null);
     setPhase('importing');
     let res: Response;
     try {
@@ -57,8 +57,8 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
     } catch { fail("We couldn't reach that link."); return; }
 
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      fail(body?.error ?? "That didn't import — check the link and try again.");
+      const body = await res.json().catch(() => null);
+      fail(readErrorMessage(body, "That didn't import — check the link and try again."));
       return;
     }
     const body = (await res.json()) as { lesson_id: string; parsed_content?: { title?: string | null; key_concepts?: string[] } };
@@ -78,9 +78,11 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lesson_id: lessonId }),
     });
-    if (!res.ok) { fail("The quiz didn't draft — try the link again."); return; }
-    const body = (await res.json()) as { quiz_id?: string };
-    setQuizId(body.quiz_id ?? null);
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => null);
+      fail(readErrorMessage(errBody, "The quiz didn't draft — try the link again."));
+      return;
+    }
     setPhase('done');
   }
 
@@ -127,7 +129,7 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
           <p className="text-fg text-sm">Review and publish the quiz when it&apos;s ready for students.</p>
           <div className="flex flex-wrap gap-2">
             <Link href={quizzesHref} className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker">
-              {quizId ? 'Open the quiz' : 'Open the Quiz Library'}
+              Open the Quiz Library
             </Link>
             <Link href={lessonsHref} className="rounded-md border-2 border-sidebar-edge bg-surface px-4 py-2 font-display text-sm font-bold text-fg shadow-sticker">
               Back to the Lesson Library

@@ -38,6 +38,21 @@ describe('UrlImportStudio', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t open/i));
   });
 
+  it('shows the busy envelope (503) userMessage inline — never [object Object]', async () => {
+    mockFetch({
+      '/import-url': () => new Response(
+        JSON.stringify({ error: { code: 'llm_exhausted', userMessage: 'The system is busy — please try again in a moment.', retryable: true } }),
+        { status: 503 },
+      ),
+    });
+    render(<UrlImportStudio classId="c1" existingLessons={[]} />);
+    fireEvent.change(screen.getByLabelText(/link|url|web address/i), { target: { value: 'https://x' } });
+    fireEvent.click(screen.getByRole('button', { name: /import/i }));
+    const alert = await waitFor(() => screen.getByRole('alert'));
+    expect(alert).toHaveTextContent(/busy/i);
+    expect(alert.textContent ?? '').not.toContain('[object Object]');
+  });
+
   it('gates quiz-gen behind the fuzzy-dup modal when a near match exists', async () => {
     mockFetch({
       '/import-url': () => new Response(JSON.stringify({ lesson_id: 'L1', parsed_content: { title: 'Photosynthesis', key_concepts: ['light', 'chlorophyll'] } }), { status: 200 }),

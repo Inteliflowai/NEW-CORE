@@ -40,7 +40,7 @@ export function ContentStudioTabs({ classId, existingLessons, schoolState }: Con
       <div role="tablist" aria-label="Create a lesson" className="flex flex-wrap gap-2">
         {TABS.map((t, i) => (
           <button
-            key={t.id} type="button" role="tab" id={`cs-tab-${t.id}`} aria-controls={`cs-panel-${t.id}`}
+            key={t.id} type="button" role="tab" id={`cs-tab-${t.id}`} aria-controls="cs-tabpanel"
             aria-selected={active === t.id} tabIndex={active === t.id ? 0 : -1}
             ref={(el) => { tabRefs.current[i] = el; }}
             onClick={() => setActive(t.id)} onKeyDown={(e) => onKeyDown(e, i)}
@@ -52,7 +52,7 @@ export function ContentStudioTabs({ classId, existingLessons, schoolState }: Con
         ))}
       </div>
 
-      <div role="tabpanel" id={`cs-panel-${active}`} aria-labelledby={`cs-tab-${active}`}>
+      <div role="tabpanel" id="cs-tabpanel" aria-labelledby={`cs-tab-${active}`}>
         {active === 'upload' && <UploadStudio classId={classId} existingLessons={existingLessons} />}
         {active === 'url' && <UrlImportStudio classId={classId} existingLessons={existingLessons} />}
         {active === 'generate' && <GenerateLessonStudio classId={classId} schoolState={schoolState} />}

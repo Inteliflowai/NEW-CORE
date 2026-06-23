@@ -14,9 +14,9 @@ const NOW = new Date('2026-06-23T12:00:00Z');
 const data: LessonLibraryData = {
   class_id: 'c1',
   lessons: [
-    { id: 'L1', title: 'Photosynthesis', subject: 'Science', grade_level: '7', status: 'pending_review', quiz_count: 1, created_at: '2026-06-23T08:00:00Z', parsed_content: { objectives: ['Explain photosynthesis'], key_concepts: ['chlorophyll'], vocabulary: [], misconception_risks: [] } }, // today
-    { id: 'L2', title: 'Fractions', subject: 'Math', grade_level: '6', status: 'draft', quiz_count: 0, created_at: '2026-06-21T08:00:00Z', parsed_content: null }, // this week
-    { id: 'L3', title: 'The Revolution', subject: 'History', grade_level: '8', status: 'pending_review', quiz_count: 2, created_at: '2026-05-02T08:00:00Z', parsed_content: null }, // older month
+    { id: 'L1', title: 'Photosynthesis', subject: 'Science', grade_level: '7', status: 'pending_review', quiz_count: 1, created_at: '2026-06-23T08:00:00Z', standard_codes: [], standard_framework: null, chapter_title: null, day_index: null, parsed_content: { objectives: ['Explain photosynthesis'], key_concepts: ['chlorophyll'], vocabulary: [], misconception_risks: [] } }, // today
+    { id: 'L2', title: 'Fractions', subject: 'Math', grade_level: '6', status: 'draft', quiz_count: 0, created_at: '2026-06-21T08:00:00Z', standard_codes: [], standard_framework: null, chapter_title: null, day_index: null, parsed_content: null }, // this week
+    { id: 'L3', title: 'The Revolution', subject: 'History', grade_level: '8', status: 'pending_review', quiz_count: 2, created_at: '2026-05-02T08:00:00Z', standard_codes: [], standard_framework: null, chapter_title: null, day_index: null, parsed_content: null }, // older month
   ],
 };
 
@@ -102,7 +102,7 @@ describe('LessonLibrary', () => {
     const padded: LessonLibraryData = {
       class_id: 'c1',
       lessons: [
-        { id: 'P1', title: 'Padded Science', subject: '  Science  ', grade_level: '7', status: 'draft', quiz_count: 0, created_at: '2026-06-23T08:00:00Z', parsed_content: null },
+        { id: 'P1', title: 'Padded Science', subject: '  Science  ', grade_level: '7', status: 'draft', quiz_count: 0, created_at: '2026-06-23T08:00:00Z', standard_codes: [], standard_framework: null, chapter_title: null, day_index: null, parsed_content: null },
       ],
     };
     render(<LessonLibrary data={padded} now={NOW} />);
@@ -117,6 +117,24 @@ describe('LessonLibrary', () => {
     expect(screen.queryByLabelText('Class')).toBeNull();
     rerender(<LessonLibrary data={data} now={NOW} classes={[{ id: 'c1', label: 'Bio' }, { id: 'c2', label: 'Chem' }]} />);
     expect(screen.getByLabelText('Class')).toBeInTheDocument();
+  });
+
+  it('surfaces the unit/day meta and orders same-unit lessons by day within a group', () => {
+    const unitData: LessonLibraryData = {
+      class_id: 'c1',
+      lessons: [
+        // Same Subject·Grade group, same unit, supplied out of day order (Day 2 before Day 1).
+        { id: 'U2', title: 'Unit Day Two', subject: 'Math', grade_level: '4', status: 'draft', quiz_count: 0, created_at: '2026-06-23T09:00:00Z', standard_codes: [], standard_framework: null, chapter_title: 'Fractions Unit', day_index: 2, parsed_content: null },
+        { id: 'U1', title: 'Unit Day One', subject: 'Math', grade_level: '4', status: 'draft', quiz_count: 0, created_at: '2026-06-23T08:00:00Z', standard_codes: [], standard_framework: null, chapter_title: 'Fractions Unit', day_index: 1, parsed_content: null },
+      ],
+    };
+    render(<LessonLibrary data={unitData} now={NOW} />);
+    // Unit/day meta is surfaced on the row.
+    expect(screen.getByText('Unit: Fractions Unit · Day 1')).toBeInTheDocument();
+    expect(screen.getByText('Unit: Fractions Unit · Day 2')).toBeInTheDocument();
+    // Within the group, Day 1 renders before Day 2 despite the reverse input order.
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(headings.indexOf('Unit Day One')).toBeLessThan(headings.indexOf('Unit Day Two'));
   });
 
   it('carries no banned coach-posture words in any rendered prose', () => {

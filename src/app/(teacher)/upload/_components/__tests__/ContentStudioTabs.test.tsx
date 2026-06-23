@@ -28,10 +28,35 @@ describe('ContentStudioTabs', () => {
     expect((screen.getByLabelText(/state/i) as HTMLSelectElement).value).toBe('TX');
   });
 
-  it('ArrowRight moves selection to the next tab', () => {
+  it('ArrowRight moves selection to the next tab and rolls focus (roving tabindex)', () => {
     render(<ContentStudioTabs classId="c1" existingLessons={[]} schoolState={null} />);
     const first = screen.getByRole('tab', { name: /upload a file/i });
     fireEvent.keyDown(first, { key: 'ArrowRight' });
-    expect(screen.getByRole('tab', { name: /from a url/i })).toHaveAttribute('aria-selected', 'true');
+    const next = screen.getByRole('tab', { name: /from a url/i });
+    expect(next).toHaveAttribute('aria-selected', 'true');
+    // Roving-focus contract: the newly-selected tab is focused + tabbable; the prior one is not.
+    expect(document.activeElement).toBe(next);
+    expect(next).toHaveAttribute('tabindex', '0');
+    expect(first).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('ArrowLeft from the first tab wraps to the last', () => {
+    render(<ContentStudioTabs classId="c1" existingLessons={[]} schoolState={null} />);
+    const first = screen.getByRole('tab', { name: /upload a file/i });
+    fireEvent.keyDown(first, { key: 'ArrowLeft' });
+    const last = screen.getByRole('tab', { name: /generate with ai/i });
+    expect(last).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).toBe(last);
+    expect(last).toHaveAttribute('tabindex', '0');
+    expect(first).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('every tab aria-controls resolves to the single rendered tabpanel', () => {
+    render(<ContentStudioTabs classId="c1" existingLessons={[]} schoolState={null} />);
+    const panel = screen.getByRole('tabpanel');
+    for (const tab of screen.getAllByRole('tab')) {
+      const controls = tab.getAttribute('aria-controls')!;
+      expect(document.getElementById(controls)).toBe(panel);
+    }
   });
 });

@@ -37,10 +37,11 @@ describe('LessonReviewEditor', () => {
     expect(screen.getByText(/TEKS\.4\.3A/)).toBeInTheDocument();
   });
 
-  it('save edits → calls manage edit then quizzes generate with confirmed standards', async () => {
+  it('save edits → calls manage edit then quizzes generate; proposed standards default-checked persist', async () => {
     render(<LessonReviewEditor days={[day()]} chapterTitle={null} framework="TEKS" classId="c1" />);
     fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Fractions Day 1' } });
-    fireEvent.click(screen.getByLabelText(/TEKS\.4\.3A/)); // confirm the proposed standard
+    // AI-proposed standards default to CHECKED (opt-out confirm) — a straight save persists them.
+    expect((screen.getByLabelText(/TEKS\.4\.3A/) as HTMLInputElement).checked).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: /make quiz/i }));
     await waitFor(() => expect(calls.some((c) => c.url.includes('/quizzes/generate'))).toBe(true));
     const edit = calls.find((c) => c.url.includes('/manage'))!;
@@ -49,6 +50,17 @@ describe('LessonReviewEditor', () => {
     expect((edit.body as { action: string }).action).toBe('edit');
     const gen = calls.find((c) => c.url.includes('/quizzes/generate'))!;
     expect((gen.body as { lesson_id: string }).lesson_id).toBe('L1');
+  });
+
+  it('unchecking a proposed standard then saving persists no standard codes', async () => {
+    render(<LessonReviewEditor days={[day()]} chapterTitle={null} framework="TEKS" classId="c1" />);
+    // Uncheck the default-checked proposal to drop it.
+    fireEvent.click(screen.getByLabelText(/TEKS\.4\.3A/));
+    expect((screen.getByLabelText(/TEKS\.4\.3A/) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /make quiz/i }));
+    await waitFor(() => expect(calls.some((c) => c.url.includes('/quizzes/generate'))).toBe(true));
+    const edit = calls.find((c) => c.url.includes('/manage'))!;
+    expect((edit.body as { standard_codes: string[] }).standard_codes).toEqual([]);
   });
 
   it('multi-day → pager switches days and saves both', async () => {
