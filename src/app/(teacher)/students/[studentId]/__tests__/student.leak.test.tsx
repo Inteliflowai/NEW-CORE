@@ -31,6 +31,12 @@ vi.mock('@/lib/signals/loadStudentIdentity', () => ({
   loadStudentIdentity: vi.fn(),
 }));
 
+// The page now also loads a per-student grade trend when a class is in context. Mock it to an
+// empty trend so the page renders the cold-start (no digits) — leaving the leak whitelist intact.
+vi.mock('@/lib/gradebook/loadStudentGradeTrend', () => ({
+  loadStudentGradeTrend: vi.fn().mockResolvedValue({ points: [], direction: null, latest: null, average: null }),
+}));
+
 import { loadStudentSignals } from '@/lib/signals/loadStudentSignals';
 import { loadStudentIdentity } from '@/lib/signals/loadStudentIdentity';
 import type { StudentSignals } from '@/lib/signals/loadStudentSignals';

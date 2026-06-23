@@ -16,6 +16,10 @@ vi.mock('@/lib/supabase/server', () => ({ createAdminSupabaseClient: () => ({}) 
 vi.mock('@/lib/auth/guards', () => ({ guardStudentAccess: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/signals/loadStudentSignals', () => ({ loadStudentSignals: vi.fn() }));
 vi.mock('@/lib/signals/loadStudentIdentity', () => ({ loadStudentIdentity: vi.fn() }));
+// Per-student grade trend loads when a class is in context — mock to an empty trend (cold-start).
+vi.mock('@/lib/gradebook/loadStudentGradeTrend', () => ({
+  loadStudentGradeTrend: vi.fn().mockResolvedValue({ points: [], direction: null, latest: null, average: null }),
+}));
 
 import { loadStudentSignals } from '@/lib/signals/loadStudentSignals';
 import { loadStudentIdentity } from '@/lib/signals/loadStudentIdentity';
