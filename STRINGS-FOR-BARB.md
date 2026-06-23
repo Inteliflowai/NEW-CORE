@@ -516,3 +516,147 @@ DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-mom
 | Subtitle | The coach notices one thing and speaks — then gets out of the way. Same beat, three feelings. |
 | Replay | ↻ Replay the moment |
 | Feeling eyebrows | Delight + momentum · Relief + competence · Reassurance + pride |
+
+## Content Studio
+
+> Note (route error envelopes): the `POST /api/teacher/quizzes/manage` and `POST /api/teacher/lessons/manage` JSON `error` strings (`Unauthorized` / `Forbidden` / `Bad request` / `Unknown action` / `Quiz not found` / `Lesson not found` / `Server error`) are internal/operator-facing only — they are NOT shown to teachers. The client masks them with its own captured copy (the Quiz Library "Write error" string; the lessons/manage archive call is best-effort and surfaces nothing). No Barb gating needed on those envelopes.
+
+### Lesson Library (DRAFT)
+| Key | Draft |
+|---|---|
+| Page title | Lesson Library |
+| Page kicker | Your lessons |
+| Search field label | Search |
+| Search placeholder | Find a lesson |
+| Class filter label (shown when teacher has 2+ classes) | Class |
+| Subject filter label | Subject |
+| Subject filter — all | All subjects |
+| Grade filter label | Grade |
+| Grade filter — all | All grades |
+| Grade option (per value) | Grade {N} |
+| Date filter label | Added |
+| Date filter — all | All time |
+| Date filter — month | This month |
+| Date filter — week | This week |
+| Date filter — today | Today |
+| Section header (subject + grade) | {SUBJECT} · GRADE {N} |
+| Section header (subject only) | {SUBJECT} |
+| Section header (no subject) | OTHER |
+| Status pill — published | Published |
+| Status pill — ready | Ready to review |
+| Status pill — draft | Draft |
+| Row meta (subject·grade) | {Subject} · Grade {N} |
+| Quiz state — one | 1 quiz ready |
+| Quiz state — many | {N} quizzes ready |
+| Quiz state — none | No quiz yet |
+| Row action — view the lesson plan | View lesson |
+| Row action — has quiz | Open quiz |
+| Row action — no quiz | Make a quiz |
+| Cold start — title | No lessons yet |
+| Cold start — body | Upload a lesson and we'll draft a quiz you can review. |
+| Cold start — CTA | Upload a lesson |
+| No-match — title | Nothing matches |
+| No-match — body | Try a different search, subject, grade, or date. |
+
+### Quiz Library (DRAFT)
+| Key | Draft |
+|---|---|
+| Page title | Quiz Library |
+| Page kicker | Your checks |
+| Search field label | Search |
+| Search placeholder | Find a check… |
+| Class filter label (shown when teacher has 2+ classes) | Class |
+| Subject filter label | Subject |
+| Subject filter — all | All subjects |
+| Grade filter label | Grade |
+| Grade filter — all | All grades |
+| Grade option (per value) | Grade {N} |
+| Date filter label | When |
+| Date filter — all | All time |
+| Date filter — month | This month |
+| Date filter — week | This week |
+| Date filter — today | Today |
+| Section header (subject + grade) | {SUBJECT} · GRADE {N} |
+| Section header (no subject) | OTHER |
+| Status pill — published | Published |
+| Status pill — draft | Draft |
+| Row meta — question count (one) | 1 question |
+| Row meta — question count (many) | {N} questions |
+| Row meta — published date | Published {Mon} {D} |
+| Cold start — title | No checks yet |
+| Cold start — body | Upload a lesson and a check is drafted for you. Publish it when it's ready for students. |
+| No-match — body | Nothing matches that. Try a different search. |
+| Edit panel — title | Edit check |
+| Edit panel — published note | Published — students can see it now. |
+| Edit field — title label | Title |
+| Edit field — question label | Question {N} |
+| Edit field — choices prefix | Choices: |
+| Edit field — grading note label | Grading note |
+| Action — save | Save changes |
+| Action — publish | Publish for students |
+| Action — unpublish | Unpublish |
+| Action — archive | Archive |
+| Write error | That didn't save — try again in a moment. |
+
+### Lesson plan viewer (DRAFT — read-only side panel; teacher-only)
+| Key | Draft |
+|---|---|
+| Panel aria-label | Lesson plan — {title} |
+| Close button label | Close |
+| Status pill — published / ready / draft | Published / Ready to review / Draft |
+| Section — summary | Summary |
+| Section — objectives | Learning goals |
+| Section — key concepts | Key ideas |
+| Section — vocabulary | Vocabulary |
+| Section — misconceptions (teacher-only lens) | Watch for these mix-ups |
+| No-plan-yet note (shown for un-parsed AND empty-parse lessons) | There's no lesson plan to show for this lesson yet. Once it's processed, the objectives and key ideas appear here. |
+
+### Upload (orchestrator) (DRAFT)
+| Key | Draft |
+|---|---|
+| Page title | Upload a lesson |
+| Page kicker | Content Studio |
+| Drop zone — heading | Drop a lesson here |
+| Drop zone — body | PDF, Word doc, or text file. We'll draft a quiz from it. |
+| Drop zone — button | Choose a file |
+| Progress pill | Working |
+| Progress — uploading | Uploading your lesson… |
+| Progress — reading | Reading your lesson… |
+| Progress — checking | Checking your library… |
+| Progress — building | Building a quiz… |
+| Idle — title | Start with a lesson |
+| Idle — body | Drop a file above and we'll draft a quiz you can review. |
+| Done — pill | Quiz ready |
+| Done — heading | Lesson added and a quiz is drafted. |
+| Done — body | Review and publish the quiz when it's ready for students. |
+| Done — open quiz | Open the quiz |
+| Done — open quiz (fallback) | Open the Quiz Library |
+| Done — back to lessons | Back to the Lesson Library |
+| Bad type error | Upload a PDF, Word doc, or text file. |
+| Upload error | That didn't go through — try again in a moment. |
+| Read error | We couldn't read that file — try a clearer copy. |
+| Quiz-draft error | The quiz didn't draft — try again — re-drop the file here. |
+| Exact-dup modal — title | You already uploaded this file. |
+| Exact-dup modal — body | This looks like a copy of {Lesson title}. |
+| Exact-dup modal — body (no title) | This looks like a copy of a lesson you already have. |
+| Exact-dup — open it | Open it |
+| Exact-dup — upload anyway | Upload anyway |
+| Fuzzy-dup modal — title | This looks a lot like a lesson you already have. |
+| Fuzzy-dup modal — body | It's close to {Lesson title}. |
+| Fuzzy-dup modal — body (no title) | It's close to an existing lesson. |
+| Fuzzy-dup — use that one | Use that one |
+| Fuzzy-dup — create anyway | Create anyway |
+| Fuzzy-dup — cancel | Cancel |
+| Modal — close | Close |
+
+> Note (4b): the Quiz-draft error no longer points to a "re-generate from the Lesson Library" affordance (which doesn't exist); the accurate recovery is to re-drop the file here. The same string is shown whether quiz-gen fails inline or after "Create anyway".
+
+### Upload route — server messages (DRAFT — `POST /api/teacher/lessons/upload`)
+> Returned in the route's JSON `error`; the Upload UI mostly shows its own strings above, but these are captured so Barb gates every user-facing message.
+| Key | Draft |
+|---|---|
+| Unsupported type | Unsupported file type — upload a PDF, Word doc, or text file. |
+| Too large | That file is too large (15 MB max). |
+| Exact duplicate | You already uploaded this file. |
+| Upload failed | Upload failed — try again. |
+| Save failed | Could not save the lesson. |
