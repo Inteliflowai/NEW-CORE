@@ -168,6 +168,7 @@ export async function POST(req: NextRequest) {
         learning_style: normalizeLearningStyle(style), // C6: normalize at boundary
         content: assignment,
         status: 'draft',
+        assigned_at: new Date().toISOString(), // gradebook v1.1: the day this was assigned (never changes)
         generation_model: OPENAI_GEN_MODEL,
       })
       .select()

@@ -477,6 +477,7 @@ async function main() {
               },
               status: 'published',
               due_at: assignment.due_at,
+              assigned_at: assignment.assigned_at,
               skill_ids: skillId ? [skillId] : [],
               reteach_needed: student.reteachNeeded ?? false,
             });

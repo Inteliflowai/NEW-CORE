@@ -263,6 +263,7 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
             content: assignment.content, // jsonb NOT NULL (C9)
             status: assignment.status,
             due_at: assignment.due_at,
+            assigned_at: assignment.assigned_at,
             reteach_needed: student.reteachNeeded ?? false,
           });
           if (aErr) throw aErr;

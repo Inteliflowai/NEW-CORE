@@ -77,6 +77,7 @@ export interface TrialAssignment {
   mastery_band: MasteryBand | null;
   content: Record<string, unknown>; // jsonb NOT NULL (C9)
   due_at: string;
+  assigned_at: string;
   status: string;
   reteach_needed?: boolean;
 }
@@ -253,6 +254,8 @@ export function buildTrialRows(students: DemoStudent[], ids: TrialIds, now: Date
   ];
   const assignments: TrialAssignment[] = assignmentDefs.map(({ key, offsetDays }) => {
     const due = daysAgo(now, -offsetDays);
+    // Assigned 2 days before due → four distinct assigned-days for the four defs.
+    const assigned = daysAgo(now, -offsetDays + 2);
     return {
       key,
       mastery_band: null,
@@ -262,6 +265,7 @@ export function buildTrialRows(students: DemoStudent[], ids: TrialIds, now: Date
         tasks: TASKS_BY_BAND.grade_level.tasks,
       },
       due_at: isoOf(due),
+      assigned_at: isoOf(assigned),
       status: 'published',
     };
   });
