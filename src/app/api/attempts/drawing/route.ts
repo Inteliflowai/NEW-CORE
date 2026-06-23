@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
   const attemptId = String(form.get('attempt_id') ?? '');
   const step = String(form.get('step') ?? '');
   if (!(file instanceof Blob) || !attemptId || !step) return NextResponse.json({ error: 'Missing file, attempt_id, or step' }, { status: 400 });
+  if (!/^\d+$/.test(step)) return NextResponse.json({ error: 'Bad step' }, { status: 400 });
   const ext = EXT[file.type];
   if (!ext) return NextResponse.json({ error: 'Only PNG, JPEG, or WebP images are allowed.' }, { status: 415 });
   if (file.size > MAX_BYTES) return NextResponse.json({ error: 'That image is too large (max 8 MB).' }, { status: 413 });
@@ -41,8 +42,8 @@ export async function POST(req: NextRequest) {
 
   const path = `${user.id}/${attemptId}/task-${step}-${Date.now()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
-  const { error: upErr } = await admin.storage.from(BUCKET).upload(path, buffer, { contentType: file.type, upsert: true });
-  if (upErr) return NextResponse.json({ error: 'Upload failed — try again.' }, { status: 500 });
+  const { data, error: upErr } = await admin.storage.from(BUCKET).upload(path, buffer, { contentType: file.type, upsert: true });
+  if (upErr || !data) return NextResponse.json({ error: 'Upload failed — try again.' }, { status: 500 });
 
   return NextResponse.json({ image_url: `/api/attempts/drawing?path=${encodeURIComponent(path)}` });
 }
@@ -54,7 +55,11 @@ export async function GET(req: NextRequest) {
 
   const path = new URL(req.url).searchParams.get('path');
   if (!path || path.includes('..')) return NextResponse.json({ error: 'Bad path' }, { status: 400 });
-  const ownerId = path.split('/')[0];
+  // Well-formed key shape: {student_id}/{attempt_id}/{file}. Reject anything shorter so a
+  // bare/owner-less path can't slip past the ownership check below.
+  const segs = path.split('/');
+  if (segs.length < 3 || !segs[0]) return NextResponse.json({ error: 'Bad path' }, { status: 400 });
+  const ownerId = segs[0];
 
   const admin = createAdminSupabaseClient();
   if (user.id !== ownerId) {
@@ -69,8 +74,15 @@ export async function GET(req: NextRequest) {
   const { data, error } = await admin.storage.from(BUCKET).download(path);
   if (error || !data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const bytes = Buffer.from(await data.arrayBuffer());
+  // Serving untrusted student-uploaded bytes: pin the sniffed type + force inline display so the
+  // browser can't be coaxed into treating the payload as a different content type.
   return new NextResponse(bytes, {
     status: 200,
-    headers: { 'Content-Type': contentTypeForPath(path), 'Cache-Control': 'private, max-age=300' },
+    headers: {
+      'Content-Type': contentTypeForPath(path),
+      'Cache-Control': 'private, max-age=300',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Disposition': 'inline',
+    },
   });
 }

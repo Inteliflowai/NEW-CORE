@@ -9,6 +9,7 @@ import { computeMasteryBand } from '@/lib/utils/scoring';
 import { gradeTextToTier } from '@/lib/quiz/gradeTextToTier';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 import { recomputeSkillStatesForStudent } from '@/lib/skills/recomputeSkillStates';
+import { responsesImageUrlsOk } from '@/lib/assignments/imageUrlGuard';
 import type { QuestionAttemptData, SessionAggregates, RawSessionData } from '@/lib/signals/behavioralTypes';
 
 type ResponsesShape = { tasks: Record<string, { text: string; image_url: string | null }> };
@@ -31,6 +32,10 @@ export async function POST(req: Request) {
       .eq('id', body.attempt_id).eq('student_id', user.id).maybeSingle();
     const attempt = attemptRow as { id: string; student_id: string; assignment_id: string; status: string; teli_hint_count: number | null; created_at: string; allow_redo: boolean | null } | null;
     if (!attempt) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
+
+    // Reject any image_url the student didn't legitimately mint via POST /api/attempts/drawing
+    // (must be a proxy link to a path THIS student owns) — before this body's responses are persisted.
+    if (!responsesImageUrlsOk(body.responses, user.id)) return NextResponse.json({ error: 'Invalid image reference' }, { status: 400 });
 
     // Load the one active (or most-recent, now-completed) Teli session for this attempt.
     // The partial-unique index in migration 0016 guarantees at most one ACTIVE session;

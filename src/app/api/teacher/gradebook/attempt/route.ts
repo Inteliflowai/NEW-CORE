@@ -37,7 +37,8 @@ export async function GET(req: NextRequest) {
   const content = normalizeContent(assignment.content);
   const tasks = (content.tasks ?? []).map((t) => ({ step: t.step, description: t.description }));
   const responses = (a.responses as { tasks?: Record<string, { text?: string; image_url?: string | null }> } | null) ?? { tasks: {} };
-  const aiFeedback = (a.ai_feedback as { overall?: string } | null) ?? null;
+  // Project to the declared { overall } wire shape — never ship the per-task `tasks` grade array.
+  const aiFeedback = a.ai_feedback ? { overall: (a.ai_feedback as { overall?: string }).overall } : null;
 
   return NextResponse.json({ tasks, responses, ai_feedback: aiFeedback, status: a.status });
 }

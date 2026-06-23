@@ -5,6 +5,7 @@
 // → object-level ownership guard (student_id match) — RLS is NOT the IDOR backstop.
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
+import { responsesImageUrlsOk } from '@/lib/assignments/imageUrlGuard';
 type ResponsesShape = { tasks: Record<string, { text: string; image_url: string | null }> };
 
 async function owned(admin: ReturnType<typeof createAdminSupabaseClient>, attemptId: string, userId: string) {
@@ -22,6 +23,7 @@ export async function PUT(req: Request) {
   const att = await owned(admin, p.attempt_id, user.id);
   if (!att) return NextResponse.json({ error: 'Attempt not found' }, { status: 404 });
   if (att.status !== 'in_progress') return NextResponse.json({ error: 'Attempt not editable' }, { status: 409 });
+  if (!responsesImageUrlsOk(p.responses, user.id)) return NextResponse.json({ error: 'Invalid image reference' }, { status: 400 });
   const { error } = await admin.from('homework_attempts').update({ responses: p.responses }).eq('id', p.attempt_id).eq('student_id', user.id);
   if (error) return NextResponse.json({ error: 'Save failed' }, { status: 500 });
   return NextResponse.json({ ok: true });

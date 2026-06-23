@@ -105,6 +105,17 @@ describe('POST /api/attempts/homework-submit', () => {
     const res = await (await load())(req({ ...fullBody, responses: { tasks: { '1': { text: '', image_url: null }, '2': { text: '', image_url: null } } } }));
     expect(res.status).toBe(400); expect((await res.json()).error).toBe('incomplete_assignment');
   });
+  it('400 and NO DB write when a task carries a non-proxy (external) image_url', async () => {
+    const res = await (await load())(req({ ...fullBody, responses: { tasks: { '1': { text: 'ok', image_url: 'https://attacker.example/x.gif' }, '2': { text: 'ok', image_url: null } } } }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Invalid image reference');
+    expect(updates).toHaveLength(0);
+  });
+  it('proceeds (200) when image_url is the caller\'s own proxy URL', async () => {
+    const res = await (await load())(req({ ...fullBody, responses: { tasks: { '1': { text: 'ok', image_url: '/api/attempts/drawing?path=u1%2Fatt1%2Ftask-1-1.png' }, '2': { text: 'ok', image_url: null } } } }));
+    expect(res.status).toBe(200);
+    expect(updates.some(u => u.status === 'graded')).toBe(true);
+  });
   it('409 when a graded attempt without allow_redo is resubmitted', async () => { ATTEMPT = { ...(ATTEMPT as object), status: 'graded', allow_redo: false }; expect((await (await load())(req(fullBody))).status).toBe(409); });
   it('409 and NO graded overwrite when a graded attempt WITH allow_redo is resubmitted by id', async () => {
     // A teacher-granted redo leaves allow_redo=true on the OLD graded row. Submitting that

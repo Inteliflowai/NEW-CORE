@@ -5,6 +5,7 @@ import { NextRequest } from 'next/server';
 const getUser = vi.fn();
 const guardStudentAccess = vi.fn();
 const uploads: Array<{ path: string }> = [];
+const downloads: string[] = [];
 let ATTEMPT: unknown; let ROLE: string; let DOWNLOAD: { data: Blob | null; error: unknown };
 
 vi.mock('@/lib/auth/roles', () => ({ STAFF_ROLES: ['teacher', 'school_admin', 'school_sysadmin', 'platform_admin'] as const }));
@@ -17,8 +18,8 @@ vi.mock('@/lib/supabase/server', () => ({
       return { select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: ATTEMPT }) }) }) }) };
     },
     storage: { from: () => ({
-      upload: async (path: string) => { uploads.push({ path }); return { error: null }; },
-      download: async () => DOWNLOAD,
+      upload: async (path: string) => { uploads.push({ path }); return { data: { path }, error: null }; },
+      download: async (path: string) => { downloads.push(path); return DOWNLOAD; },
     }) },
   }),
 }));
@@ -27,7 +28,7 @@ function postReq(form: FormData) { return new NextRequest('http://x/api/attempts
 function getReq(path: string) { return new NextRequest(`http://x/api/attempts/drawing?path=${encodeURIComponent(path)}`); }
 
 beforeEach(() => {
-  getUser.mockReset(); guardStudentAccess.mockReset(); uploads.length = 0;
+  getUser.mockReset(); guardStudentAccess.mockReset(); uploads.length = 0; downloads.length = 0;
   ROLE = 'teacher'; ATTEMPT = { id: 'A1', student_id: 'stu1', status: 'in_progress' };
   DOWNLOAD = { data: new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }), error: null };
   getUser.mockResolvedValue({ data: { user: { id: 'stu1' } }, error: null });
@@ -65,6 +66,18 @@ describe('POST /api/attempts/drawing', () => {
     const { POST } = await import('@/app/api/attempts/drawing/route');
     expect((await POST(postReq(fd({ file: new Blob(['x'], { type: 'application/pdf' }) })))).status).toBe(415);
   });
+  it('413 and NO upload on an oversize image (> 8 MB)', async () => {
+    // Real byte length > 8 MB so the size survives the FormData round-trip in req.formData().
+    const big = new Blob([new Uint8Array(9 * 1024 * 1024)], { type: 'image/png' });
+    const { POST } = await import('@/app/api/attempts/drawing/route');
+    expect((await POST(postReq(fd({ file: big })))).status).toBe(413);
+    expect(uploads).toHaveLength(0);
+  });
+  it('400 on a non-digit step', async () => {
+    const { POST } = await import('@/app/api/attempts/drawing/route');
+    expect((await POST(postReq(fd({ step: 'abc' })))).status).toBe(400);
+    expect(uploads).toHaveLength(0);
+  });
 });
 
 describe('GET /api/attempts/drawing', () => {
@@ -91,5 +104,34 @@ describe('GET /api/attempts/drawing', () => {
     guardStudentAccess.mockResolvedValue(new Response(null, { status: 403 }));
     const { GET } = await import('@/app/api/attempts/drawing/route');
     expect((await GET(getReq('stu1/A1/task-1-1.png'))).status).toBe(403);
+  });
+  it('400 on a traversal path and never reaches the download', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'stu1' } }, error: null });
+    const { GET } = await import('@/app/api/attempts/drawing/route');
+    expect((await GET(getReq('stu1/../x'))).status).toBe(400);
+    expect(downloads).toHaveLength(0);
+  });
+  it('404 when the download returns no data', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'stu1' } }, error: null });
+    DOWNLOAD = { data: null, error: { message: 'x' } };
+    const { GET } = await import('@/app/api/attempts/drawing/route');
+    expect((await GET(getReq('stu1/A1/task-1-1.png'))).status).toBe(404);
+  });
+  it('serves the exact stored bytes', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'stu1' } }, error: null });
+    DOWNLOAD = { data: new Blob([new Uint8Array([7, 8, 9])], { type: 'image/png' }), error: null };
+    const { GET } = await import('@/app/api/attempts/drawing/route');
+    const res = await GET(getReq('stu1/A1/task-1-1.png'));
+    expect(res.status).toBe(200);
+    expect(Array.from(new Uint8Array(await res.arrayBuffer()))).toEqual([7, 8, 9]);
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('content-disposition')).toBe('inline');
+  });
+  it('serves a .jpg path with content-type image/jpeg', async () => {
+    getUser.mockResolvedValue({ data: { user: { id: 'stu1' } }, error: null });
+    const { GET } = await import('@/app/api/attempts/drawing/route');
+    const res = await GET(getReq('stu1/A1/task-1-1.jpg'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toMatch(/image\/jpeg/);
   });
 });
