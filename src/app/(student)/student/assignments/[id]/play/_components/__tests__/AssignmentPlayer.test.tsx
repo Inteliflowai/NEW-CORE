@@ -198,6 +198,91 @@ describe('AssignmentPlayer — image-only answer (Task 6)', () => {
   });
 });
 
+describe('AssignmentPlayer — image-attach autosave (Fix A)', () => {
+  beforeEach(() => {
+    if (typeof window !== 'undefined') window.localStorage.clear();
+  });
+
+  it('persists the image_url to /homework-draft immediately (no timer advance) after a photo file is attached', async () => {
+    // Route fetch by URL: POST /api/attempts/drawing returns the proxy URL;
+    // PUT /api/attempts/homework-draft (and anything else) returns {}. We record
+    // all draft PUT calls to assert immediacy (no fake-timer advance needed).
+    const proxyUrl = '/api/attempts/drawing?path=student1/att-img/task-1-1.png';
+    const fetchMock = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/api/attempts/drawing')) {
+        return Promise.resolve({ ok: true, json: async () => ({ image_url: proxyUrl }) });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <AssignmentPlayer
+        assignmentId="a1"
+        attemptId="att-img"
+        content={content}
+        initialResponses={{ tasks: {} } as ResponsesShape}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
+
+    // The "Add a photo" file input is visible in the tasks phase when no image is set
+    // and the canvas is not open (aria-label="Add a photo" on the hidden <input>).
+    const photoInput = screen.getByLabelText(/add a photo/i);
+    fireEvent.change(photoInput, {
+      target: { files: [new File([new Uint8Array([1, 2, 3])], 'p.png', { type: 'image/png' })] },
+    });
+
+    // persistDraftNow fires immediately after uploadTaskImage resolves — no timer advance.
+    await waitFor(() => {
+      const draftCalls = (fetchMock.mock.calls as unknown[][]).filter(
+        (args) => typeof args[0] === 'string' && (args[0] as string).includes('/api/attempts/homework-draft'),
+      );
+      expect(draftCalls.length).toBeGreaterThan(0);
+      const lastBody = JSON.parse(
+        ((draftCalls[draftCalls.length - 1][1] as unknown as RequestInit).body) as string,
+      );
+      expect(lastBody.responses.tasks['1'].image_url).toBe(proxyUrl);
+    });
+  });
+
+  it('persists image_url = null immediately when the attached photo is removed', async () => {
+    // Start with an existing image_url so the "Remove" button renders right away
+    // in the tasks phase — no upload needed.
+    const proxyUrl = '/api/attempts/drawing?path=existing.png';
+    const fetchMock = vi.fn(() =>
+      Promise.resolve({ ok: true, json: async () => ({}) }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <AssignmentPlayer
+        assignmentId="a1"
+        attemptId="att-img2"
+        content={content}
+        initialResponses={{ tasks: { '1': { text: '', image_url: proxyUrl } } } as ResponsesShape}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /ready to start|start/i }));
+
+    // "Remove" button is rendered by TaskCard when imageUrl is non-null.
+    const removeBtn = screen.getByRole('button', { name: /^remove$/i });
+    fireEvent.click(removeBtn);
+
+    // handleTaskImage(step, null) calls persistDraftNow immediately — no timer advance.
+    await waitFor(() => {
+      const draftCalls = (fetchMock.mock.calls as unknown[][]).filter(
+        (args) => typeof args[0] === 'string' && (args[0] as string).includes('/api/attempts/homework-draft'),
+      );
+      expect(draftCalls.length).toBeGreaterThan(0);
+      const lastBody = JSON.parse(
+        ((draftCalls[draftCalls.length - 1][1] as unknown as RequestInit).body) as string,
+      );
+      expect(lastBody.responses.tasks['1'].image_url).toBeNull();
+    });
+  });
+});
+
 describe('AssignmentPlayer — autosave (8b)', () => {
   beforeEach(() => {
     vi.useFakeTimers();

@@ -225,6 +225,18 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
   }
 
   // ── Autosave (debounced PUT + localStorage mirror) ───────────────────────
+  const persistDraftNow = useCallback((next: ResponsesShape) => {
+    try {
+      window.localStorage.setItem(draftKey(attemptId), JSON.stringify({ responses: next, savedAt: Date.now() }));
+    } catch { /* best-effort */ }
+    void fetch('/api/attempts/homework-draft', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({ attempt_id: attemptId, responses: next }),
+    }).catch(() => {});
+  }, [attemptId]);
+
   const scheduleAutosave = useCallback((next: ResponsesShape) => {
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
@@ -242,8 +254,13 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
     }, AUTOSAVE_DEBOUNCE_MS);
   }, [attemptId]);
 
-  // Flush any pending autosave on unmount.
-  useEffect(() => () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); }, []);
+  // Flush any pending autosave on unmount — fire immediately if a timer is pending.
+  useEffect(() => () => {
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      persistDraftNow(responsesRef.current);
+    }
+  }, [persistDraftNow]);
 
   // ── Response handler ───────────────────────────────────────────────────
   function handleTaskChange(step: number, value: string) {
@@ -265,7 +282,10 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
       const next: ResponsesShape = {
         tasks: { ...prev.tasks, [String(step)]: { text: prev.tasks[String(step)]?.text ?? '', image_url: imageUrl } },
       };
-      scheduleAutosave(next);
+      // Image attach/remove is a single deliberate action with no follow-on keystrokes —
+      // persist immediately (not via the 3s debounce) to avoid losing the image_url if
+      // the user closes the tab before the debounce fires.
+      persistDraftNow(next);
       return next;
     });
   }
