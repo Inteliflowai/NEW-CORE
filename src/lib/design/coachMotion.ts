@@ -56,6 +56,14 @@ export function coachContainerVariants(reduce: boolean, cfg: CoachMotionConfig):
   };
 }
 
+/** Stagger-only orchestrator (no exit) — for in-place staggered reveals (Teli thread, Alerts feed). */
+export function coachStaggerVariants(reduce: boolean, cfg: CoachMotionConfig): Variants {
+  return {
+    hidden: {},
+    show: { transition: reduce ? {} : { staggerChildren: cfg.stagger, delayChildren: 0.04 } },
+  };
+}
+
 /** NOTICE — the coach-mark leans in and squares up. */
 export function coachMarkVariants(reduce: boolean, cfg: CoachMotionConfig): Variants {
   return {

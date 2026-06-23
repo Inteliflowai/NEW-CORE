@@ -4,6 +4,7 @@ import {
   COACH_MOTION,
   coachTransition,
   coachContainerVariants,
+  coachStaggerVariants,
   coachMarkVariants,
   coachRiseVariants,
   coachSparkVariants,
@@ -48,5 +49,13 @@ describe('coachMotion — token-sourced, reduced-motion-aware', () => {
   it('spark snaps under reduced motion', () => {
     const v = coachSparkVariants(true);
     expect((v.show as { transition: { duration: number } }).transition.duration).toBe(0);
+  });
+
+  it('stagger-only variant drops the stagger under reduced motion', () => {
+    const full = coachStaggerVariants(false, COACH_MOTION.student);
+    const reduced = coachStaggerVariants(true, COACH_MOTION.student);
+    expect((full.show as { transition: { staggerChildren: number } }).transition.staggerChildren)
+      .toBe(COACH_MOTION.student.stagger);
+    expect((reduced.show as { transition: object }).transition).toEqual({});
   });
 });
