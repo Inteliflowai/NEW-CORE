@@ -164,6 +164,16 @@ describe('cellTooltipLines', () => {
     );
     expect(lines.join(' ')).toMatch(/not turned in yet/i);
   });
+  it('shows all three dates (Assigned · Due · Turned in) when present', () => {
+    const lines = cellTooltipLines(
+      { assignment_key: 'k', title: 'Fractions', due_at: '2026-06-16T00:00:00Z', assigned_at: '2026-06-14T00:00:00Z' },
+      gradedCell(88),
+    );
+    expect(lines.join(' ')).toMatch(/Assigned Jun 14/);
+    expect(lines.join(' ')).toMatch(/Due Jun 16/);
+    expect(lines.join(' ')).toMatch(/Turned in Jun 9/);
+    for (const l of lines) expect(hasBannedWord(l)).toBe(false);
+  });
 });
 
 describe('GradebookGrid — windowing', () => {

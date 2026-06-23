@@ -318,7 +318,7 @@ A compact legend strip above the grid mapping each status glyph to a leak-guarde
 
 ### Gradebook dates + trend (DRAFT — 2026-06-23)
 - Column header subline: "Assigned {Mon D} · Due {Mon D}" (DRAFT)
-- Cell tooltip lines: "{Assignment name}" / "Turned in {Mon D} (on time|late)" / "Not turned in yet" / "Due {Mon D}" (DRAFT)
+- Cell tooltip lines (timeline: name → Assigned → Due → Turned in): "{Assignment name}" / "Assigned {Mon D}" / "Due {Mon D}" / "Turned in {Mon D} (on time|late)" / "Not turned in yet" (DRAFT)
 - Window control: "Show earlier" / "Show recent only" (DRAFT)
 - Drill-in trend direction: "Climbing over the last few." / "Slipping a little lately." / "Holding steady lately." / "Grades over time" (DRAFT)
 - Drill-in trend cold-start: "Not enough graded work yet to show a trend." (DRAFT)

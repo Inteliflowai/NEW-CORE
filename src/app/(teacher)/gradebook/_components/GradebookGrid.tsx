@@ -38,14 +38,16 @@ export const DEFAULT_VISIBLE_COLS = 12;
 /** Pure, testable tooltip lines for a grade cell (assignment name + dates). Count-bearing prose →
  *  banned-word-free (dates are expected). DRAFT → Barb. */
 export function cellTooltipLines(col: GradebookAssignmentCol, cell: GradebookCell): string[] {
+  // All three dates as a timeline: Assigned → Due → Turned in (Marvin, 2026-06-23).
   const lines: string[] = [col.title];
+  if (col.assigned_at) lines.push(`Assigned ${shortDate(col.assigned_at)}`);
+  if (col.due_at) lines.push(`Due ${shortDate(col.due_at)}`);
   if (cell.submitted_at) {
     const late = cell.submitted_on_time === false;
     lines.push(`Turned in ${shortDate(cell.submitted_at)}${late ? ' (late)' : ' (on time)'}`);
   } else {
     lines.push('Not turned in yet');
   }
-  if (col.due_at) lines.push(`Due ${shortDate(col.due_at)}`);
   return lines;
 }
 
