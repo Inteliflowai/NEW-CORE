@@ -470,3 +470,39 @@ These are teacher-facing context hints (shown in the composer card), derived fro
 | No classes body | Once a class is set up for you, you can recognize students here. |
 | Class unavailable title | That class isn't available |
 | Class unavailable body | Use the class selector to pick one of your classes. |
+
+---
+
+## Signature-Moment (feel prototype — coach NOTICE→SPEAK→INVITE→DEFER, 3 registers)
+
+DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-moment/`). Plain human words; no metric/score/percentile/jargon; growth-framed for student/parent. Barb gates all of it.
+
+### The observation line (one per register)
+| Register | Line |
+|---|---|
+| Student | Nice — your writing's getting sharper. Want to level up your endings next? |
+| Teacher | Leila's cohesion dipped this week. Want a 5-minute reteach you can run tomorrow? |
+| Parent | Maya's reading is really coming along this month. Here's one small way to cheer her on at home. |
+
+### The invitation + the quiet decline
+| Register | Yes | Decline |
+|---|---|---|
+| Student | Show me how | Maybe later |
+| Teacher | Open the reteach | Not now |
+| Parent | Show me the idea | Maybe later |
+
+### The DEFER calm (shown after acting)
+| Register | After "yes" | After decline |
+|---|---|---|
+| Student | Let's go — one ending at a time. | All good — I'll be here. |
+| Teacher | Ready for tomorrow. | Okay — I'll keep an eye on it. |
+| Parent | Here's the idea — small and doable. | No rush — she's doing well. |
+
+### Page chrome
+| Key | Draft |
+|---|---|
+| Eyebrow | CORE · feel prototype |
+| Title | The signature moment |
+| Subtitle | The coach notices one thing and speaks — then gets out of the way. Same beat, three feelings. |
+| Replay | ↻ Replay the moment |
+| Feeling eyebrows | Delight + momentum · Relief + competence · Reassurance + pride |
