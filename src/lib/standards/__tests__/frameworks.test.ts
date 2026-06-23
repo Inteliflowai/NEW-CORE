@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  US_STATES, isUsStateCode, frameworkLabelForState, standardsGuidance,
+  US_STATES, isUsStateCode, frameworkLabelForState, frameworkShortLabelForState, standardsGuidance,
 } from '@/lib/standards/frameworks';
 
 describe('standards/frameworks', () => {
@@ -22,6 +22,13 @@ describe('standards/frameworks', () => {
     expect(frameworkLabelForState('VA')).toMatch(/SOL|Standards of Learning/);
     expect(frameworkLabelForState('CA')).toMatch(/Common Core/);
     expect(frameworkLabelForState(null)).toMatch(/Common Core/); // national reference fallback
+  });
+  it('frameworkShortLabelForState returns concise storage/UI labels', () => {
+    expect(frameworkShortLabelForState('TX')).toBe('TEKS');
+    expect(frameworkShortLabelForState('FL')).toBe('B.E.S.T.');
+    expect(frameworkShortLabelForState('VA')).toBe('SOL');
+    expect(frameworkShortLabelForState('ca')).toBe('Common Core + NGSS'); // case-insensitive default
+    expect(frameworkShortLabelForState(null)).toBe('Common Core + NGSS');
   });
   it('standardsGuidance names the state when known and stays generic when not', () => {
     expect(standardsGuidance('TX')).toMatch(/Texas|TX/);

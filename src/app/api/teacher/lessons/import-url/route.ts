@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
     }).select('id').single();
 
     if (insErr || !lesson) {
-      return respondEngineError(new Error(`Failed to persist imported lesson: ${insErr?.message ?? 'no row'}`));
+      console.error('[teacher/lessons/import-url] persist error:', insErr ?? 'no row returned');
+      return respondEngineError(new Error('Failed to persist imported lesson'));
     }
     return NextResponse.json({ lesson_id: (lesson as { id: string }).id, parsed_content: parsed });
   } catch (err) {

@@ -85,8 +85,20 @@ describe('POST /api/teacher/lessons/manage', () => {
     expect(p.title).toBe('New title');
     expect(p.standard_codes).toEqual(['CCSS.4.NF.1']); // non-strings filtered
     expect(p.standard_framework).toBe('TEKS');
-    expect(p.parsed_content).toEqual({ summary: 's' });
+    // parsed_content is validated through GeneratedLessonSchema — the valid {summary} survives
+    // (with the schema's array defaults filled in).
+    expect(p.parsed_content).toMatchObject({ summary: 's', proposed_standards: [] });
     expect('status' in p).toBe(false); // edit never touches status
+  });
+
+  it('400 + no write when parsed_content fails the lesson-content schema', async () => {
+    const res = await (await load())(req({
+      lesson_id: 'L1', action: 'edit', title: 'New title',
+      parsed_content: { vocabulary: 'nope' }, // wrong shape — vocabulary must be an array
+    }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Invalid lesson content');
+    expect(lessonUpdates).toHaveLength(0); // never wrote
   });
 
   it('edit with nothing to update → 400', async () => {

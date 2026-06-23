@@ -16,6 +16,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { STAFF_ROLES } from '@/lib/auth/roles';
 import { guardClassAccess } from '@/lib/auth/guards';
+import { GeneratedLessonSchema } from '@/lib/engine/types';
 
 type Body = {
   lesson_id?: string;
@@ -59,7 +60,13 @@ export async function POST(req: Request) {
       if (typeof body.title === 'string') patch.title = body.title;
       if ('subject' in body) patch.subject = body.subject ?? null;
       if ('grade_level' in body) patch.grade_level = body.grade_level ?? null;
-      if (body.parsed_content && typeof body.parsed_content === 'object') patch.parsed_content = body.parsed_content;
+      if (body.parsed_content && typeof body.parsed_content === 'object') {
+        // Validate the lesson content against the generated-lesson contract — quizzes/generate
+        // later feeds parsed_content to the LLM, so an unchecked shape is an injection/garbage risk.
+        const v = GeneratedLessonSchema.safeParse(body.parsed_content);
+        if (!v.success) return NextResponse.json({ error: 'Invalid lesson content' }, { status: 400 });
+        patch.parsed_content = v.data;
+      }
       if (Array.isArray(body.standard_codes)) {
         patch.standard_codes = (body.standard_codes as unknown[]).filter((c): c is string => typeof c === 'string');
       }

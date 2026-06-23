@@ -7,6 +7,7 @@ const extractTextFromUrl = vi.fn();
 const parseLesson = vi.fn();
 const lessonInserts: Array<Record<string, unknown>> = [];
 let ROLE: string;
+let LESSON_INSERT_ERROR: unknown; // when set, the lessons insert resolves with this .error + data:null
 
 class UrlFetchError extends Error {}
 
@@ -18,7 +19,9 @@ vi.mock('@/lib/supabase/server', () => ({
   createAdminSupabaseClient: () => ({
     from: (t: string) => {
       if (t === 'users') return { select: () => ({ eq: () => ({ single: async () => ({ data: { role: ROLE } }) }) }) };
-      return { insert: (row: Record<string, unknown>) => { lessonInserts.push(row); return { select: () => ({ single: async () => ({ data: { id: 'L1', ...row }, error: null }) }) }; } };
+      return { insert: (row: Record<string, unknown>) => { lessonInserts.push(row); return { select: () => ({ single: async () => (
+        LESSON_INSERT_ERROR ? { data: null, error: LESSON_INSERT_ERROR } : { data: { id: 'L1', ...row }, error: null }
+      ) }) }; } };
     },
   }),
 }));
@@ -30,7 +33,7 @@ async function load() { return (await import('@/app/api/teacher/lessons/import-u
 
 beforeEach(() => {
   getUser.mockReset(); guardClassAccess.mockReset(); extractTextFromUrl.mockReset(); parseLesson.mockReset();
-  lessonInserts.length = 0; ROLE = 'teacher';
+  lessonInserts.length = 0; ROLE = 'teacher'; LESSON_INSERT_ERROR = null;
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   guardClassAccess.mockResolvedValue(null);
   extractTextFromUrl.mockResolvedValue('A lesson about volcanoes.');
@@ -69,5 +72,18 @@ describe('POST /api/teacher/lessons/import-url', () => {
     const { LlmExhaustedError } = await import('@/lib/ai/errors');
     parseLesson.mockRejectedValue(new LlmExhaustedError('openai'));
     expect((await (await load())(req({ url: 'https://x', class_id: 'c1' }))).status).toBe(503);
+  });
+  it('400 url_fetch on blank extracted text, WITHOUT calling parseLesson', async () => {
+    extractTextFromUrl.mockResolvedValue('   ');
+    const res = await (await load())(req({ url: 'https://x', class_id: 'c1' }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('url_fetch');
+    expect(parseLesson).not.toHaveBeenCalled();
+  });
+  it('500 when the lessons insert fails (fail loud, no raw DB text leaked)', async () => {
+    LESSON_INSERT_ERROR = { message: 'db down' };
+    const res = await (await load())(req({ url: 'https://x', class_id: 'c1' }));
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toMatch(/db down/);
   });
 });

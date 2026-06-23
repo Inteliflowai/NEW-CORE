@@ -8,6 +8,7 @@ const generateLesson = vi.fn();
 const segmentUnit = vi.fn();
 const lessonInserts: Array<Record<string, unknown>[]> = [];
 let ROLE: string; let SCHOOL_STATE: string | null;
+let LESSON_INSERT_ERROR: unknown; // when set, the lessons insert resolves with this .error + data:null
 
 vi.mock('@/lib/auth/guards', () => ({ guardClassAccess }));
 vi.mock('@/lib/engine/lessonGenerate', () => ({
@@ -19,15 +20,19 @@ vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: async () => ({ auth: { getUser } }),
   createAdminSupabaseClient: () => ({
     from: (t: string) => {
-      if (t === 'users') return { select: () => ({ eq: () => ({ single: async () => ({ data: { role: ROLE, school_id: 's1' } }) }) }) };
+      if (t === 'users') return { select: () => ({ eq: () => ({ single: async () => ({ data: { role: ROLE } }) }) }) };
+      // state is now resolved via the CLASS → classes.school_id → schools.state.
+      if (t === 'classes') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { school_id: 's1' } }) }) }) };
       if (t === 'schools') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { state: SCHOOL_STATE } }) }) }) };
       // lessons — insert(rows).select(...) returns the rows with synthetic ids
       return {
         insert: (rows: Record<string, unknown>[]) => {
           lessonInserts.push(rows);
-          return { select: async () => ({
-            data: rows.map((r, i) => ({ id: `L${i + 1}`, ...r })), error: null,
-          }) };
+          return { select: async () => (
+            LESSON_INSERT_ERROR
+              ? { data: null, error: LESSON_INSERT_ERROR }
+              : { data: rows.map((r, i) => ({ id: `L${i + 1}`, ...r })), error: null }
+          ) };
         },
       };
     },
@@ -48,7 +53,7 @@ const oneLesson = {
 
 beforeEach(() => {
   getUser.mockReset(); guardClassAccess.mockReset(); generateLesson.mockReset(); segmentUnit.mockReset();
-  lessonInserts.length = 0; ROLE = 'teacher'; SCHOOL_STATE = 'TX';
+  lessonInserts.length = 0; ROLE = 'teacher'; SCHOOL_STATE = 'TX'; LESSON_INSERT_ERROR = null;
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   guardClassAccess.mockResolvedValue(null);
   generateLesson.mockResolvedValue(oneLesson);
@@ -85,7 +90,7 @@ describe('POST /api/teacher/lessons/generate', () => {
     expect(body.framework).toMatch(/TEKS/);
   });
 
-  it('multi-day → segmentUnit + N lessons with chapter_title + day_index', async () => {
+  it('multi-day → segmentUnit + N lessons with chapter_title + day_index, each day generated from its own segment', async () => {
     segmentUnit.mockResolvedValue({ unit_title: 'Ecosystems', days: [
       { day: 1, title: 'A', focus: 'fa' }, { day: 2, title: 'B', focus: 'fb' },
     ] });
@@ -93,6 +98,13 @@ describe('POST /api/teacher/lessons/generate', () => {
     expect(res.status).toBe(200);
     expect(segmentUnit).toHaveBeenCalledOnce();
     expect(generateLesson).toHaveBeenCalledTimes(2);
+    // Each day is driven by its own segment (title + focus), NOT the whole-unit description.
+    expect(generateLesson).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      description: 'Ecosystems — Day 1: A. fa', focus: 'fa',
+    }));
+    expect(generateLesson).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      description: 'Ecosystems — Day 2: B. fb', focus: 'fb',
+    }));
     const rows = lessonInserts[0];
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.chapter_title === 'Ecosystems')).toBe(true);
@@ -100,6 +112,24 @@ describe('POST /api/teacher/lessons/generate', () => {
     const body = await res.json();
     expect(body.chapter_title).toBe('Ecosystems');
     expect(body.days.map((d: { day_index: number }) => d.day_index)).toEqual([1, 2]);
+  });
+
+  it('normalizes day_index to 1..N even when segmentUnit returns out-of-order/duplicated days', async () => {
+    segmentUnit.mockResolvedValue({ unit_title: 'Ecosystems', days: [
+      { day: 2, title: 'A', focus: 'fa' }, { day: 2, title: 'B', focus: 'fb' },
+    ] });
+    const res = await (await load())(req({ description: 'Ecosystems unit', class_id: 'c1', num_days: 2 }));
+    expect(res.status).toBe(200);
+    const rows = lessonInserts[0];
+    expect(rows.map((r) => r.day_index)).toEqual([1, 2]); // position-based, NOT the model's d.day
+  });
+
+  it('500 when the lessons insert fails (fail loud, no raw DB text leaked)', async () => {
+    LESSON_INSERT_ERROR = { message: 'db down' };
+    const res = await (await load())(req({ description: 'x', class_id: 'c1' }));
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(JSON.stringify(body)).not.toMatch(/db down/); // generic message only
   });
 
   it('body.state overrides the school state for the framework', async () => {

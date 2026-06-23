@@ -49,6 +49,23 @@ export function frameworkLabelForState(state: string | null | undefined): string
   return DEFAULT_FRAMEWORK;
 }
 
+// Concise labels for the named-standard states — stored in lessons.standard_framework and
+// shown verbatim in the UI legend (e.g. "Standards · TEKS"). The prose label above stays for
+// the prompt guidance only.
+const NAMED_STATE_SHORT_LABELS: Record<string, string> = {
+  TX: 'TEKS',
+  FL: 'B.E.S.T.',
+  VA: 'SOL',
+};
+
+const DEFAULT_SHORT_LABEL = 'Common Core + NGSS';
+
+/** A short framework label for storage + the UI legend. Unknown/null → 'Common Core + NGSS'. */
+export function frameworkShortLabelForState(state: string | null | undefined): string {
+  if (isUsStateCode(state)) return NAMED_STATE_SHORT_LABELS[state.toUpperCase()] ?? DEFAULT_SHORT_LABEL;
+  return DEFAULT_SHORT_LABEL;
+}
+
 /** A prompt directive telling the model which standards to align to and to propose codes from. */
 export function standardsGuidance(state: string | null | undefined): string {
   const label = frameworkLabelForState(state);

@@ -93,4 +93,16 @@ describe('lessonGenerate', () => {
     await expect(segmentUnit({ description: 'x', numDays: 1 })).rejects.toThrow();
     expect(mockChat).not.toHaveBeenCalled();
   });
+
+  it('segmentUnit throws LlmExhaustedError on null completion', async () => {
+    mockChat.mockResolvedValue(null);
+    const { segmentUnit } = await import('@/lib/engine/lessonGenerate');
+    await expect(segmentUnit({ description: 'x', numDays: 2 })).rejects.toBeInstanceOf(LlmExhaustedError);
+  });
+
+  it('segmentUnit throws LlmExhaustedError on empty content (no hollow unit)', async () => {
+    mockChat.mockResolvedValue({ choices: [{ message: { content: '' } }] });
+    const { segmentUnit } = await import('@/lib/engine/lessonGenerate');
+    await expect(segmentUnit({ description: 'x', numDays: 2 })).rejects.toBeInstanceOf(LlmExhaustedError);
+  });
 });

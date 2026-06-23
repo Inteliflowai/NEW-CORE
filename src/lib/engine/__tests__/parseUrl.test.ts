@@ -43,4 +43,36 @@ describe('extractTextFromUrl', () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error('network')) as unknown as typeof fetch;
     await expect(extractTextFromUrl('https://example.com/x')).rejects.toBeInstanceOf(UrlFetchError);
   });
+
+  it('does NOT follow a 302 redirect to a blocked (metadata) host', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(null, { status: 302, headers: { location: 'http://169.254.169.254/latest/meta-data/' } }),
+    ) as unknown as typeof fetch;
+    await expect(extractTextFromUrl('https://example.com/r')).rejects.toBeInstanceOf(UrlFetchError);
+  });
+
+  it('follows a 302 redirect to an allowed host and returns its body', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: 'https://example.com/final' } }))
+      .mockResolvedValueOnce(new Response('<html><body><p>Redirected content</p></body></html>', { status: 200 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    const text = await extractTextFromUrl('https://example.com/start');
+    expect(text).toContain('Redirected content');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects numeric-IP encodings of loopback/metadata (decimal/hex/IPv4-mapped IPv6)', async () => {
+    await expect(extractTextFromUrl('http://2130706433/x')).rejects.toBeInstanceOf(UrlFetchError); // 127.0.0.1 decimal
+    await expect(extractTextFromUrl('http://0x7f000001/x')).rejects.toBeInstanceOf(UrlFetchError); // 127.0.0.1 hex
+    await expect(extractTextFromUrl('http://[::ffff:169.254.169.254]/x')).rejects.toBeInstanceOf(UrlFetchError); // mapped metadata
+  });
+
+  it('throws UrlFetchError when more than 3 redirects are followed', async () => {
+    // Every hop returns a 302 to a fresh allowed host → the cap (3) is exceeded.
+    let n = 0;
+    globalThis.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response(null, { status: 302, headers: { location: `https://example.com/hop${++n}` } })),
+    ) as unknown as typeof fetch;
+    await expect(extractTextFromUrl('https://example.com/start')).rejects.toBeInstanceOf(UrlFetchError);
+  });
 });

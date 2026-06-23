@@ -9,7 +9,7 @@ import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/sup
 import { guardClassAccess } from '@/lib/auth/guards';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 import { generateLesson, segmentUnit, resolveNumDays } from '@/lib/engine/lessonGenerate';
-import { standardsGuidance, frameworkLabelForState, isUsStateCode } from '@/lib/standards/frameworks';
+import { standardsGuidance, frameworkShortLabelForState, isUsStateCode } from '@/lib/standards/frameworks';
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'school_sysadmin', 'platform_admin']);
 
@@ -20,10 +20,9 @@ export async function POST(req: NextRequest) {
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const admin = createAdminSupabaseClient();
-    const { data: profile } = await admin.from('users').select('role, school_id').eq('id', user.id).single();
+    const { data: profile } = await admin.from('users').select('role').eq('id', user.id).single();
     const role: string | null = (profile as { role?: string } | null)?.role ?? null;
     if (!role || !TEACHER_ROLES.has(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    const schoolId = (profile as { school_id?: string | null } | null)?.school_id ?? null;
 
     const body = (await req.json().catch(() => null)) as
       | { description?: string; class_id?: string; subject?: string; grade_level?: string; num_days?: number; state?: string }
@@ -35,14 +34,20 @@ export async function POST(req: NextRequest) {
     const guard = await guardClassAccess(classId);
     if (guard) return guard;
 
-    // Resolve the standards state: body override → school's stored state → null (degrades gracefully).
+    // Resolve the standards state from the CLASS being written to (NOT the acting user) — a
+    // platform_admin/cross-school author may write to a class in a different school than their own.
+    // body.state override → class.school_id → schools.state → null (degrades gracefully).
     let state: string | null = isUsStateCode(body?.state) ? (body!.state as string).toUpperCase() : null;
-    if (!state && schoolId) {
-      const { data: school } = await admin.from('schools').select('state').eq('id', schoolId).maybeSingle();
-      const s = (school as { state?: string | null } | null)?.state ?? null;
-      state = isUsStateCode(s) ? s!.toUpperCase() : null;
+    if (!state) {
+      const { data: klass } = await admin.from('classes').select('school_id').eq('id', classId).maybeSingle();
+      const classSchoolId = (klass as { school_id?: string | null } | null)?.school_id ?? null;
+      if (classSchoolId) {
+        const { data: school } = await admin.from('schools').select('state').eq('id', classSchoolId).maybeSingle();
+        const s = (school as { state?: string | null } | null)?.state ?? null;
+        state = isUsStateCode(s) ? s!.toUpperCase() : null;
+      }
     }
-    const framework = frameworkLabelForState(state);
+    const framework = frameworkShortLabelForState(state);
     const guidance = standardsGuidance(state);
 
     const subject = body?.subject ?? null;
@@ -58,10 +63,19 @@ export async function POST(req: NextRequest) {
     } else {
       const seg = await segmentUnit({ description, numDays, subject, grade_level: gradeLevel });
       chapterTitle = seg.unit_title;
-      const lessons = await Promise.all(seg.days.map((d) =>
-        generateLesson({ description, focus: d.focus, subject, grade_level: gradeLevel, standardsGuidance: guidance }),
+      // Drive EACH day's generation by its own segment (title + focus) — NOT the whole-unit
+      // description — so days don't overlap. Normalize day_index to the array position (i+1),
+      // never the model-supplied d.day, so persisted day_index is always a clean 1..N sequence.
+      const lessons = await Promise.all(seg.days.map((d, i) =>
+        generateLesson({
+          description: `${seg.unit_title} — Day ${i + 1}: ${d.title}. ${d.focus}`,
+          focus: d.focus,
+          subject,
+          grade_level: gradeLevel,
+          standardsGuidance: guidance,
+        }),
       ));
-      generated = seg.days.map((d, i) => ({ dayIndex: d.day, lesson: lessons[i] }));
+      generated = seg.days.map((d, i) => ({ dayIndex: i + 1, lesson: lessons[i] }));
     }
 
     // Persist all rows in one insert; return the inserted ids + content for the review surface.
@@ -84,7 +98,8 @@ export async function POST(req: NextRequest) {
       .insert(rows)
       .select('id, day_index, title, subject, grade_level, parsed_content, standard_framework');
     if (insErr || !inserted) {
-      return respondEngineError(new Error(`Failed to persist generated lessons: ${insErr?.message ?? 'no rows'}`));
+      console.error('[teacher/lessons/generate] persist error:', insErr ?? 'no rows returned');
+      return respondEngineError(new Error('Failed to persist generated lessons'));
     }
 
     const days = (inserted as Array<Record<string, unknown>>)
