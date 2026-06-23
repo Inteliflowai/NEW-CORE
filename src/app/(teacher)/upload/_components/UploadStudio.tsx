@@ -24,11 +24,13 @@
  * (STRINGS-FOR-BARB.md §Content Studio).
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/core/EmptyState';
 import { SectionLabel } from '../../_components/SectionLabel';
 import { detectDuplicates, type LessonRowLite } from '@/lib/lessons/duplicateDetect';
+import { DupModal } from './DupModal';
+import { readErrorMessage } from './errorMessage';
 
 /** A teacher's existing lesson, trimmed to what the fuzzy check needs (concept_tags from
  *  parsed_content.key_concepts). Supplied by the server page (archived excluded). */
@@ -77,9 +79,6 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
-  // Result links shown on the done state.
-  const [quizId, setQuizId] = useState<string | null>(null);
-
   // Modal state — exact (server 409) + fuzzy (detectDuplicates) dups.
   const [exactDup, setExactDup] = useState<ExactDup | null>(null);
   const [fuzzyMatch, setFuzzyMatch] = useState<LessonRowLite | null>(null);
@@ -97,7 +96,6 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
     setError(null);
     setExactDup(null);
     setFuzzyMatch(null);
-    setQuizId(null);
   }
 
   // ── Step 1: upload (multipart). force re-POSTs past an exact dup. ──────────
@@ -123,8 +121,8 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
       return;
     }
     if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      fail(body?.error ?? "That didn't go through — try again in a moment.");
+      const body = await res.json().catch(() => null);
+      fail(readErrorMessage(body, "That didn't go through — try again in a moment."));
       return;
     }
 
@@ -143,7 +141,8 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
       body: JSON.stringify({ lesson_id: lessonId }),
     });
     if (!res.ok) {
-      fail("We couldn't read that file — try a clearer copy.");
+      const errBody = await res.json().catch(() => null);
+      fail(readErrorMessage(errBody, "We couldn't read that file — try a clearer copy."));
       return;
     }
     const body = (await res.json()) as {
@@ -175,11 +174,10 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
       body: JSON.stringify({ lesson_id: lessonId }),
     });
     if (!res.ok) {
-      fail("The quiz didn't draft — try again — re-drop the file here.");
+      const errBody = await res.json().catch(() => null);
+      fail(readErrorMessage(errBody, "The quiz didn't draft — try again — re-drop the file here."));
       return;
     }
-    const body = (await res.json()) as { quiz_id?: string };
-    setQuizId(body.quiz_id ?? null);
     setPhase('done');
   }
 
@@ -323,7 +321,7 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
               href={quizzesHref}
               className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker"
             >
-              {quizId ? 'Open the quiz' : 'Open the Quiz Library'}
+              Open the Quiz Library
             </Link>
             <Link
               href={lessonsHref}
@@ -402,73 +400,6 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
         />
       )}
     </div>
-  );
-}
-
-const FOCUSABLE = 'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])';
-
-interface DupModalProps {
-  testId: string;
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}
-
-/** A small centered modal mirroring the gradebook drill-in a11y pattern: role="dialog", focus
- *  trap, Escape-to-close, click-scrim-to-close, focus restoration to the trigger. */
-function DupModal({ testId, title, onClose, children }: DupModalProps): React.JSX.Element {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    triggerRef.current = (document.activeElement as HTMLElement) ?? null;
-    closeRef.current?.focus();
-    return () => { triggerRef.current?.focus?.(); };
-  }, []);
-
-  function onKeyDown(e: React.KeyboardEvent<HTMLElement>) {
-    if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
-    if (e.key === 'Tab') {
-      const root = panelRef.current;
-      if (!root) return;
-      const nodes = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((n) => !n.hasAttribute('disabled'));
-      if (nodes.length === 0) return;
-      const first = nodes[0];
-      const last = nodes[nodes.length - 1];
-      const active = document.activeElement as HTMLElement | null;
-      if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
-    }
-  }
-
-  return (
-    <>
-      <div aria-hidden="true" onClick={onClose} className="fixed inset-0 z-20 bg-fg/30" />
-      <div
-        ref={panelRef}
-        data-testid={testId}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onKeyDown={onKeyDown}
-        className="fixed left-1/2 top-1/2 z-30 flex w-full max-w-md -translate-x-1/2 -translate-y-1/2 flex-col gap-4 rounded-lg border-2 border-sidebar-edge bg-surface p-5 shadow-sticker-lg"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <h2 className="font-display text-base font-extrabold text-fg">{title}</h2>
-          <button
-            type="button"
-            ref={closeRef}
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-md border-2 border-sidebar-edge px-2 py-1 text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-          >
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </>
   );
 }
 

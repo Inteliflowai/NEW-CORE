@@ -73,6 +73,8 @@ export function LessonViewPanel({ lesson, onClose }: LessonViewPanelProps): Reac
   const vocab = plan?.vocabulary ?? [];
   const misconceptions = plan?.misconception_risks ?? [];
   const summary = plan?.summary?.trim() ?? '';
+  // Teacher-confirmed standards — TEACHER-ONLY (codes/framework are never shown to students/parents).
+  const standardCodes = lesson.standard_codes ?? [];
   // ParsedLessonSchema defaults every field, so a valid-but-empty object ({}) parses non-null;
   // treat "no displayable content" the same as "no plan" so we never show an empty-bodied dialog.
   const hasPlan =
@@ -157,6 +159,19 @@ export function LessonViewPanel({ lesson, onClose }: LessonViewPanelProps): Reac
           <Section title="Watch for these mix-ups">
             <ul className="flex list-disc flex-col gap-1 pl-5 text-fg text-sm">
               {misconceptions.map((m, i) => (<li key={i}>{m}</li>))}
+            </ul>
+          </Section>
+        )}
+
+        {standardCodes.length > 0 && (
+          <Section title="Standards">
+            {lesson.standard_framework && (
+              <p className="text-fg text-xs">{lesson.standard_framework}</p>
+            )}
+            <ul className="flex flex-wrap gap-2">
+              {standardCodes.map((code, i) => (
+                <li key={i} className="rounded-md border-2 border-sidebar-edge bg-bg px-2 py-0.5 text-fg text-xs font-bold">{code}</li>
+              ))}
             </ul>
           </Section>
         )}

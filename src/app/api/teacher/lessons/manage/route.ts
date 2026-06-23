@@ -16,12 +16,19 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { STAFF_ROLES } from '@/lib/auth/roles';
 import { guardClassAccess } from '@/lib/auth/guards';
+import { GeneratedLessonSchema } from '@/lib/engine/types';
 
 type Body = {
   lesson_id?: string;
-  action?: 'archive';
+  action?: 'archive' | 'edit';
+  title?: string;
+  subject?: string | null;
+  grade_level?: string | null;
+  parsed_content?: unknown;
+  standard_codes?: unknown;
+  standard_framework?: string | null;
 };
-const ACTIONS = new Set(['archive']);
+const ACTIONS = new Set(['archive', 'edit']);
 
 export async function POST(req: Request) {
   try {
@@ -47,6 +54,29 @@ export async function POST(req: Request) {
 
     const guard = await guardClassAccess(lesson.class_id ?? '');
     if (guard) return guard;
+
+    if (body.action === 'edit') {
+      const patch: Record<string, unknown> = {};
+      if (typeof body.title === 'string') patch.title = body.title;
+      if ('subject' in body) patch.subject = body.subject ?? null;
+      if ('grade_level' in body) patch.grade_level = body.grade_level ?? null;
+      if (body.parsed_content && typeof body.parsed_content === 'object') {
+        // Validate the lesson content against the generated-lesson contract — quizzes/generate
+        // later feeds parsed_content to the LLM, so an unchecked shape is an injection/garbage risk.
+        const v = GeneratedLessonSchema.safeParse(body.parsed_content);
+        if (!v.success) return NextResponse.json({ error: 'Invalid lesson content' }, { status: 400 });
+        patch.parsed_content = v.data;
+      }
+      if (Array.isArray(body.standard_codes)) {
+        patch.standard_codes = (body.standard_codes as unknown[]).filter((c): c is string => typeof c === 'string');
+      }
+      if ('standard_framework' in body) patch.standard_framework = body.standard_framework ?? null;
+      if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+
+      const { error } = await admin.from('lessons').update(patch).eq('id', lesson.id);
+      if (error) return NextResponse.json({ error: 'Server error' }, { status: 500 });
+      return NextResponse.json({ ok: true, lesson_id: lesson.id, status: lesson.status });
+    }
 
     // archive — soft delete.
     const { error } = await admin.from('lessons').update({ status: 'archived' }).eq('id', lesson.id);

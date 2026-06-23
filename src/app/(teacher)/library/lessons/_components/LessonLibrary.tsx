@@ -46,6 +46,10 @@ function LessonRow({ lesson, classId, onView }: { lesson: LessonLibRow; classId:
   const meta = [lesson.subject, lesson.grade_level ? `Grade ${lesson.grade_level}` : null]
     .filter(Boolean)
     .join(' · ');
+  // Light unit grouping — surface the unit + day position when the lesson belongs to a unit.
+  const unitMeta = lesson.chapter_title
+    ? `Unit: ${lesson.chapter_title}${lesson.day_index != null ? ` · Day ${lesson.day_index}` : ''}`
+    : null;
   const hasQuiz = lesson.quiz_count > 0;
   const quizHref = `/library/quizzes?class=${encodeURIComponent(classId)}`;
   return (
@@ -56,6 +60,7 @@ function LessonRow({ lesson, classId, onView }: { lesson: LessonLibRow; classId:
           <SectionLabel tone={pill.tone}>{pill.label}</SectionLabel>
         </div>
         {meta && <p className="text-fg text-xs">{meta}</p>}
+        {unitMeta && <p className="text-fg text-xs">{unitMeta}</p>}
         <p className="text-fg text-xs">
           {hasQuiz ? (lesson.quiz_count === 1 ? '1 quiz ready' : `${lesson.quiz_count} quizzes ready`) : 'No quiz yet'}
         </p>
@@ -113,7 +118,20 @@ export function LessonLibrary({
     });
   }, [data.lessons, query, bucket, subject, grade, clock]);
 
-  const groups = useMemo(() => groupByCategory(filtered), [filtered]);
+  // Within a Subject · Grade group, order unit lessons by their day position (lessons not in a unit
+  // keep the loader's newest-first order). Light grouping only — no new grouped layout.
+  const groups = useMemo(() => {
+    return groupByCategory(filtered).map((group) => ({
+      ...group,
+      items: [...group.items].sort((a, b) => {
+        // Only reorder when BOTH belong to the SAME unit; otherwise preserve the incoming order.
+        if (a.chapter_title && b.chapter_title && a.chapter_title === b.chapter_title) {
+          return (a.day_index ?? 0) - (b.day_index ?? 0);
+        }
+        return 0;
+      }),
+    }));
+  }, [filtered]);
   const selected = selectedId ? data.lessons.find((l) => l.id === selectedId) ?? null : null;
 
   const uploadHref = `/upload?class=${encodeURIComponent(data.class_id)}`;

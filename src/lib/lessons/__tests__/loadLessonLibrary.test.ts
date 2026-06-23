@@ -79,4 +79,25 @@ describe('loadLessonLibrary', () => {
     expect(byId['L3'].parsed_content).toBeNull(); // non-object
     expect(byId['L4'].parsed_content).toBeNull(); // object that fails ParsedLessonSchema.safeParse
   });
+
+  it('exposes confirmed standards (codes + framework) and unit/day, defaulting missing values safely', async () => {
+    LESSONS = [
+      { id: 'L1', title: 'Day 1', subject: 'Math', grade_level: '4', status: 'draft', created_at: '2026-06-12T00:00:00Z',
+        parsed_content: null, standard_codes: ['TEKS.4.3A', 'TEKS.4.3B'], standard_framework: 'TEKS', chapter_title: 'Fractions Unit', day_index: 1 },
+      // Missing/absent fields default safely: codes → [], framework/chapter → null, day_index → null.
+      { id: 'L2', title: 'Standalone', subject: null, grade_level: null, status: 'draft', created_at: '2026-06-10T00:00:00Z',
+        parsed_content: null, standard_codes: null, standard_framework: null, chapter_title: null, day_index: null },
+    ];
+    QUIZZES = [];
+    const lib = await loadLessonLibrary(admin, { classId: 'c1' });
+    const byId = Object.fromEntries(lib.lessons.map((l) => [l.id, l]));
+    expect(byId['L1'].standard_codes).toEqual(['TEKS.4.3A', 'TEKS.4.3B']);
+    expect(byId['L1'].standard_framework).toBe('TEKS');
+    expect(byId['L1'].chapter_title).toBe('Fractions Unit');
+    expect(byId['L1'].day_index).toBe(1);
+    expect(byId['L2'].standard_codes).toEqual([]);
+    expect(byId['L2'].standard_framework).toBeNull();
+    expect(byId['L2'].chapter_title).toBeNull();
+    expect(byId['L2'].day_index).toBeNull();
+  });
 });

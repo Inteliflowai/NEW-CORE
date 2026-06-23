@@ -660,3 +660,76 @@ DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-mom
 | Exact duplicate | You already uploaded this file. |
 | Upload failed | Upload failed — try again. |
 | Save failed | Could not save the lesson. |
+
+### Content Studio — Seg 2: Generate with AI + URL import (DRAFT, Barb sign-off required)
+
+Seg 2 turns the single Upload page into a 3-tab Content Studio. New/changed user-facing strings:
+
+| Key | Draft |
+|---|---|
+| Page title (was "Upload a lesson") | Content Studio |
+| Page kicker (was "Content Studio") | Create a lesson |
+| Tab 1 | Upload a file |
+| Tab 2 | From a URL |
+| Tab 3 | Generate with AI |
+
+**From a URL tab**
+| Key | Draft |
+|---|---|
+| Field heading | Paste a link |
+| Field hint | A public web page or a shared Google Doc ("Anyone with the link"). We'll read it and draft a quiz. |
+| Input accessible label | Link or web address |
+| Button | Import |
+| Progress — reading | Reading that link… |
+| Progress — checking | Checking your library… |
+| Progress — building | Building a quiz… |
+| Error — not a URL | That doesn't look like a web address. |
+| Error — bad protocol | Only http and https links are supported. |
+| Error — blocked host | We can't open that link. |
+| Error — unreachable | We couldn't reach that link. |
+| Error — not ok / no text | We couldn't open that link. / No readable text at that link. |
+| Error — generic import | That didn't import — check the link and try again. |
+| Done — title | Lesson imported and a quiz is drafted. |
+| Done — body | Review and publish the quiz when it's ready for students. |
+
+**Generate with AI tab**
+| Key | Draft |
+|---|---|
+| Description field | What should this lesson teach? |
+| Description placeholder | e.g. A 7th-grade intro to photosynthesis: inputs, outputs, and why it matters. |
+| Subject label | Subject (optional) |
+| Grade label | Grade (optional) |
+| Days label | Days |
+| State label | State (optional — suggests standards) |
+| State — none option | No state |
+| Button | Generate |
+| Progress — single | Writing your lesson… |
+| Progress — unit | Writing your unit… |
+| Error | That didn't work — give it another try in a moment. |
+
+**Review & edit surface (after generate)**
+| Key | Draft |
+|---|---|
+| Unit label (multi-day) | Unit |
+| Day pager button | Day {N} |
+| Title field | Title |
+| Subject / Grade fields | Subject / Grade |
+| Passage field | Lesson passage |
+| Goals field | Learning goals (one per line) |
+| Key ideas field | Key ideas (one per line) |
+| Vocabulary field | Vocabulary (term: definition, one per line) |
+| Misconceptions field | Watch for these mix-ups (one per line) |
+| Standards group | Standards · {framework} |
+| Standards — none | No standards were proposed for this lesson. You can publish without them. |
+| Save button — single | Save & make quiz |
+| Save button — unit | Save unit & make quizzes |
+| Progress — save single | Saving your lesson… |
+| Progress — save day | Saving day {i} of {N}… |
+| Progress — build single | Building a quiz… |
+| Progress — build day | Building quiz {i} of {N}… |
+| Done — single | Lesson saved and a quiz is drafted. |
+| Done — unit | {N} lessons saved, each with a quiz drafted. |
+| Done — body | Review and publish each quiz when it's ready for students. |
+| Error — save/build | That didn't finish — give it another try in a moment. |
+
+Note: "standards" here is teacher-only metadata (codes + framework label). It never appears on any student/parent surface.

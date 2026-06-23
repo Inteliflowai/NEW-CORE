@@ -1057,3 +1057,63 @@ Pedagogical lock: Spark is enrichment. Total student work = N homework tasks
 LESSON CONTENT:
 ${lessonSummary}`;
 }
+
+// ---- 6. LESSON GENERATION (Seg 2) ----
+
+export const LESSON_GENERATE_SYSTEM =
+  'You are an expert K-12 curriculum designer. Write one complete, classroom-ready lesson from ' +
+  "the teacher's description. Return ONLY valid JSON. No markdown, no explanation, no preamble.";
+
+export function lessonGeneratePrompt(input: {
+  description: string;
+  subject?: string | null;
+  grade_level?: string | null;
+  focus?: string | null;
+  standardsGuidance?: string | null;
+}): string {
+  const hints = [
+    input.subject ? `Subject: ${input.subject}.` : '',
+    input.grade_level ? `Grade level: ${input.grade_level}.` : '',
+    input.focus ? `This lesson is one day of a larger unit. Focus it on: ${input.focus}` : '',
+  ].filter(Boolean).join(' ');
+
+  return [
+    `Write a lesson for this description:\n"""${input.description}"""`,
+    hints,
+    input.standardsGuidance ?? '',
+    'Return a JSON object with these fields:',
+    '- "title": a short lesson title.',
+    '- "summary": a 200-400 word teaching passage written for the stated grade level (the core reading the teacher would deliver).',
+    '- "objectives": 2-5 measurable learning objectives.',
+    '- "key_concepts": 4-8 key concepts (short phrases).',
+    '- "vocabulary": 5-10 items, each {"term","definition"}.',
+    '- "misconception_risks": 2-4 likely student misconceptions.',
+    '- "grade_level": the grade level (echo the hint if given, else infer).',
+    '- "subject": the subject (echo the hint if given, else infer).',
+    '- "proposed_standards": an array of {"code","description"} (may be empty).',
+    'Write plain, grade-appropriate language. Do not reference external materials not included in the summary.',
+  ].filter(Boolean).join('\n');
+}
+
+export const UNIT_SEGMENT_SYSTEM =
+  'You are an expert curriculum planner. Split a multi-day unit into a coherent day-by-day ' +
+  'sequence. Return ONLY valid JSON. No markdown, no preamble.';
+
+export function unitSegmentPrompt(input: {
+  description: string;
+  numDays: number;
+  subject?: string | null;
+  grade_level?: string | null;
+}): string {
+  const hints = [
+    input.subject ? `Subject: ${input.subject}.` : '',
+    input.grade_level ? `Grade level: ${input.grade_level}.` : '',
+  ].filter(Boolean).join(' ');
+  return [
+    `Split this unit into EXACTLY ${input.numDays} days:\n"""${input.description}"""`,
+    hints,
+    'Return a JSON object: {"unit_title": string, "days": [{"day": number, "title": string, "focus": string}]}.',
+    `The "days" array MUST have exactly ${input.numDays} entries, numbered 1..${input.numDays}.`,
+    'Each "focus" is 1-2 sentences specific enough to write a full lesson from. Order days so they build on each other.',
+  ].filter(Boolean).join('\n');
+}

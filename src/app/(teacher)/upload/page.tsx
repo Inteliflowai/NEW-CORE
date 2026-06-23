@@ -15,7 +15,8 @@ import { guardClassAccess } from '@/lib/auth/guards';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { EmptyState } from '@/components/core/EmptyState';
 import { PageHeader } from '../_components/PageHeader';
-import { UploadStudio, type UploadLessonLite } from './_components/UploadStudio';
+import { ContentStudioTabs } from './_components/ContentStudioTabs';
+import type { UploadLessonLite } from './_components/UploadStudio';
 
 const NO_CLASSES = (
   <EmptyState variant="just-getting-started" titleOverride="No classes yet"
@@ -66,10 +67,20 @@ export default async function UploadPage({
     return { id: l.id, title: l.title, concept_tags, status: l.status ?? 'draft' };
   });
 
+  // School state (for the Generate tab's standards suggestions). Resolved class → school; null when
+  // unset (most schools today) — the standards step then degrades to optional.
+  let schoolState: string | null = null;
+  const { data: classRow } = await admin.from('classes').select('school_id').eq('id', classId).maybeSingle();
+  const schoolId = (classRow as { school_id?: string | null } | null)?.school_id ?? null;
+  if (schoolId) {
+    const { data: school } = await admin.from('schools').select('state').eq('id', schoolId).maybeSingle();
+    schoolState = (school as { state?: string | null } | null)?.state ?? null;
+  }
+
   return (
     <div className="p-5 flex flex-col gap-5">
-      <PageHeader title="Upload a lesson" kicker="Content Studio" accent="brand" />
-      <UploadStudio classId={classId} existingLessons={existingLessons} />
+      <PageHeader title="Content Studio" kicker="Create a lesson" accent="brand" />
+      <ContentStudioTabs classId={classId} existingLessons={existingLessons} schoolState={schoolState} />
     </div>
   );
 }
