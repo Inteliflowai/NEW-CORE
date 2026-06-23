@@ -27,6 +27,28 @@ import { SectionLabel } from '../../_components/SectionLabel';
 import { SummaryCallout } from '../../_components/SummaryCallout';
 import { GradebookDrillIn, type DrillInCell } from './GradebookDrillIn';
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function shortDate(iso: string): string {
+  const d = new Date(iso);
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
+/** How many of the most-recent dated columns the grid shows before "Show earlier". */
+export const DEFAULT_VISIBLE_COLS = 12;
+
+/** Pure, testable tooltip lines for a grade cell (assignment name + dates). Count-bearing prose →
+ *  banned-word-free (dates are expected). DRAFT → Barb. */
+export function cellTooltipLines(col: GradebookAssignmentCol, cell: GradebookCell): string[] {
+  const lines: string[] = [col.title];
+  if (cell.submitted_at) {
+    const late = cell.submitted_on_time === false;
+    lines.push(`Turned in ${shortDate(cell.submitted_at)}${late ? ' (late)' : ' (on time)'}`);
+  } else {
+    lines.push('Not turned in yet');
+  }
+  if (col.due_at) lines.push(`Due ${shortDate(col.due_at)}`);
+  return lines;
+}
+
 /** Status glyph — paired with text/grade so color is never the sole signal. */
 const GLYPH: Record<CellStatus, string> = {
   graded: '✓',
@@ -118,6 +140,8 @@ function FooterPct({ value }: { value: number | null }) {
 
 interface Selection {
   studentName: string;
+  studentId: string;
+  classId: string;
   col: GradebookAssignmentCol;
   cell: DrillInCell;
 }
@@ -131,6 +155,13 @@ export function GradebookGrid({ data }: GradebookGridProps) {
   const [selected, setSelected] = useState<Selection | null>(null);
 
   const { students, assignments, cells, column_averages, class_average, missing_count } = data;
+
+  const [showAll, setShowAll] = useState(false);
+  const hasEarlier = assignments.length > DEFAULT_VISIBLE_COLS;
+  // assignments arrive chronological asc; default shows the most-recent window (the tail).
+  const visibleCols = showAll ? assignments : assignments.slice(-DEFAULT_VISIBLE_COLS);
+  // Single fixed-position tooltip (avoids clipping inside the scroll container).
+  const [tip, setTip] = useState<{ lines: string[]; x: number; y: number } | null>(null);
 
   /** Build the drill-in cell. The cell already carries the immutable AI grade (score_pct) from the
    * loader regardless of override, so the drill-in's "AI grade vs Your grade" comparison stays
@@ -149,6 +180,16 @@ export function GradebookGrid({ data }: GradebookGridProps) {
       {/* Glyph legend (recognition-over-recall). */}
       <GlyphLegend />
 
+      {hasEarlier && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="self-start rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        >
+          {showAll ? 'Show recent only' : 'Show earlier'}
+        </button>
+      )}
+
       {/* Scroll wrapper — capped height so the sticky header row stays visible with a long roster.
           Sticky first column (left) + sticky header row (top); the top-left corner sits above both. */}
       <div className="max-h-[70vh] overflow-auto rounded-lg border-2 border-sidebar-edge shadow-sticker">
@@ -158,13 +199,18 @@ export function GradebookGrid({ data }: GradebookGridProps) {
               <th className="sticky left-0 top-0 z-30 bg-surface border-b-2 border-sidebar-edge p-2 text-left align-bottom">
                 <span className="sr-only">Student</span>
               </th>
-              {assignments.map((col) => (
+              {visibleCols.map((col) => (
                 <th
                   key={col.assignment_key}
                   className="sticky top-0 z-20 bg-surface border-b-2 border-l-2 border-sidebar-edge p-2 text-center align-bottom"
                 >
                   <div className="flex flex-col items-center gap-1">
                     <SectionLabel tone="brand">{col.title}</SectionLabel>
+                    <span className="text-[10px] text-fg-muted whitespace-nowrap">
+                      {col.assigned_at ? `Assigned ${shortDate(col.assigned_at)}` : ''}
+                      {col.assigned_at && col.due_at ? ' · ' : ''}
+                      {col.due_at ? `Due ${shortDate(col.due_at)}` : ''}
+                    </span>
                   </div>
                 </th>
               ))}
@@ -180,12 +226,13 @@ export function GradebookGrid({ data }: GradebookGridProps) {
                 >
                   {s.name}
                 </th>
-                {assignments.map((col) => {
+                {visibleCols.map((col) => {
                   const cell = cells[s.student_id]?.[col.assignment_key];
                   const status: CellStatus = cell?.status ?? 'none';
                   const safeCell: GradebookCell = cell ?? {
                     attempt_id: null, status: 'none', displayed_grade: null, score_pct: null,
-                    effort_label: null, is_override: false, submitted_on_time: null, allow_redo: false,
+                    effort_label: null, teacher_notes: null, submitted_at: null,
+                    is_override: false, submitted_on_time: null, allow_redo: false,
                   };
                   const grade = safeCell.displayed_grade;
                   const showGrade = grade != null && (status === 'graded' || status === 'redo' || status === 'redo_in_progress');
@@ -227,7 +274,14 @@ export function GradebookGrid({ data }: GradebookGridProps) {
                         <button
                           type="button"
                           aria-label={ariaLabel}
-                          onClick={() => setSelected({ studentName: s.name, col, cell: toDrillCell(safeCell) })}
+                          onMouseEnter={(e) => setTip({ lines: cellTooltipLines(col, safeCell), x: e.clientX, y: e.clientY })}
+                          onMouseLeave={() => setTip(null)}
+                          onFocus={(e) => {
+                            const r = e.currentTarget.getBoundingClientRect();
+                            setTip({ lines: cellTooltipLines(col, safeCell), x: r.left + r.width / 2, y: r.top });
+                          }}
+                          onBlur={() => setTip(null)}
+                          onClick={() => setSelected({ studentName: s.name, studentId: s.student_id, classId: data.class_id, col, cell: toDrillCell(safeCell) })}
                           className="flex w-full cursor-pointer items-center justify-center rounded-md p-1 text-fg ring-1 ring-sidebar-edge/40 hover:shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                         >
                           {inner}
@@ -252,7 +306,7 @@ export function GradebookGrid({ data }: GradebookGridProps) {
                 Class average
                 <span className="ml-2 font-bold"><FooterPct value={class_average} /></span>
               </th>
-              {assignments.map((col) => {
+              {visibleCols.map((col) => {
                 const avg = column_averages[col.assignment_key] ?? null;
                 return (
                   <td
@@ -267,6 +321,18 @@ export function GradebookGrid({ data }: GradebookGridProps) {
           </tfoot>
         </table>
       </div>
+
+      {tip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none fixed z-40 max-w-xs -translate-x-1/2 -translate-y-full rounded-md border-2 border-sidebar-edge bg-surface px-2 py-1 text-xs text-fg shadow-sticker"
+          style={{ left: tip.x, top: tip.y - 6 }}
+        >
+          {tip.lines.map((l, i) => (
+            <div key={i} className={i === 0 ? 'font-bold' : ''}>{l}</div>
+          ))}
+        </div>
+      )}
 
       {selected && (
         <GradebookDrillIn

@@ -3,7 +3,7 @@ import '@/test/setup-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { hasBannedWord } from '@/lib/copy/leakGuard';
-import { GradebookGrid } from '../GradebookGrid';
+import { GradebookGrid, cellTooltipLines, DEFAULT_VISIBLE_COLS } from '../GradebookGrid';
 import type { Gradebook, GradebookCell } from '@/lib/gradebook/loadGradebook';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
@@ -11,7 +11,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 const data: Gradebook = {
   class_id: 'c1',
   students: [{ student_id: 's1', name: 'Ana Diaz' }, { student_id: 's2', name: 'Ben Cole' }],
-  assignments: [{ assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z' }],
+  assignments: [{ assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z' }],
   cells: {
     s1: { 'due:d1': { attempt_id: 'h1', status: 'graded', displayed_grade: 88, score_pct: 88, effort_label: null, teacher_notes: null, submitted_at: '2026-06-09T00:00:00Z', is_override: false, submitted_on_time: true, allow_redo: false } },
     s2: { 'due:d1': { attempt_id: null, status: 'missing', displayed_grade: null, score_pct: null, effort_label: null, teacher_notes: null, submitted_at: null, is_override: false, submitted_on_time: null, allow_redo: false } },
@@ -25,10 +25,34 @@ function oneCell(cell: GradebookCell): Gradebook {
   return {
     class_id: 'c1',
     students: [{ student_id: 's1', name: 'Ana Diaz' }],
-    assignments: [{ assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z' }],
+    assignments: [{ assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z' }],
     cells: { s1: { 'due:d1': cell } },
     class_average: cell.displayed_grade, column_averages: { 'due:d1': cell.displayed_grade }, missing_count: 0,
     quizzes: [], quiz_cells: { s1: {} },
+  };
+}
+
+function gradedCell(grade: number, over: Partial<GradebookCell> = {}): GradebookCell {
+  return {
+    attempt_id: 'h1', status: 'graded', displayed_grade: grade, score_pct: grade,
+    effort_label: null, teacher_notes: null, submitted_at: '2026-06-09T00:00:00Z',
+    is_override: false, submitted_on_time: true, allow_redo: false, ...over,
+  };
+}
+
+function makeData(nCols: number): Gradebook {
+  const assignments = Array.from({ length: nCols }, (_, i) => ({
+    assignment_key: `lesson:L:${String(i).padStart(2, '0')}`,
+    title: `Lesson ${i}`,
+    due_at: `2026-06-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+    assigned_at: `2026-06-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+  }));
+  const cells: Gradebook['cells'] = { s1: {} };
+  for (const a of assignments) cells.s1[a.assignment_key] = gradedCell(80);
+  return {
+    class_id: 'c1', students: [{ student_id: 's1', name: 'Ana Diaz' }],
+    assignments, cells, class_average: 80, column_averages: {}, missing_count: 0,
+    quizzes: [], quiz_cells: {},
   };
 }
 
@@ -118,5 +142,46 @@ describe('GradebookGrid', () => {
     expect(legend.textContent || '').toMatch(/graded/i);
     expect(legend.textContent || '').toMatch(/missing/i);
     expect(hasBannedWord(legend.textContent || '')).toBe(false);
+  });
+});
+
+describe('cellTooltipLines', () => {
+  it('shows assignment name + submitted date + due, banned-word-free', () => {
+    const lines = cellTooltipLines(
+      { assignment_key: 'k', title: 'Fractions', due_at: '2026-06-16T00:00:00Z', assigned_at: null },
+      gradedCell(88, { submitted_on_time: false }),
+    );
+    expect(lines[0]).toBe('Fractions');
+    expect(lines.join(' ')).toMatch(/Turned in Jun 9/);
+    expect(lines.join(' ')).toMatch(/late/i);
+    expect(lines.join(' ')).toMatch(/Due Jun 16/);
+    for (const l of lines) expect(hasBannedWord(l)).toBe(false);
+  });
+  it('says not turned in yet when there is no submission', () => {
+    const lines = cellTooltipLines(
+      { assignment_key: 'k', title: 'Fractions', due_at: null, assigned_at: null },
+      { ...gradedCell(0), status: 'missing', submitted_at: null, displayed_grade: null },
+    );
+    expect(lines.join(' ')).toMatch(/not turned in yet/i);
+  });
+});
+
+describe('GradebookGrid — windowing', () => {
+  it('shows only the most-recent DEFAULT_VISIBLE_COLS columns, newest visible; expands on Show earlier', () => {
+    expect(DEFAULT_VISIBLE_COLS).toBe(12);
+    render(<GradebookGrid data={makeData(15)} />);
+    // 15 cols, default window 12 → "Lesson 0/1/2" (oldest) hidden until expanded.
+    expect(screen.queryByText('Lesson 0')).toBeNull();
+    expect(screen.getByText('Lesson 14')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /show earlier/i }));
+    expect(screen.getByText('Lesson 0')).toBeInTheDocument();
+  });
+  it('does NOT show the Show earlier control when columns fit the window', () => {
+    render(<GradebookGrid data={makeData(5)} />);
+    expect(screen.queryByRole('button', { name: /show earlier/i })).toBeNull();
+  });
+  it('renders the assigned/due dates in the column header', () => {
+    render(<GradebookGrid data={makeData(2)} />);
+    expect(screen.getAllByText(/Assigned Jun|Due Jun/).length).toBeGreaterThan(0);
   });
 });

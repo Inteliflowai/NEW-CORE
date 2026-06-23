@@ -316,6 +316,15 @@ A compact legend strip above the grid mapping each status glyph to a leak-guarde
 - Save-failure inline error (unchanged): "That didn't save — try again in a moment."
 - Empty/out-of-range grade inline error (unchanged): "Enter a grade from 0 to 100, or use Clear override."
 
+### Gradebook dates + trend (DRAFT — 2026-06-23)
+- Column header subline: "Assigned {Mon D} · Due {Mon D}" (DRAFT)
+- Cell tooltip lines: "{Assignment name}" / "Turned in {Mon D} (on time|late)" / "Not turned in yet" / "Due {Mon D}" (DRAFT)
+- Window control: "Show earlier" / "Show recent only" (DRAFT)
+- Drill-in trend direction: "Climbing over the last few." / "Slipping a little lately." / "Holding steady lately." / "Grades over time" (DRAFT)
+- Drill-in trend cold-start: "Not enough graded work yet to show a trend." (DRAFT)
+- Profile "Grades over time" section heading: "Grades over time" (DRAFT)
+- Profile trend direction: "Climbing across recent assignments." / "Slipping a little across recent assignments." / "Holding steady across recent assignments." (DRAFT)
+
 ---
 
 ## Insights

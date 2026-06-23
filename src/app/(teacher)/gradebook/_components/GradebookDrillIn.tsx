@@ -24,6 +24,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { GradebookCell, GradebookAssignmentCol } from '@/lib/gradebook/loadGradebook';
 import { effortLabelPhrase } from '@/lib/copy/effortLabelPhrase';
+import { GradeTrendSparkline } from '@/components/core/GradeTrendSparkline';
+import type { StudentGradeTrend } from '@/lib/gradebook/loadStudentGradeTrend';
 
 /** The drill-in renders the loader's GradebookCell verbatim — it already carries the immutable
  * AI grade (score_pct), the effort label, the teacher note and the submission date. */
@@ -31,6 +33,8 @@ export type DrillInCell = GradebookCell;
 
 export interface GradebookDrillInSelection {
   studentName: string;
+  studentId: string;
+  classId: string;
   col: GradebookAssignmentCol;
   cell: DrillInCell;
 }
@@ -65,10 +69,30 @@ function submittedDateLabel(iso: string): string {
   return `Turned in ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
 
+/** Plain-language grade-trend direction (banned-word-free; no band/risk). DRAFT → Barb. */
+function trendDirectionPhrase(d: StudentGradeTrend['direction']): string {
+  if (d === 'climbing') return 'Climbing over the last few.';
+  if (d === 'sliding') return 'Slipping a little lately.';
+  if (d === 'steady') return 'Holding steady lately.';
+  return 'Grades over time';
+}
+
 const FOCUSABLE = 'button, [href], input, textarea, select, [tabindex]:not([tabindex="-1"])';
 
 export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillInProps) {
-  const { studentName, col, cell } = selected;
+  const { studentName, studentId, classId, col, cell } = selected;
+
+  // This student's grade-over-time trend (class-scoped, teacher-only earned grades). Fetched on open
+  // via the auth-guarded route; null until it resolves (or on error → no sparkline section).
+  const [trend, setTrend] = useState<StudentGradeTrend | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/teacher/gradebook/trend?studentId=${encodeURIComponent(studentId)}&classId=${encodeURIComponent(classId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((t) => { if (live) setTrend(t); })
+      .catch(() => { if (live) setTrend(null); });
+    return () => { live = false; };
+  }, [studentId, classId]);
 
   const isGradedFamily = GRADED_FAMILY.has(cell.status);
   // A grade override needs a graded attempt; a note needs ANY attempt (submitted included).
@@ -266,6 +290,19 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
               <span className="font-bold">AI grade:</span> {cell.displayed_grade}%
             </p>
           )
+        )}
+
+        {/* Grade trend — this student's graded assignments over time (teacher-only; earned grades). */}
+        {trend && Array.isArray(trend.points) && (
+          <div className="flex flex-col gap-1 border-t-2 border-sidebar-edge pt-4">
+            <p className="text-sm font-bold text-fg">{trendDirectionPhrase(trend.direction)}</p>
+            <GradeTrendSparkline
+              size="sm"
+              points={trend.points.map((p) => ({ date: p.date, grade: p.grade, label: `${p.assignment_title} · ${p.grade}%` }))}
+              ariaLabel={`${studentName}'s grades over time${trend.latest != null ? `, latest ${trend.latest} percent` : ''}`}
+              coldStartLabel="Not enough graded work yet to show a trend."
+            />
+          </div>
         )}
 
         {/* Effort line — only shown when an effort label is available */}

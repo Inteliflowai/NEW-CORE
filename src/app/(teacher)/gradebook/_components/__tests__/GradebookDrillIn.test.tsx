@@ -9,9 +9,23 @@ import { hasBannedWord } from '@/lib/copy/leakGuard';
 
 const selected = {
   studentName: 'Ana Diaz',
-  col: { assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z' },
+  studentId: 's1',
+  classId: 'c1',
+  col: { assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z' },
   cell: { attempt_id: 'h1', status: 'graded' as const, displayed_grade: 90, effort_label: null, teacher_notes: null, submitted_at: '2026-06-09T00:00:00Z', is_override: true, submitted_on_time: true, allow_redo: false, score_pct: 70 },
 };
+
+/** The component now also GETs the grade trend on open; isolate the override POST (the call with
+ *  a body) from that read so existing assertions stay precise. */
+type FetchMock = { mock: { calls: Array<[unknown, ({ method?: string; body?: string } | undefined)?]> } };
+function overridePostCalls(): Array<[unknown, { method: string; body: string }]> {
+  return (fetch as unknown as FetchMock).mock.calls.filter(
+    (c): c is [unknown, { method: string; body: string }] => c[1]?.method === 'POST',
+  );
+}
+function overridePostBody() {
+  return JSON.parse(overridePostCalls()[0][1].body);
+}
 
 beforeEach(() => { vi.restoreAllMocks(); vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true, displayed_grade: 95 }) })); });
 
@@ -27,8 +41,8 @@ describe('GradebookDrillIn', () => {
     render(<GradebookDrillIn selected={selected} onClose={() => {}} onWrite={onWrite} />);
     fireEvent.change(screen.getByLabelText(/grade/i), { target: { value: '95' } });
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-    const body = JSON.parse((fetch as unknown as { mock: { calls: Array<[unknown, { body: string }]> } }).mock.calls[0][1].body);
+    await waitFor(() => expect(overridePostCalls().length).toBeGreaterThan(0));
+    const body = overridePostBody();
     expect(body.attempt_id).toBe('h1'); expect(body.teacher_score).toBe(95);
     await waitFor(() => expect(onWrite).toHaveBeenCalled());
   });
@@ -63,8 +77,8 @@ describe('GradebookDrillIn', () => {
     // Grade input starts empty for a non-override cell; edit only the note.
     fireEvent.change(screen.getByLabelText(/add a note/i), { target: { value: 'great effort' } });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-    const body = JSON.parse((fetch as unknown as { mock: { calls: Array<[unknown, { body: string }]> } }).mock.calls[0][1].body);
+    await waitFor(() => expect(overridePostCalls().length).toBeGreaterThan(0));
+    const body = overridePostBody();
     expect(body.teacher_notes).toBe('great effort');
     expect('teacher_score' in body).toBe(false); // blank grade → no grade change sent
     expect(screen.queryByRole('alert')).toBeNull(); // no inline error
@@ -75,7 +89,7 @@ describe('GradebookDrillIn', () => {
     fireEvent.change(screen.getByLabelText(/grade/i), { target: { value: '150' } });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/grade from 0 to 100/i);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(overridePostCalls()).toHaveLength(0); // an out-of-range grade never POSTs the override
   });
 
   // M4 — Escape closes the panel (keyboard a11y).
@@ -123,8 +137,8 @@ describe('GradebookDrillIn', () => {
     render(<GradebookDrillIn selected={noted} onClose={() => {}} onWrite={() => {}} />);
     fireEvent.change(screen.getByLabelText(/add a note/i), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-    const body = JSON.parse((fetch as unknown as { mock: { calls: Array<[unknown, { body: string }]> } }).mock.calls[0][1].body);
+    await waitFor(() => expect(overridePostCalls().length).toBeGreaterThan(0));
+    const body = overridePostBody();
     expect(body.teacher_notes).toBeNull(); // '' → null so a teacher can CLEAR a note
   });
 
@@ -144,5 +158,33 @@ describe('GradebookDrillIn', () => {
     fireEvent.click(toggle);
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(toggle.checked).toBe(false); // reverted to prior state
+  });
+});
+
+describe('GradebookDrillIn — grade trend', () => {
+  const trendSelected = {
+    studentName: 'Ana Diaz', studentId: 's1', classId: 'c1',
+    col: { assignment_key: 'k', title: 'Fractions', due_at: null, assigned_at: null },
+    cell: {
+      attempt_id: 'h1', status: 'graded' as const, displayed_grade: 88, score_pct: 88,
+      effort_label: null, teacher_notes: null, submitted_at: '2026-06-09T00:00:00Z',
+      is_override: false, submitted_on_time: true, allow_redo: false,
+    },
+  };
+
+  it('fetches the trend on open and renders the sparkline when there are ≥2 points', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      points: [{ date: 'd1', grade: 70, assignment_title: 'L', on_time: true }, { date: 'd2', grade: 90, assignment_title: 'L', on_time: true }],
+      direction: 'climbing', latest: 90, average: 80,
+    }), { status: 200 })));
+    render(<GradebookDrillIn selected={trendSelected as never} onClose={() => {}} onWrite={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('grade-trend-sparkline')).toBeInTheDocument());
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining('/api/teacher/gradebook/trend?studentId=s1&classId=c1'));
+  });
+
+  it('shows the cold-start message when fewer than 2 points', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ points: [{ date: 'd', grade: 80, assignment_title: 'L', on_time: true }], direction: null, latest: 80, average: 80 }), { status: 200 })));
+    render(<GradebookDrillIn selected={trendSelected as never} onClose={() => {}} onWrite={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('trend-cold-start')).toBeInTheDocument());
   });
 });
