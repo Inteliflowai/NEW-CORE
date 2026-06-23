@@ -21,14 +21,14 @@ beforeAll(() => {
 describe('SignatureMoment prototype', () => {
   it('defaults to the teacher register and switches registers via the toggle', async () => {
     render(<SignatureMoment />);
-    expect(screen.getByRole('tab', { name: 'Teacher' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'Teacher' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText(/Leila's cohesion dipped/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Student' }));
-    expect(screen.getByRole('tab', { name: 'Student' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Student' }));
+    expect(screen.getByRole('button', { name: 'Student' })).toHaveAttribute('aria-pressed', 'true');
     expect(await screen.findByText(/your writing's getting sharper/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Parent' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Parent' }));
     expect(await screen.findByText(/Maya's reading is really coming along/i)).toBeInTheDocument();
   });
 

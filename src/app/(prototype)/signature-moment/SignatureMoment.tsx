@@ -50,14 +50,14 @@ export function SignatureMoment(): React.JSX.Element {
       className="pop-canvas flex w-full max-w-xl flex-col items-stretch gap-6 rounded-lg bg-bg p-6"
     >
       {/* Register toggle */}
-      <div role="tablist" aria-label="Register" className="flex gap-2">
+      <div role="group" aria-label="Register" className="flex gap-2">
         {ORDER.map((k) => {
           const active = k === key;
           return (
             <button
               key={k}
-              role="tab"
-              aria-selected={active}
+              type="button"
+              aria-pressed={active}
               onClick={() => select(k)}
               className={`flex-1 rounded-md border-2 border-sidebar-edge px-3 py-1.5 text-sm font-bold shadow-sticker transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${
                 active ? 'bg-brand text-fg-on-brand' : 'bg-surface text-fg hover:bg-brand-surface'
