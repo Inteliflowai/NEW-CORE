@@ -733,3 +733,31 @@ Seg 2 turns the single Upload page into a 3-tab Content Studio. New/changed user
 | Error — save/build | That didn't finish — give it another try in a moment. |
 
 Note: "standards" here is teacher-only metadata (codes + framework label). It never appears on any student/parent surface.
+
+### Content Studio — Seg 5: Drawing canvas + review of work (DRAFT, Barb sign-off required)
+
+Students can answer a task by drawing or attaching a photo; teachers see the actual answers + drawings in the gradebook drill-in.
+
+**Student drawing canvas + task affordance**
+| Key | Draft |
+|---|---|
+| Canvas tool — pen | Pen |
+| Canvas tool — eraser | Eraser |
+| Canvas — undo | Undo |
+| Canvas — clear | Clear |
+| Canvas — confirm | Use this drawing |
+| Canvas — cancel | Cancel |
+| Task — add a drawing | Add a drawing |
+| Task — add a photo | Add a photo |
+| Task — remove the image | Remove |
+| Task — uploading | Attaching… |
+| Task — upload error | That didn't attach — try again. |
+
+**Teacher review-of-work (gradebook drill-in)**
+| Key | Draft |
+|---|---|
+| Section heading | Student's work |
+| No written answer for a task | No written answer. |
+| AI feedback label | What the AI noted |
+
+Note: the "Student's work" panel is teacher-only; it shows the student's own answers + the AI grading feedback (no band/risk machinery).
