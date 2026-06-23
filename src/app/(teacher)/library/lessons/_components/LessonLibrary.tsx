@@ -22,8 +22,7 @@ import Link from 'next/link';
 import type { LessonLibrary as LessonLibraryData, LessonLibRow } from '@/lib/lessons/loadLessonLibrary';
 import { EmptyState } from '@/components/core/EmptyState';
 import { SectionLabel } from '../../../_components/SectionLabel';
-
-type DateBucket = 'all' | 'month' | 'week' | 'today';
+import { inBucket, type DateBucket } from '@/lib/content/dateBucket';
 
 /** Status → a plain, label-only pill (NO diagnostic enum, NO band machinery). DRAFT → Barb. */
 function statusPill(status: string): { label: string; tone: 'brand' | 'ok' | 'warn' } {
@@ -36,26 +35,6 @@ function statusPill(status: string): { label: string; tone: 'brand' | 'ok' | 'wa
     default:
       return { label: 'Draft', tone: 'warn' };
   }
-}
-
-/** UTC calendar-day start for `d`. */
-function dayStart(d: Date): number {
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-}
-
-/** True if `createdIso` falls inside the chosen bucket, relative to `now`. */
-function inBucket(createdIso: string, bucket: DateBucket, now: Date): boolean {
-  if (bucket === 'all') return true;
-  if (!createdIso) return false;
-  const created = new Date(createdIso);
-  if (Number.isNaN(created.getTime())) return false;
-  if (bucket === 'today') return dayStart(created) === dayStart(now);
-  if (bucket === 'week') {
-    const sevenDaysAgo = dayStart(now) - 6 * 24 * 60 * 60 * 1000; // today + the prior 6 days
-    return dayStart(created) >= sevenDaysAgo;
-  }
-  // month — same UTC calendar month + year as now.
-  return created.getUTCFullYear() === now.getUTCFullYear() && created.getUTCMonth() === now.getUTCMonth();
 }
 
 function LessonRow({ lesson, classId }: { lesson: LessonLibRow; classId: string }): React.JSX.Element {

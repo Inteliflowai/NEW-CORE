@@ -34,7 +34,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('UploadStudio', () => {
   it('happy path: upload → parse → quiz drives to a "quiz ready" done state with library links', async () => {
-    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/api/teacher/lessons/upload')) {
         return jsonResponse(201, { lesson_id: 'NEW1', file_url: 'x', file_name: 'cells.pdf', file_type: 'application/pdf' });
@@ -109,7 +109,7 @@ describe('UploadStudio', () => {
 
   it('fuzzy dup: after parse, a near-duplicate gates quiz-gen behind the 3-option modal', async () => {
     let generateCalled = false;
-    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
       const u = String(url);
       if (u.includes('/api/teacher/lessons/upload')) {
         return jsonResponse(201, { lesson_id: 'NEW1', file_url: 'x', file_name: 'photo.pdf', file_type: 'application/pdf' });
@@ -139,6 +139,101 @@ describe('UploadStudio', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /create anyway/i }));
     await waitFor(() => expect(screen.getByTestId('upload-done')).toBeInTheDocument());
     expect(generateCalled).toBe(true);
+  });
+
+  it('fuzzy dup: "Cancel" archives the just-created orphan lesson (best-effort) and stops', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/api/teacher/lessons/upload')) {
+        return jsonResponse(201, { lesson_id: 'NEW1', file_url: 'x', file_name: 'photo.pdf', file_type: 'application/pdf' });
+      }
+      if (u.includes('/api/teacher/lessons/parse')) {
+        return jsonResponse(200, { lesson_id: 'NEW1', parsed_content: { title: 'Photosynthesis Basics', key_concepts: ['photosynthesis', 'light reactions'] } });
+      }
+      if (u.includes('/api/teacher/lessons/manage')) {
+        return jsonResponse(200, { ok: true, lesson_id: 'NEW1', status: 'archived' });
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<UploadStudio classId="c1" existingLessons={EXISTING} />);
+    chooseFile(makeFile('photo.pdf', 'application/pdf'));
+
+    const dialog = await screen.findByTestId('fuzzy-dup-modal');
+    fireEvent.click(within(dialog).getByRole('button', { name: /cancel/i }));
+
+    // The orphan near-duplicate lesson is archived via the manage route.
+    await waitFor(() => {
+      const manageCall = fetchMock.mock.calls.find((c) => String(c[0]).includes('/api/teacher/lessons/manage'));
+      expect(manageCall).toBeTruthy();
+      const body = JSON.parse((manageCall![1] as RequestInit).body as string);
+      expect(body).toMatchObject({ lesson_id: 'NEW1', action: 'archive' });
+    });
+    // Quiz-gen never ran.
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/quizzes/generate'))).toBe(false);
+  });
+
+  it('fuzzy dup: "Use that one" archives the just-created orphan lesson (best-effort)', async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/api/teacher/lessons/upload')) {
+        return jsonResponse(201, { lesson_id: 'NEW1', file_url: 'x', file_name: 'photo.pdf', file_type: 'application/pdf' });
+      }
+      if (u.includes('/api/teacher/lessons/parse')) {
+        return jsonResponse(200, { lesson_id: 'NEW1', parsed_content: { title: 'Photosynthesis Basics', key_concepts: ['photosynthesis', 'light reactions'] } });
+      }
+      if (u.includes('/api/teacher/lessons/manage')) {
+        return jsonResponse(200, { ok: true, lesson_id: 'NEW1', status: 'archived' });
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<UploadStudio classId="c1" existingLessons={EXISTING} />);
+    chooseFile(makeFile('photo.pdf', 'application/pdf'));
+
+    const dialog = await screen.findByTestId('fuzzy-dup-modal');
+    fireEvent.click(within(dialog).getByRole('link', { name: /use that one/i }));
+
+    await waitFor(() => {
+      const manageCall = fetchMock.mock.calls.find((c) => String(c[0]).includes('/api/teacher/lessons/manage'));
+      expect(manageCall).toBeTruthy();
+      const body = JSON.parse((manageCall![1] as RequestInit).body as string);
+      expect(body).toMatchObject({ lesson_id: 'NEW1', action: 'archive' });
+    });
+  });
+
+  it('drag-drop re-entry: dropping a second file while a modal is open starts no second chain', async () => {
+    let uploadCalls = 0;
+    const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/api/teacher/lessons/upload')) {
+        uploadCalls += 1;
+        return jsonResponse(201, { lesson_id: 'NEW1', file_url: 'x', file_name: 'photo.pdf', file_type: 'application/pdf' });
+      }
+      if (u.includes('/api/teacher/lessons/parse')) {
+        return jsonResponse(200, { lesson_id: 'NEW1', parsed_content: { title: 'Photosynthesis Basics', key_concepts: ['photosynthesis', 'light reactions'] } });
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container } = render(<UploadStudio classId="c1" existingLessons={EXISTING} />);
+    chooseFile(makeFile('photo.pdf', 'application/pdf'));
+
+    // First chain ends at the fuzzy-dup modal.
+    await screen.findByTestId('fuzzy-dup-modal');
+    expect(uploadCalls).toBe(1);
+
+    // Drop a second file onto the drop zone WHILE the modal is open — must be ignored.
+    const dropZone = container.querySelector('[class*="border-dashed"]') as HTMLElement;
+    const second = makeFile('second.pdf', 'application/pdf');
+    fireEvent.drop(dropZone, { dataTransfer: { files: [second] } });
+
+    // No second upload was kicked off.
+    await waitFor(() => expect(uploadCalls).toBe(1));
+    expect(uploadCalls).toBe(1);
   });
 
   it('a bad-type file shows an inline error and never calls the upload route', async () => {

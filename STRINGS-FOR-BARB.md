@@ -519,6 +519,8 @@ DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-mom
 
 ## Content Studio
 
+> Note (route error envelopes): the `POST /api/teacher/quizzes/manage` and `POST /api/teacher/lessons/manage` JSON `error` strings (`Unauthorized` / `Forbidden` / `Bad request` / `Unknown action` / `Quiz not found` / `Lesson not found` / `Server error`) are internal/operator-facing only — they are NOT shown to teachers. The client masks them with its own captured copy (the Quiz Library "Write error" string; the lessons/manage archive call is best-effort and surfaces nothing). No Barb gating needed on those envelopes.
+
 ### Lesson Library (DRAFT)
 | Key | Draft |
 |---|---|
@@ -602,17 +604,21 @@ DRAFT copy for the signature coaching moment (`src/app/(prototype)/signature-mom
 | Bad type error | Upload a PDF, Word doc, or text file. |
 | Upload error | That didn't go through — try again in a moment. |
 | Read error | We couldn't read that file — try a clearer copy. |
-| Quiz-draft error | The quiz didn't draft — you can try again from the Lesson Library. |
+| Quiz-draft error | The quiz didn't draft — try again — re-drop the file here. |
 | Exact-dup modal — title | You already uploaded this file. |
 | Exact-dup modal — body | This looks like a copy of {Lesson title}. |
+| Exact-dup modal — body (no title) | This looks like a copy of a lesson you already have. |
 | Exact-dup — open it | Open it |
 | Exact-dup — upload anyway | Upload anyway |
 | Fuzzy-dup modal — title | This looks a lot like a lesson you already have. |
 | Fuzzy-dup modal — body | It's close to {Lesson title}. |
+| Fuzzy-dup modal — body (no title) | It's close to an existing lesson. |
 | Fuzzy-dup — use that one | Use that one |
 | Fuzzy-dup — create anyway | Create anyway |
 | Fuzzy-dup — cancel | Cancel |
 | Modal — close | Close |
+
+> Note (4b): the Quiz-draft error no longer points to a "re-generate from the Lesson Library" affordance (which doesn't exist); the accurate recovery is to re-drop the file here. The same string is shown whether quiz-gen fails inline or after "Create anyway".
 
 ### Upload route — server messages (DRAFT — `POST /api/teacher/lessons/upload`)
 > Returned in the route's JSON `error`; the Upload UI mostly shows its own strings above, but these are captured so Barb gates every user-facing message.

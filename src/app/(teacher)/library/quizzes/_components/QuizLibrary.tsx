@@ -25,6 +25,7 @@ import { useRouter } from 'next/navigation';
 import { EmptyState } from '@/components/core/EmptyState';
 import { SectionLabel } from '../../../_components/SectionLabel';
 import type { QuizLibrary as QuizLibraryData, QuizLibRow } from '@/lib/quizzes/loadQuizLibrary';
+import { inBucket, type DateBucket } from '@/lib/content/dateBucket';
 
 /** A quiz question, as the edit panel needs it (subset of quiz_questions). */
 export interface QuizQuestionLite {
@@ -46,9 +47,6 @@ export interface QuizLibraryProps {
   now?: Date;
 }
 
-type DateGranularity = 'all' | 'month' | 'week' | 'day';
-
-const MS_DAY = 24 * 60 * 60 * 1000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** Banned-word-free published-date label. DRAFT → Barb. */
@@ -63,28 +61,17 @@ function statusWord(status: string): string {
   return 'Draft';
 }
 
-function withinGranularity(createdISO: string, granularity: DateGranularity, now: Date): boolean {
-  if (granularity === 'all') return true;
-  if (!createdISO) return false;
-  const created = new Date(createdISO).getTime();
-  if (Number.isNaN(created)) return false;
-  if (granularity === 'day') return now.getTime() - created <= MS_DAY;
-  if (granularity === 'week') return now.getTime() - created <= 7 * MS_DAY;
-  // month: same calendar month + year (UTC)
-  const c = new Date(createdISO);
-  return c.getUTCFullYear() === now.getUTCFullYear() && c.getUTCMonth() === now.getUTCMonth();
-}
-
 export function QuizLibrary({ data, classId, questions, now }: QuizLibraryProps) {
   const clock = now ?? new Date();
   const [search, setSearch] = useState('');
-  const [granularity, setGranularity] = useState<DateGranularity>('all');
+  // Calendar buckets (shared with the Lesson Library) so "Today"/"This week" mean the same on both.
+  const [granularity, setGranularity] = useState<DateBucket>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return data.quizzes.filter((row) => {
-      if (!withinGranularity(row.created_at, granularity, clock)) return false;
+      if (!inBucket(row.created_at, granularity, clock)) return false;
       if (!q) return true;
       const hay = `${row.title} ${row.lesson_title ?? ''}`.toLowerCase();
       return hay.includes(q);
@@ -128,13 +115,13 @@ export function QuizLibrary({ data, classId, questions, now }: QuizLibraryProps)
           <select
             id="quiz-when"
             value={granularity}
-            onChange={(e) => setGranularity(e.target.value as DateGranularity)}
+            onChange={(e) => setGranularity(e.target.value as DateBucket)}
             className="rounded-md border-2 border-sidebar-edge bg-bg px-3 py-1.5 text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
             <option value="all">All time</option>
             <option value="month">This month</option>
             <option value="week">This week</option>
-            <option value="day">Today</option>
+            <option value="today">Today</option>
           </select>
         </div>
       </div>

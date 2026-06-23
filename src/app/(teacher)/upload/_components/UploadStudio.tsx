@@ -175,7 +175,7 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
       body: JSON.stringify({ lesson_id: lessonId }),
     });
     if (!res.ok) {
-      fail("The quiz didn't draft — you can try again from the Lesson Library.");
+      fail("The quiz didn't draft — try again — re-drop the file here.");
       return;
     }
     const body = (await res.json()) as { quiz_id?: string };
@@ -188,9 +188,24 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
     setPhase('error');
   }
 
+  // Best-effort: archive the just-created near-duplicate lesson when the teacher declines the
+  // fuzzy-dup, so it doesn't linger as an orphan draft polluting future dedup. Fire-and-forget —
+  // never block the close/navigation on its result (or failure).
+  function archivePendingLesson() {
+    const lessonId = lessonIdRef.current;
+    if (!lessonId) return;
+    void fetch('/api/teacher/lessons/manage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lesson_id: lessonId, action: 'archive' }),
+    }).catch(() => {});
+  }
+
   // ── Entry: a teacher chose / dropped a file. ───────────────────────────────
   function onFile(file: File | null | undefined) {
     if (!file) return;
+    // Don't start a second chain while one is mid-flight or a dup modal is open.
+    if (busy || exactDup || fuzzyMatch) return;
     resetTransient();
     if (!isAllowed(file)) {
       fail('Upload a PDF, Word doc, or text file.');
@@ -209,6 +224,8 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
   function onDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setDragging(false);
+    // Ignore a drop while a chain is mid-flight or a dup modal is open.
+    if (busy || exactDup || fuzzyMatch) return;
     onFile(e.dataTransfer.files?.[0]);
   }
 
@@ -223,12 +240,18 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
     const lessonId = lessonIdRef.current;
     setFuzzyMatch(null);
     if (!lessonId) return;
-    void doGenerate(lessonId).catch(() => fail("The quiz didn't draft — try again."));
+    void doGenerate(lessonId).catch(() => fail("The quiz didn't draft — try again — re-drop the file here."));
   }
   function onCancelFuzzy() {
-    // Stop the flow; the draft lesson stays in the library for later.
+    // Declined the near-duplicate → archive the just-created lesson (best-effort) so it doesn't
+    // linger as an orphan draft, then stop the flow.
+    archivePendingLesson();
     setFuzzyMatch(null);
     setPhase('idle');
+  }
+  // "Use that one" — the teacher will open the existing lesson instead; archive the orphan first.
+  function onUseExisting() {
+    archivePendingLesson();
   }
 
   const busy = phase === 'uploading' || phase === 'reading' || phase === 'checking' || phase === 'building';
@@ -261,6 +284,8 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
           type="file"
           accept={ACCEPT}
           onChange={onInputChange}
+          tabIndex={-1}
+          aria-hidden="true"
           className="sr-only"
         />
       </div>
@@ -345,6 +370,7 @@ export function UploadStudio({ classId, existingLessons }: UploadStudioProps): R
           <div className="flex flex-wrap gap-2">
             <Link
               href={lessonsHref}
+              onClick={onUseExisting}
               className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker"
             >
               Use that one
