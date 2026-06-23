@@ -24,6 +24,7 @@ import { guardStudentAccess } from '@/lib/auth/guards';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { loadStudentSignals } from '@/lib/signals/loadStudentSignals';
 import { loadStudentIdentity } from '@/lib/signals/loadStudentIdentity';
+import { loadStudentGradeTrend } from '@/lib/gradebook/loadStudentGradeTrend';
 import { storyLine } from '@/lib/copy/storyLine';
 import { divergencePhrase } from '@/lib/copy/divergencePhrase';
 import { misconceptionPhrase } from '@/lib/copy/misconceptionPhrase';
@@ -33,6 +34,7 @@ import type { EffortLabel } from '@/lib/copy/effortPhrase';
 import { IdentityHeader } from './_components/IdentityHeader';
 import { WholeChildRail } from './_components/WholeChildRail';
 import { SkillMapMatrix, type SkillMapRow } from './_components/SkillMapMatrix';
+import { GradeTrendSection } from './_components/GradeTrendSection';
 import { SectionLabel } from '../../_components/SectionLabel';
 import { priorityCta } from './_lib/priorityCta';
 
@@ -54,9 +56,10 @@ export default async function StudentPage({
 
   // ── Data: signals + identity (identity is NOT in the signals payload) ────────
   const admin = createAdminSupabaseClient();
-  const [signals, identity] = await Promise.all([
+  const [signals, identity, gradeTrend] = await Promise.all([
     loadStudentSignals(admin, studentId),
     loadStudentIdentity(admin, studentId),
+    classId ? loadStudentGradeTrend(admin, { studentId, classId }) : Promise.resolve(null),
   ]);
 
   // ── Breadcrumb (from ?from / ?class) ─────────────────────────────────────────
@@ -122,6 +125,8 @@ export default async function StudentPage({
             <h2><SectionLabel tone="brand">Skill Map</SectionLabel></h2>
             <SkillMapMatrix rows={skillRows} />
           </section>
+
+          {gradeTrend && <GradeTrendSection trend={gradeTrend} studentName={fullName} />}
 
           {/* A pattern worth knowing — only when divergence is flagged */}
           {showPattern && (
