@@ -73,7 +73,6 @@ export function GenerateLessonStudio({ classId, schoolState }: GenerateLessonStu
         </div>
         <textarea
           id="lesson-description"
-          aria-label="Describe what to teach"
           className={`${INPUT} min-h-32`} value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder="e.g. A 7th-grade intro to photosynthesis: inputs, outputs, and why it matters."
         />

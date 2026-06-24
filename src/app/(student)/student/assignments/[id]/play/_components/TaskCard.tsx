@@ -30,6 +30,10 @@ export function TaskCard({ step, description, value, onChange, onFirstInput, ima
   const [showCanvas, setShowCanvas] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imgError, setImgError] = useState<string | null>(null);
+  // Dictation is async (record + network); read the LATEST answer text when the transcript
+  // returns, not the snapshot captured when MicButton was created, so interim typing isn't lost.
+  const valueRef = useRef(value);
+  valueRef.current = value;
 
   function fireFirstInput() {
     if (!hasInputtedRef.current) { hasInputtedRef.current = true; onFirstInput(); }
@@ -66,8 +70,8 @@ export function TaskCard({ step, description, value, onChange, onFirstInput, ima
 
       <div>
         <MicButton
-          label="Speak your answer"
-          onTranscript={(t) => { fireFirstInput(); onChange(value.trim() ? `${value.trim()} ${t}` : t); }}
+          label={`Speak your answer for question ${step}`}
+          onTranscript={(t) => { fireFirstInput(); const base = valueRef.current.trim(); onChange(base ? `${base} ${t}` : t); }}
         />
       </div>
 

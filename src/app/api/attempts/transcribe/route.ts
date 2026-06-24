@@ -9,6 +9,11 @@ import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 const MAX_BYTES = 25 * 1024 * 1024; // OpenAI Whisper hard limit
 const MIN_BYTES = 1024;             // below this it is too short to be speech
 
+// Buffer/toFile need the Node runtime; cap the held connection so a stuck/retrying
+// upstream request is reaped rather than pinning a function (bounds the cost surface).
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -19,7 +24,8 @@ export async function POST(req: NextRequest) {
     try { form = await req.formData(); } catch { return NextResponse.json({ error: 'Bad request' }, { status: 400 }); }
     const file = form.get('file');
     if (!(file instanceof Blob)) return NextResponse.json({ error: 'Missing audio' }, { status: 400 });
-    if (file.type && !file.type.startsWith('audio/')) return NextResponse.json({ error: 'Only audio is supported.' }, { status: 415 });
+    // Require an audio/* content-type — an empty/missing type must NOT bypass the guard.
+    if (!file.type || !file.type.startsWith('audio/')) return NextResponse.json({ error: 'Only audio is supported.' }, { status: 415 });
     if (file.size > MAX_BYTES) return NextResponse.json({ error: 'That recording is too long.' }, { status: 413 });
     if (file.size < MIN_BYTES) return NextResponse.json({ error: 'too_short' }, { status: 400 });
 

@@ -33,6 +33,16 @@ describe('POST /api/attempts/transcribe', () => {
     const { POST } = await import('@/app/api/attempts/transcribe/route');
     expect((await POST(req(audio(2048, 'application/pdf')))).status).toBe(415);
   });
+  it('413 when the recording exceeds the size cap (no transcribe call)', async () => {
+    const { POST } = await import('@/app/api/attempts/transcribe/route');
+    const res = await POST(req(audio(26 * 1024 * 1024)));
+    expect(res.status).toBe(413);
+    expect(transcribe).not.toHaveBeenCalled();
+  });
+  it('415 when the file has no content-type (empty type must not bypass the audio guard)', async () => {
+    const { POST } = await import('@/app/api/attempts/transcribe/route');
+    expect((await POST(req(audio(2048, '')))).status).toBe(415);
+  });
   it('400 too_short on a tiny blob (no transcribe call)', async () => {
     const { POST } = await import('@/app/api/attempts/transcribe/route');
     const res = await POST(req(audio(100)));

@@ -45,16 +45,13 @@ export async function resilientChatCompletion(
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
       const result = await getOpenAI().chat.completions.create(
         { ...normalizeTokenParam(params), stream: false },
         { signal: controller.signal },
       );
-
-      clearTimeout(timeout);
       return result;
     } catch (error: unknown) {
       const err = error as { status?: number; response?: { status?: number }; message?: string };
@@ -71,6 +68,8 @@ export async function resilientChatCompletion(
       const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + Math.random() * 500, maxDelayMs);
       console.warn(`[OpenAI] Attempt ${attempt + 1} failed (${status || 'timeout'}), retrying in ${Math.round(delay)}ms...`);
       await new Promise(r => setTimeout(r, delay));
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -90,12 +89,10 @@ export async function resilientImageGeneration(
   let lastErr: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
       const result = await getOpenAI().images.generate(params, { signal: controller.signal }) as OpenAI.Images.ImagesResponse;
-      clearTimeout(timeout);
       return result;
     } catch (error: unknown) {
       const err = error as { status?: number; response?: { status?: number }; message?: string };
@@ -111,6 +108,8 @@ export async function resilientImageGeneration(
       const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + Math.random() * 500, maxDelayMs);
       console.warn(`[OpenAI Image] Attempt ${attempt + 1} failed (${status || 'timeout'}), retrying in ${Math.round(delay)}ms...`);
       await new Promise(r => setTimeout(r, delay));
+    } finally {
+      clearTimeout(timeout);
     }
   }
 
@@ -132,15 +131,14 @@ export async function resilientAudioTranscription(
   const { maxRetries = 2, initialDelayMs = 1000, maxDelayMs = 10000, timeoutMs = 60000 } = options;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       const file = await toFile(audio.buffer, audio.filename);
       const result = await getOpenAI().audio.transcriptions.create(
         { file, model: OPENAI_TRANSCRIBE_MODEL, language: 'en', response_format: 'text' },
         { signal: controller.signal },
       );
-      clearTimeout(timeout);
       return typeof result === 'string' ? result : ((result as { text?: string }).text ?? '');
     } catch (error: unknown) {
       const err = error as { status?: number; response?: { status?: number }; message?: string };
@@ -153,6 +151,8 @@ export async function resilientAudioTranscription(
       }
       const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + Math.random() * 500, maxDelayMs);
       await new Promise(r => setTimeout(r, delay));
+    } finally {
+      clearTimeout(timeout);
     }
   }
   throw new LlmExhaustedError('openai', lastErr);
@@ -169,14 +169,13 @@ export async function resilientTextToSpeech(
   const { maxRetries = 2, initialDelayMs = 1000, maxDelayMs = 10000, timeoutMs = 60000 } = options;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       const result = await getOpenAI().audio.speech.create(
         { model: OPENAI_TTS_MODEL, voice: 'nova', input: text, speed: 0.95 },
         { signal: controller.signal },
       );
-      clearTimeout(timeout);
       return Buffer.from(await result.arrayBuffer());
     } catch (error: unknown) {
       const err = error as { status?: number; response?: { status?: number }; message?: string };
@@ -189,6 +188,8 @@ export async function resilientTextToSpeech(
       }
       const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + Math.random() * 500, maxDelayMs);
       await new Promise(r => setTimeout(r, delay));
+    } finally {
+      clearTimeout(timeout);
     }
   }
   throw new LlmExhaustedError('openai', lastErr);

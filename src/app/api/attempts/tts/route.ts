@@ -7,6 +7,10 @@ import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 
 const MAX_CHARS = 4096; // OpenAI TTS input limit
 
+// Node runtime + a bounded hold so a stuck/retrying upstream request is reaped (cost surface).
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient();
@@ -23,7 +27,9 @@ export async function POST(req: NextRequest) {
       status: 200,
       headers: {
         'Content-Type': 'audio/mpeg',
-        'Cache-Control': 'private, max-age=3600',
+        // no-store: synthesized passage audio is cheap to regenerate; avoids a cached clip being
+        // replayable by the next user on a shared/kiosk browser profile.
+        'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
       },
     });

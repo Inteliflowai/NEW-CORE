@@ -31,6 +31,23 @@ describe('resilientAudioTranscription', () => {
     const { resilientAudioTranscription } = await import('@/lib/ai/openai');
     await expect(resilientAudioTranscription({ buffer: Buffer.from('x'), filename: 'a.webm' })).rejects.toBeInstanceOf(LlmExhaustedError);
   });
+
+  it('retries a retryable (503) error then succeeds', async () => {
+    transcriptionsCreate.mockRejectedValueOnce({ status: 503 }).mockResolvedValueOnce('Recovered.');
+    const { resilientAudioTranscription } = await import('@/lib/ai/openai');
+    const out = await resilientAudioTranscription({ buffer: Buffer.from('x'), filename: 'a.webm' }, { initialDelayMs: 0, maxDelayMs: 0 });
+    expect(out).toBe('Recovered.');
+    expect(transcriptionsCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries maxRetries+1 times on a persistent 503 then throws', async () => {
+    transcriptionsCreate.mockRejectedValue({ status: 503 });
+    const { resilientAudioTranscription } = await import('@/lib/ai/openai');
+    await expect(
+      resilientAudioTranscription({ buffer: Buffer.from('x'), filename: 'a.webm' }, { maxRetries: 2, initialDelayMs: 0, maxDelayMs: 0 }),
+    ).rejects.toBeInstanceOf(LlmExhaustedError);
+    expect(transcriptionsCreate).toHaveBeenCalledTimes(3);
+  });
 });
 
 describe('resilientTextToSpeech', () => {
@@ -47,5 +64,15 @@ describe('resilientTextToSpeech', () => {
     speechCreate.mockRejectedValue({ status: 500, message: 'down' });
     const { resilientTextToSpeech } = await import('@/lib/ai/openai');
     await expect(resilientTextToSpeech('x', { maxRetries: 0 })).rejects.toBeInstanceOf(LlmExhaustedError);
+  });
+
+  it('retries a retryable (500) error then succeeds', async () => {
+    speechCreate
+      .mockRejectedValueOnce({ status: 500 })
+      .mockResolvedValueOnce({ arrayBuffer: async () => new Uint8Array([9]).buffer });
+    const { resilientTextToSpeech } = await import('@/lib/ai/openai');
+    const out = await resilientTextToSpeech('x', { initialDelayMs: 0, maxDelayMs: 0 });
+    expect(out.length).toBe(1);
+    expect(speechCreate).toHaveBeenCalledTimes(2);
   });
 });

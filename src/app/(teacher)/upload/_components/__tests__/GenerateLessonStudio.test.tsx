@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import GenerateLessonStudio from '../GenerateLessonStudio';
 
@@ -15,6 +15,12 @@ beforeEach(() => {
         standard_framework: 'TEKS', parsed_content: { title: 'Fractions', summary: 's', objectives: [], key_concepts: [], vocabulary: [], misconception_risks: [], proposed_standards: [] } }],
     }), { status: 200 });
   }) as unknown as typeof fetch;
+});
+afterEach(() => {
+  // The dictation test stubs mic globals in its body; reset them so the suite is order-independent.
+  (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = undefined;
+  (globalThis.navigator as unknown as { mediaDevices?: unknown }).mediaDevices = undefined;
+  vi.restoreAllMocks();
 });
 
 describe('GenerateLessonStudio', () => {
@@ -55,6 +61,6 @@ describe('GenerateLessonStudio', () => {
     fireEvent.click(screen.getByRole('button', { name: /dictate/i }));
     await waitFor(() => expect(rec.state).toBe('recording'));
     fireEvent.click(screen.getByRole('button', { name: /stop/i }));
-    await waitFor(() => expect((screen.getByLabelText(/describe what to teach/i) as HTMLTextAreaElement).value).toMatch(/photosynthesis basics/));
+    await waitFor(() => expect((screen.getByLabelText(/what should this lesson teach/i) as HTMLTextAreaElement).value).toMatch(/photosynthesis basics/));
   });
 });
