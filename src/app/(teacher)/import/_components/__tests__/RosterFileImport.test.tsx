@@ -46,6 +46,10 @@ describe('RosterFileImport — lean mode', () => {
     fireEvent.change(input, { target: { files: [file] } });
     const btn = await screen.findByRole('button', { name: /upload/i });
     fireEvent.click(btn);
+    // Wait for the fetch call to be RECORDED before reading mock.calls — under full-suite
+    // concurrency the status node can settle a tick before the spy's call array is populated,
+    // so gate on the call explicitly (the only call-args read not already gated by a counter).
+    await waitFor(() => expect(vi.mocked(globalThis.fetch)).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument());
     // Should show the summary values (studentsCreated=3, enrolled=3)
     expect(screen.getAllByText(/3/).length).toBeGreaterThanOrEqual(1);
