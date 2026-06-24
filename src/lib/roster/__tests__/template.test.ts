@@ -130,3 +130,24 @@ describe('buildRosterTemplate', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Integration: parsing an unedited template should yield zero real rows
+// ---------------------------------------------------------------------------
+// Import parseRosterWorkbook here — NOT in the describe block above so the
+// existing header-round-trip tests stay isolated.
+
+import { parseRosterWorkbook } from '@/lib/roster/parseWorkbook';
+
+describe('parseRosterWorkbook(buildRosterTemplate()) — unedited template imports nothing', () => {
+  it('yields 0 teachers, 0 classes, 0 students, 0 enrollments, 0 parents and no issues', () => {
+    const bytes = buildRosterTemplate();
+    const { roster, issues } = parseRosterWorkbook(bytes);
+    expect(roster.teachers).toHaveLength(0);
+    expect(roster.classes).toHaveLength(0);
+    expect(roster.students).toHaveLength(0);
+    expect(roster.enrollments).toHaveLength(0);
+    expect(roster.parents).toHaveLength(0);
+    expect(issues).toHaveLength(0);
+  });
+});
