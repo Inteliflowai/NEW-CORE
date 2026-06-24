@@ -729,3 +729,22 @@ describe('0019 content_studio', () => {
     expect(s()).toMatch(/insert into storage\.buckets[\s\S]*'lesson-uploads'[\s\S]*false/i);
   });
 });
+
+describe('0022 google_connections', () => {
+  const s = () => sql('0022_google_connections.sql');
+  it('creates the per-teacher token vault with user_id PK', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.google_connections/);
+    expect(s()).toMatch(/user_id\s+uuid\s+PRIMARY KEY\s+REFERENCES public\.users\(id\)/);
+  });
+  it('has encrypted token columns + expiry + scopes (no plaintext token columns)', () => {
+    for (const c of ['access_token_enc', 'refresh_token_enc', 'token_expiry', 'granted_scopes', 'google_id', 'email']) {
+      expect(s(), `missing column ${c}`).toContain(c);
+    }
+    expect(s()).not.toMatch(/access_token\s+text/);   // must be _enc, never plaintext
+  });
+  it('enables RLS deny-by-default (platform-admin policy only) + grants', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.google_connections\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/CREATE POLICY [\s\S]*google_connections[\s\S]*USING \(public\.is_platform_admin\(\)\)/);
+    expect(s()).toMatch(/GRANT ALL ON public\.google_connections\s+TO authenticated, anon, service_role/);
+  });
+});
