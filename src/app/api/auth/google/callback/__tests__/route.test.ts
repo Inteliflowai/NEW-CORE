@@ -44,13 +44,17 @@ describe('GET /api/auth/google/callback', () => {
   it('401 when no logged-in user', async () => {
     getUser.mockResolvedValue({ data: { user: null }, error: null });
     const { GET } = await import('@/app/api/auth/google/callback/route');
-    expect((await GET(req('s', 's'))).status).toBe(401);
+    const res = await GET(req('s', 's'));
+    expect(res.status).toBe(401);
+    expect(res.cookies.get('g_oauth_state')?.value ?? '').toBe('');
   });
   it('403 for a non-teacher (student) role', async () => {
     single.mockResolvedValue({ data: { role: 'student', school_id: 's1' }, error: null });
     const { GET } = await import('@/app/api/auth/google/callback/route');
-    expect((await GET(req('s', 's'))).status).toBe(403);
+    const res = await GET(req('s', 's'));
+    expect(res.status).toBe(403);
     expect(exchangeCodeForTokens).not.toHaveBeenCalled();
+    expect(res.cookies.get('g_oauth_state')?.value ?? '').toBe('');
   });
   it('redirects error=denied when the user cancels consent (Google ?error=, no code)', async () => {
     const r = new NextRequest('http://x/api/auth/google/callback?error=access_denied&state=s');

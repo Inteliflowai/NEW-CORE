@@ -20,10 +20,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   const supabase = await createServerSupabaseClient();
   const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (authError || !user) {
+    const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    res.cookies.delete('g_oauth_state');
+    return res;
+  }
   const { data: profile } = await supabase.from('users').select('role, school_id').eq('id', user.id).single();
   const role = profile?.role ?? null;
-  if (role !== 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (role !== 'teacher') {
+    const res = NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    res.cookies.delete('g_oauth_state');
+    return res;
+  }
 
   const oauthError = searchParams.get('error');
   if (oauthError) return back(origin, 'error=denied');   // user cancelled consent (Google ?error=, no code)
