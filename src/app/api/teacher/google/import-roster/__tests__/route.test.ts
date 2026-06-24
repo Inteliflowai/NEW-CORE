@@ -4,17 +4,20 @@ import { NextRequest } from 'next/server';
 const getUser = vi.fn();
 const single = vi.fn();
 const reconcile = vi.fn();
-const existingClass = vi.fn();   // classes.maybeSingle()
-const classUpdate = vi.fn();
-const classInsert = vi.fn();
+const existingClass = vi.fn();   // classes select → maybeSingle(); used for BOTH the initial lookup
+                                  // and the re-read after a 23505 INSERT race (via mockResolvedValueOnce)
+const classUpdateResult = vi.fn(); // resolves { error } — the result of the final .eq() in the update chain
+const classUpdateSpy = vi.fn();    // records the value passed to .update(v)
+const classInsertResult = vi.fn(); // resolves { data, error } — the result of .single() in the insert chain
+const classInsertSpy = vi.fn();    // records the value passed to .insert(v)
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: async () => ({ auth: { getUser }, from: () => ({ select: () => ({ eq: () => ({ single }) }) }) }),
   createAdminSupabaseClient: () => ({
     from: (t: string) => {
       if (t === 'classes') return {
         select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: existingClass }) }) }),
-        update: (v: unknown) => { classUpdate(v); return { eq: () => ({ eq: async () => ({ error: null }) }) }; },
-        insert: (v: unknown) => { classInsert(v); return { select: () => ({ single: async () => ({ data: { id: 'newCls' }, error: null }) }) }; },
+        update: (v: unknown) => { classUpdateSpy(v); return { eq: () => ({ eq: () => classUpdateResult() }) }; },
+        insert: (v: unknown) => { classInsertSpy(v); return { select: () => ({ single: () => classInsertResult() }) }; },
       };
       return {};
     },
@@ -24,11 +27,17 @@ vi.mock('@/lib/google/reconcileCourseRoster', () => ({ reconcileCourseRoster: (.
 vi.mock('@/lib/google/tokens', async () => { class GoogleNotConnectedError extends Error {} return { GoogleNotConnectedError }; });
 vi.mock('@/lib/google/classroom', async () => { class GoogleScopeError extends Error {} return { GoogleScopeError }; });
 
+// Aliases kept so existing tests that reference classUpdate / classInsert still compile.
+const classUpdate = classUpdateSpy;
+const classInsert = classInsertSpy;
+
 beforeEach(() => {
-  for (const m of [getUser, single, reconcile, existingClass, classUpdate, classInsert]) m.mockReset();
+  for (const m of [getUser, single, reconcile, existingClass, classUpdateResult, classUpdateSpy, classInsertResult, classInsertSpy]) m.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   single.mockResolvedValue({ data: { role: 'teacher', school_id: 's1' }, error: null });
   existingClass.mockResolvedValue({ data: null, error: null });
+  classUpdateResult.mockResolvedValue({ error: null });
+  classInsertResult.mockResolvedValue({ data: { id: 'newCls' }, error: null });
   reconcile.mockResolvedValue({ created: 2, linked: 1, skippedNoEmail: 1, skippedOther: 0, enrolled: 3, reactivated: 0, softRemoved: 0, errors: 0, removeSkippedSuspectEmpty: false });
 });
 function req(body: object) {
@@ -82,5 +91,52 @@ describe('POST /api/teacher/google/import-roster', () => {
     const res = await POST(req({ courseId: 'c1', name: 'Math' }));
     expect(res.status).toBe(500);
     expect(JSON.stringify(await res.json())).not.toContain('secret db detail');
+  });
+
+  // Fix (1): concurrent first-import race — INSERT returns 23505
+  it('23505 INSERT race, re-lookup finds the row owned by the same user → reconcile proceeds', async () => {
+    // First maybeSingle (initial lookup): no row yet
+    existingClass.mockResolvedValueOnce({ data: null, error: null });
+    // INSERT fails with unique-violation
+    classInsertResult.mockResolvedValueOnce({ data: null, error: { code: '23505', message: 'duplicate key' } });
+    // Second maybeSingle (re-read after 23505): finds the row owned by the same user
+    existingClass.mockResolvedValueOnce({ data: { id: 'racedCls', teacher_id: 'u1' }, error: null });
+    const { POST } = await import('@/app/api/teacher/google/import-roster/route');
+    const res = await POST(req({ courseId: 'c1', name: 'Math' }));
+    expect(res.status).toBe(200);
+    expect(reconcile).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ classId: 'racedCls' }));
+  });
+
+  it('23505 INSERT race, re-lookup finds a row owned by a DIFFERENT teacher → 403, engine NOT called', async () => {
+    // First maybeSingle (initial lookup): no row yet
+    existingClass.mockResolvedValueOnce({ data: null, error: null });
+    // INSERT fails with unique-violation
+    classInsertResult.mockResolvedValueOnce({ data: null, error: { code: '23505', message: 'duplicate key' } });
+    // Second maybeSingle (re-read after 23505): finds the row owned by a different teacher
+    existingClass.mockResolvedValueOnce({ data: { id: 'racedCls', teacher_id: 'otherTeacher' }, error: null });
+    const { POST } = await import('@/app/api/teacher/google/import-roster/route');
+    const res = await POST(req({ courseId: 'c1', name: 'Math' }));
+    expect(res.status).toBe(403);
+    expect(reconcile).not.toHaveBeenCalled();
+  });
+
+  // Fix (2): class read error returns 500 (not a fall-through to INSERT)
+  it('500 when the initial class read (maybeSingle) returns a DB error', async () => {
+    existingClass.mockResolvedValueOnce({ data: null, error: { message: 'db connection failed' } });
+    const { POST } = await import('@/app/api/teacher/google/import-roster/route');
+    const res = await POST(req({ courseId: 'c1', name: 'Math' }));
+    expect(res.status).toBe(500);
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(classInsertSpy).not.toHaveBeenCalled();
+  });
+
+  // Fix (3): class name-UPDATE error is non-fatal — reconcile still runs
+  it('class name-UPDATE error is non-fatal — reconcile still runs', async () => {
+    existingClass.mockResolvedValue({ data: { id: 'oldCls', teacher_id: 'u1' }, error: null });
+    classUpdateResult.mockResolvedValue({ error: { message: 'update failed' } });
+    const { POST } = await import('@/app/api/teacher/google/import-roster/route');
+    const res = await POST(req({ courseId: 'c1', name: 'Math Renamed' }));
+    expect(res.status).toBe(200);
+    expect(reconcile).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ classId: 'oldCls' }));
   });
 });

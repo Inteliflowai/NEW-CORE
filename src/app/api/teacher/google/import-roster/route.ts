@@ -26,21 +26,42 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     // Class upsert by (school_id, google_course_id). Re-import: update NAME only (preserve a
     // teacher-edited subject/grade). New: set subject/grade from the teacher-confirmed preview.
-    const { data: existing } = await admin.from('classes').select('id, teacher_id').eq('school_id', schoolId).eq('google_course_id', courseId).maybeSingle();
+    const { data: existing, error: readErr } = await admin.from('classes').select('id, teacher_id').eq('school_id', schoolId).eq('google_course_id', courseId).maybeSingle();
+    if (readErr) {
+      console.error('[gc] class read failed:', readErr.message);
+      return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
     let classId: string;
     if (existing) {
       // IMP-6: this course is already imported. ONLY its teacher-of-record may re-import it — else
       // teacher B could re-point teacher A's class to B's Google token. Generic 403; engine not called.
       if (existing.teacher_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       classId = existing.id as string;
-      await admin.from('classes').update({ name }).eq('school_id', schoolId).eq('google_course_id', courseId);
+      const { error: updateErr } = await admin.from('classes').update({ name }).eq('school_id', schoolId).eq('google_course_id', courseId);
+      if (updateErr) console.error('[gc] class rename failed (non-fatal):', updateErr.message);
     } else {
       const { data: created, error: insErr } = await admin.from('classes').insert({
         name, subject: body.subject ?? null, grade_level: body.gradeLevel ?? null,
         teacher_id: user.id, school_id: schoolId, google_course_id: courseId, is_active: true,
       }).select('id').single();
-      if (insErr || !created) return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-      classId = created.id as string;
+      if (insErr) {
+        // Handle concurrent first-import race: two simultaneous imports both see no existing row,
+        // both attempt INSERT, and the loser gets Postgres unique-violation code 23505.
+        if (insErr.code === '23505') {
+          const { data: raced, error: reReadErr } = await admin.from('classes').select('id, teacher_id').eq('school_id', schoolId).eq('google_course_id', courseId).maybeSingle();
+          if (reReadErr || !raced) return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+          // IMP-6 on the now-found row: only its owner may proceed.
+          if (raced.teacher_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+          classId = raced.id as string;
+          const { error: updateErr } = await admin.from('classes').update({ name }).eq('school_id', schoolId).eq('google_course_id', courseId);
+          if (updateErr) console.error('[gc] class rename failed (non-fatal):', updateErr.message);
+        } else {
+          return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        }
+      } else {
+        if (!created) return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        classId = created.id as string;
+      }
     }
 
     const result = await reconcileCourseRoster(admin, { teacherId: user.id, schoolId, googleCourseId: courseId, classId });
