@@ -748,3 +748,14 @@ describe('0022 google_connections', () => {
     expect(s()).toMatch(/GRANT ALL ON public\.google_connections\s+TO authenticated, anon, service_role/);
   });
 });
+
+describe('0023 behavioral_signals_rls', () => {
+  const s = () => sql('0023_behavioral_signals_rls.sql');
+  it('enables RLS on behavioral_signals (closes the 0013 RLS gap)', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.behavioral_signals\s+ENABLE ROW LEVEL SECURITY/);
+  });
+  it('adds a deny-by-default platform-admin policy (DROP-then-CREATE, re-runnable)', () => {
+    expect(s()).toMatch(/DROP POLICY IF EXISTS behavioral_signals_platform_all ON public\.behavioral_signals/);
+    expect(s()).toMatch(/CREATE POLICY behavioral_signals_platform_all ON public\.behavioral_signals FOR ALL\s+USING \(public\.is_platform_admin\(\)\) WITH CHECK \(public\.is_platform_admin\(\)\)/);
+  });
+});
