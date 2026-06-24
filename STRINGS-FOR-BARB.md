@@ -763,3 +763,20 @@ Students can answer a task by drawing or attaching a photo; teachers see the act
 Note: the "Student's work" panel is teacher-only; it shows the student's own answers + the AI grading feedback (no band/risk machinery).
 
 **Seg 5 review update (2026-06-23):** teacher review image labels are now NEUTRAL (a photo isn't a "drawing"): enlarge button "Enlarge the answer image for question N", thumbnail alt "Answer image for question N", overlay "Student work" / "Answer image, enlarged". Student-side preview alt stays "Your drawing or photo".
+
+### Content Studio — Seg 3: Voice (dictation + read-aloud) (DRAFT, Barb sign-off required)
+
+Speak instead of type (mic → Whisper), and listen instead of read (a "Listen" button → OpenAI TTS reads the passage's audio_script).
+
+| Key | Draft |
+|---|---|
+| Mic — teacher describe-a-lesson | Dictate |
+| Mic — student answer | Speak your answer |
+| Mic — while recording | Stop |
+| Mic — transcribing | Transcribing… |
+| Mic — error | Didn't catch that — try again. |
+| Read-aloud — idle | Listen |
+| Read-aloud — loading | Loading… |
+| Read-aloud — while playing | Stop |
+
+Notes: the mic is hidden entirely when the device has no microphone support (typing always works). Dictated text is APPENDED to whatever's typed. Read-aloud reads the conversational `audio_script` (falls back to the written passage). The 503 "system is busy" envelope is shared with the rest of Content Studio.
