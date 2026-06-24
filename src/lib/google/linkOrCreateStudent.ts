@@ -15,7 +15,7 @@ export type LinkResult =
 export interface LinkArgs { schoolId: string; googleId: string; email: string; name: string }
 
 async function writeIdentity(admin: SupabaseClient, args: { schoolId: string; googleId: string; email: string; studentId: string }) {
-  await admin.from('external_identities').upsert(
+  const { error } = await admin.from('external_identities').upsert(
     {
       school_id: args.schoolId,
       provider: 'google',
@@ -26,6 +26,7 @@ async function writeIdentity(admin: SupabaseClient, args: { schoolId: string; go
     },
     { onConflict: 'school_id,provider,external_id' },
   );
+  if (error) console.error('[gc] identity write failed (non-fatal):', error.message);
 }
 
 export async function linkOrCreateStudent(admin: SupabaseClient, args: LinkArgs): Promise<LinkResult> {
@@ -34,13 +35,14 @@ export async function linkOrCreateStudent(admin: SupabaseClient, args: LinkArgs)
 
   try {
     // 1. Existing google identity row → link (harden last_seen below).
-    const { data: idRow } = await admin
+    const { data: idRow, error: idRowError } = await admin
       .from('external_identities')
       .select('core_student_id')
       .eq('school_id', args.schoolId)
       .eq('provider', 'google')
       .eq('external_id', args.googleId)
       .maybeSingle();
+    if (idRowError) return { outcome: 'skipped', reason: 'error' };
     if (idRow?.core_student_id) {
       const studentId = idRow.core_student_id as string;
       await writeIdentity(admin, { schoolId: args.schoolId, googleId: args.googleId, email, studentId });
@@ -49,11 +51,12 @@ export async function linkOrCreateStudent(admin: SupabaseClient, args: LinkArgs)
 
     // 2. Match existing public.users rows by lowercased email within the school. Exact .eq() on
     //    the lowercased value (NOT .ilike — an identity key must not be a LIKE pattern; IMP-5).
-    const { data: userRows } = await admin
+    const { data: userRows, error: userRowsError } = await admin
       .from('users')
       .select('id, role')
       .eq('school_id', args.schoolId)
       .eq('email', email);
+    if (userRowsError) return { outcome: 'skipped', reason: 'error' };
     const rows = (userRows as Array<{ id: string; role: string }> | null) ?? [];
     // Role-collision guard FIRST: if the email is used by ANY non-student role (teacher/admin/
     // parent), refuse — even if a student row also matches (never rebind a staff email; IMP-5).

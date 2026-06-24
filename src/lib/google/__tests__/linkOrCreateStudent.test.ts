@@ -9,17 +9,24 @@ vi.mock('@/lib/trial/generatePassword', () => ({ generateTrialPassword: () => 'T
 // fake admin: external_identities google-row lookup + users email lookup + identity upsert capture.
 function fakeAdmin(opts: {
   idRow?: { core_student_id: string } | null;       // existing google identity row
+  idRowError?: { message: string } | null;          // error from external_identities lookup
   userRows?: Array<{ id: string; role: string }>;   // public.users email matches
+  userRowsError?: { message: string } | null;       // error from users lookup
 }) {
   const upserts: Array<Record<string, unknown>> = [];
-  let call = 0;
   return {
     upserts,
     from(table: string) {
       if (table === 'external_identities') {
         return {
           select() {
-            return { eq() { return this; }, maybeSingle: async () => ({ data: opts.idRow ?? null, error: null }) };
+            return {
+              eq() { return this; },
+              maybeSingle: async () => ({
+                data: opts.idRowError ? null : (opts.idRow ?? null),
+                error: opts.idRowError ?? null,
+              }),
+            };
           },
           upsert(row: Record<string, unknown>, o?: { onConflict?: string }) {
             upserts.push({ ...row, __onConflict: o?.onConflict }); return Promise.resolve({ error: null });
@@ -31,8 +38,8 @@ function fakeAdmin(opts: {
         select() {
           const chain = {
             eq() { return chain; },
-            then(resolve: (v: { data: unknown; error: null }) => unknown) {
-              return resolve({ data: opts.userRows ?? [], error: null });
+            then(resolve: (v: { data: unknown; error: { message: string } | null }) => unknown) {
+              return resolve({ data: opts.userRowsError ? null : (opts.userRows ?? []), error: opts.userRowsError ?? null });
             },
           };
           return chain;
@@ -102,5 +109,19 @@ describe('linkOrCreateStudent', () => {
     const { linkOrCreateStudent } = await import('@/lib/google/linkOrCreateStudent');
     const r = await linkOrCreateStudent(fakeAdmin({ idRow: null, userRows: [] }) as never, { schoolId: 's1', googleId: 'g1', email: 'x@b.edu', name: 'X' });
     expect(r).toEqual({ outcome: 'skipped', reason: 'rebind_refused' });
+  });
+  it('skips error when the external_identities google-id lookup returns a DB error (ensureAuthUser NOT called)', async () => {
+    const { linkOrCreateStudent } = await import('@/lib/google/linkOrCreateStudent');
+    const admin = fakeAdmin({ idRowError: { message: 'boom' } });
+    const r = await linkOrCreateStudent(admin as never, { schoolId: 's1', googleId: 'g1', email: 'a@b.edu', name: 'A' });
+    expect(r).toEqual({ outcome: 'skipped', reason: 'error' });
+    expect(ensureAuthUser).not.toHaveBeenCalled();
+  });
+  it('skips error when the users email-collision lookup returns a DB error (ensureAuthUser NOT called)', async () => {
+    const { linkOrCreateStudent } = await import('@/lib/google/linkOrCreateStudent');
+    const admin = fakeAdmin({ idRow: null, userRowsError: { message: 'boom' } });
+    const r = await linkOrCreateStudent(admin as never, { schoolId: 's1', googleId: 'g1', email: 'b@b.edu', name: 'B' });
+    expect(r).toEqual({ outcome: 'skipped', reason: 'error' });
+    expect(ensureAuthUser).not.toHaveBeenCalled();
   });
 });
