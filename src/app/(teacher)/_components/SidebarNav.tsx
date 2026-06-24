@@ -19,6 +19,7 @@ const ICON: Record<NavIconKey, (p: { className?: string }) => React.JSX.Element>
   quizzes: IconQuizzes,
   insights: IconInsights,
   upload: IconUpload,
+  googleClassroom: IconUpload,
 };
 
 function NavLink({ item, alertCount }: { item: NavItem; alertCount?: number }) {

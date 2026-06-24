@@ -780,3 +780,20 @@ Speak instead of type (mic → Whisper), and listen instead of read (a "Listen" 
 | Read-aloud — while playing | Stop |
 
 Notes: the mic is hidden entirely when the device has no microphone support (typing always works). Dictated text is APPENDED to whatever's typed. Read-aloud reads the conversational `audio_script` (falls back to the written passage). The 503 "system is busy" envelope is shared with the rest of Content Studio.
+
+## Google Classroom — Seg 1 (connect) (DRAFT, Barb sign-off required)
+
+Teacher connect/reconnect/disconnect status card at `/settings/google`.
+
+| Key | Draft |
+|---|---|
+| Card heading | Google Classroom |
+| Loading state | Checking your connection… |
+| Connected state | Connected. |
+| Needs-reconnect state | Your Google access needs renewing. |
+| Not-connected state | Connect your Google account to import rosters and sync assignments. |
+| Connect CTA | Connect Google Classroom |
+| Reconnect CTA | Reconnect Google Classroom |
+| Disconnect CTA | Disconnect |
+
+Note: the connect/reconnect CTAs are `<a href="/api/teacher/google/connect">` (OAuth redirect); Disconnect is a `POST /api/teacher/google/disconnect` button. All strings are teacher-only.

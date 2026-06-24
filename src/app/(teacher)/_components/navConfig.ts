@@ -15,7 +15,8 @@ export type NavIconKey =
   | 'lessons'
   | 'quizzes'
   | 'insights'
-  | 'upload';
+  | 'upload'
+  | 'googleClassroom';
 
 export interface NavItem {
   label: string;
@@ -61,6 +62,12 @@ export const NAV_ENTRIES: NavEntry[] = [
     items: [
       { label: 'Insights', href: '/insights', icon: 'insights' },
       { label: 'Upload', href: '/upload', icon: 'upload' },
+    ],
+  },
+  {
+    groupLabel: 'SETTINGS',
+    items: [
+      { label: 'Google Classroom', href: '/settings/google', icon: 'googleClassroom' },
     ],
   },
 ];
