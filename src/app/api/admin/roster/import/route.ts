@@ -2,31 +2,53 @@
 //
 // POST /api/admin/roster/import
 //
-// School-admin-tier full roster import. Accepts a multipart/form-data upload of
-// an XLSX workbook and either previews the parsed counts (mode=preview, default)
-// or commits the import by running the engine (mode=commit).
+// Despite the /admin/ path, this is open to STAFF_ROLES (teacher-run full import,
+// Marvin 2026-06-24); each non-platform caller is pinned to their own school.
+//
+// Full 5-sheet roster import. Accepts a multipart/form-data upload of an XLSX
+// workbook and either previews the parsed counts (mode=preview, default) or
+// commits the import by running the engine (mode=commit).
 //
 // Auth chain:
-//   guardSchoolAdmin() → 401/403 on failure
-//   platform_admin callers have g.schoolId === null → must supply 'schoolId' in the form
+//   getUser() → 401 on failure
+//   profile.role in STAFF_ROLES → 403 else
+//   platform_admin: must supply 'schoolId' form field (400 if missing)
+//   non-platform (teacher/school_admin/school_sysadmin): pinned to profile.school_id;
+//     any form schoolId field is IGNORED (own-school-pinning)
 //
-// This route uses xlsx (SheetJS) via parseRosterWorkbook, which needs the Node
-// runtime (not the Edge runtime).
+// This route uses xlsx (SheetJS) via parseRosterWorkbook, which needs the Node runtime.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { guardSchoolAdmin } from '@/lib/auth/guards';
-import { createAdminSupabaseClient } from '@/lib/supabase/server';
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
+import { STAFF_ROLES } from '@/lib/auth/roles';
 import { parseRosterWorkbook } from '@/lib/roster/parseWorkbook';
 import { importRoster } from '@/lib/roster/importRoster';
 
 export const runtime = 'nodejs';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // ── Auth ────────────────────────────────────────────────────────────────────
-  const g = await guardSchoolAdmin();
-  if ('error' in g) return g.error;
+  const supabase = await createServerSupabaseClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase
+    .from('users')
+    .select('role, school_id')
+    .eq('id', user.id)
+    .single();
+
+  const role = profile?.role ?? null;
+  if (!role || !(STAFF_ROLES as readonly string[]).includes(role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const isPlatformAdmin = role === 'platform_admin';
 
   // ── Parse form ──────────────────────────────────────────────────────────────
   let form: FormData;
@@ -42,8 +64,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // ── Resolve schoolId ────────────────────────────────────────────────────────
   let schoolId: string;
-  if (g.isPlatformAdmin) {
-    // platform_admin has g.schoolId === null — must supply it explicitly
+  if (isPlatformAdmin) {
+    // platform_admin has no inherent school — must supply it explicitly
     if (!schoolIdField) {
       return NextResponse.json(
         { error: 'schoolId is required for platform_admin callers' },
@@ -52,8 +74,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     schoolId = schoolIdField;
   } else {
-    // school_admin / school_sysadmin — scope is their own school
-    schoolId = g.schoolId as string;
+    // teacher / school_admin / school_sysadmin — pinned to their own school;
+    // any form schoolId field is intentionally IGNORED (own-school-pinning)
+    const profileSchoolId = profile?.school_id ?? null;
+    if (!profileSchoolId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    schoolId = profileSchoolId;
   }
 
   // ── Validate file ───────────────────────────────────────────────────────────
@@ -61,12 +88,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'A file field (Blob) is required' }, { status: 400 });
   }
 
-  const file = fileField as Blob;
+  const file = fileField as File;
 
   if (file.size > MAX_FILE_BYTES) {
     return NextResponse.json(
       { error: `File too large — maximum is ${MAX_FILE_BYTES / (1024 * 1024)} MB` },
       { status: 413 },
+    );
+  }
+
+  // ── MIME / extension check (full import requires .xlsx — 5-sheet workbook) ──
+  const fileName = (file as File).name ?? '';
+  const mimeOk = file.type === XLSX_MIME || fileName.endsWith('.xlsx');
+  if (!mimeOk) {
+    return NextResponse.json(
+      { error: 'Unsupported file type — the full roster import requires an .xlsx workbook' },
+      { status: 415 },
     );
   }
 
@@ -78,7 +115,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (mode === 'commit') {
       const admin = createAdminSupabaseClient();
       const summary = await importRoster(admin, { schoolId, roster });
-      console.info('[roster-import] actor=%s school=%s summary=%o', g.userId, schoolId, summary);
+      console.info('[roster-import] actor=%s school=%s summary=%o', user.id, schoolId, summary);
       return NextResponse.json({ mode: 'commit', summary });
     }
 
@@ -95,7 +132,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       issues,
     });
   } catch (err) {
-    console.error('[roster-import] unexpected error actor=%s school=%s', g.userId, schoolId, err);
+    console.error('[roster-import] unexpected error actor=%s school=%s', user.id, schoolId, err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

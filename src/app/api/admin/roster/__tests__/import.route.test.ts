@@ -1,19 +1,25 @@
 // src/app/api/admin/roster/__tests__/import.route.test.ts
 // Tests for POST /api/admin/roster/import
-// Node env (xlsx + FormData round-trip). Mirrors the hoisted-mock pattern used by
-// other admin route tests (e.g. spark-enable/__tests__/route.test.ts).
+// Route is now open to STAFF_ROLES (teacher-run full import, Marvin 2026-06-24).
+// Non-platform callers are pinned to their OWN school — any form schoolId is ignored.
+// Node env (xlsx + FormData round-trip). Hoisted-mock pattern.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─── Shared mock state ────────────────────────────────────────────────────────
 
-const mockGuardSchoolAdmin = vi.fn();
+const getUser = vi.fn();
+const profileSingle = vi.fn();
 const mockParseRosterWorkbook = vi.fn();
 const mockImportRoster = vi.fn();
 
 // ─── Module mocks (hoisted, top-level — the reliable pattern) ─────────────────
 
-vi.mock('@/lib/auth/guards', () => ({
-  guardSchoolAdmin: () => mockGuardSchoolAdmin(),
+vi.mock('@/lib/supabase/server', () => ({
+  createServerSupabaseClient: async () => ({
+    auth: { getUser },
+    from: () => ({ select: () => ({ eq: () => ({ single: profileSingle }) }) }),
+  }),
+  createAdminSupabaseClient: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('@/lib/roster/parseWorkbook', () => ({
@@ -22,11 +28,6 @@ vi.mock('@/lib/roster/parseWorkbook', () => ({
 
 vi.mock('@/lib/roster/importRoster', () => ({
   importRoster: (...a: unknown[]) => mockImportRoster(...a),
-}));
-
-vi.mock('@/lib/supabase/server', () => ({
-  createAdminSupabaseClient: vi.fn().mockReturnValue({}),
-  createServerSupabaseClient: vi.fn(),
 }));
 
 // ─── Fixture helpers ──────────────────────────────────────────────────────────
@@ -56,29 +57,38 @@ const FAKE_SUMMARY = {
   issues: [],
 };
 
-/** Build a multipart FormData request — mirrors the drawing and upload test helpers. */
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/** Build a multipart FormData request. */
 function makeFormReq(opts: {
   hasFile?: boolean;
   fileSizeBytes?: number;
+  fileMime?: string;
+  fileName?: string;
   mode?: string;
   schoolId?: string;
 }): import('next/server').NextRequest {
   const {
     hasFile = true,
     fileSizeBytes = 100,
+    fileMime = XLSX_MIME,
+    fileName,
     mode,
     schoolId,
   } = opts;
 
   const form = new FormData();
   if (hasFile) {
-    form.set('file', new Blob([new Uint8Array(fileSizeBytes)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const blob = new File(
+      [new Uint8Array(fileSizeBytes)],
+      fileName ?? 'roster.xlsx',
+      { type: fileMime },
+    );
+    form.set('file', blob);
   }
   if (mode !== undefined) form.set('mode', mode);
   if (schoolId !== undefined) form.set('schoolId', schoolId);
 
-  // Use standard Request so FormData Content-Type (multipart/form-data with boundary) is set
-  // automatically by the browser-compatible FormData impl in Node.
   return new Request('http://localhost/api/admin/roster/import', {
     method: 'POST',
     body: form,
@@ -89,46 +99,63 @@ function makeFormReq(opts: {
 
 describe('POST /api/admin/roster/import', () => {
   beforeEach(() => {
-    mockGuardSchoolAdmin.mockReset();
     mockParseRosterWorkbook.mockReset();
     mockImportRoster.mockReset();
+    getUser.mockReset();
+    profileSingle.mockReset();
 
-    // Defaults: school_admin (not platform admin), schoolId present
-    mockGuardSchoolAdmin.mockResolvedValue({
-      userId: 'admin-user-1',
-      schoolId: 'school-1',
-      role: 'school_admin',
-      isPlatformAdmin: false,
+    // Default: authenticated teacher, school-1
+    getUser.mockResolvedValue({ data: { user: { id: 'teacher-1' } }, error: null });
+    profileSingle.mockResolvedValue({
+      data: { role: 'teacher', school_id: 'school-1' },
+      error: null,
     });
 
     mockParseRosterWorkbook.mockReturnValue({ roster: FAKE_ROSTER, issues: FAKE_ISSUES });
     mockImportRoster.mockResolvedValue(FAKE_SUMMARY);
   });
 
-  // ── Guard rejection ──────────────────────────────────────────────────────────
+  // ── Auth rejection ───────────────────────────────────────────────────────────
 
-  it('returns the guard error (403) when caller is not a school admin tier', async () => {
-    const { NextResponse } = await import('next/server');
-    mockGuardSchoolAdmin.mockResolvedValue({
-      error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
-    });
-
-    const { POST } = await import('../import/route');
-    const res = await POST(makeFormReq({}));
-    expect(res.status).toBe(403);
-    expect(mockParseRosterWorkbook).not.toHaveBeenCalled();
-    expect(mockImportRoster).not.toHaveBeenCalled();
-  });
-
-  it('returns the guard error (401) when caller is unauthenticated', async () => {
-    const { NextResponse } = await import('next/server');
-    mockGuardSchoolAdmin.mockResolvedValue({
-      error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }),
-    });
-
+  it('returns 401 when caller is unauthenticated (no user)', async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: null });
     const { POST } = await import('../import/route');
     const res = await POST(makeFormReq({}));
     expect(res.status).toBe(401);
+    expect(mockImportRoster).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when getUser returns an auth error', async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: { message: 'jwt expired' } });
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({}));
+    expect(res.status).toBe(401);
+    expect(mockImportRoster).not.toHaveBeenCalled();
+  });
+
+  // ── Role rejection ───────────────────────────────────────────────────────────
+
+  it('returns 403 for a non-staff role (student)', async () => {
+    profileSingle.mockResolvedValue({ data: { role: 'student', school_id: 'school-1' }, error: null });
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({}));
+    expect(res.status).toBe(403);
+    expect(mockImportRoster).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 for a non-staff role (parent)', async () => {
+    profileSingle.mockResolvedValue({ data: { role: 'parent', school_id: 'school-1' }, error: null });
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({}));
+    expect(res.status).toBe(403);
+    expect(mockImportRoster).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when non-platform caller has no school_id', async () => {
+    profileSingle.mockResolvedValue({ data: { role: 'teacher', school_id: null }, error: null });
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({}));
+    expect(res.status).toBe(403);
     expect(mockImportRoster).not.toHaveBeenCalled();
   });
 
@@ -146,7 +173,6 @@ describe('POST /api/admin/roster/import', () => {
 
   it('returns 413 when the file exceeds 5 MB', async () => {
     const { POST } = await import('../import/route');
-    // 5MB + 1 byte
     const res = await POST(makeFormReq({ fileSizeBytes: 5 * 1024 * 1024 + 1 }));
     expect(res.status).toBe(413);
     const body = await res.json();
@@ -155,16 +181,36 @@ describe('POST /api/admin/roster/import', () => {
     expect(mockImportRoster).not.toHaveBeenCalled();
   });
 
-  // ── platform_admin missing schoolId field ────────────────────────────────────
+  // ── MIME / extension guard (full route = .xlsx only) ────────────────────────
+
+  it('returns 415 when the uploaded file has CSV mime type', async () => {
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({ fileMime: 'text/csv', fileName: 'students.csv' }));
+    expect(res.status).toBe(415);
+    const body = await res.json();
+    expect(body.error).toMatch(/unsupported file type/i);
+    expect(mockParseRosterWorkbook).not.toHaveBeenCalled();
+  });
+
+  it('returns 415 when the mime is application/octet-stream and name is not .xlsx', async () => {
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({ fileMime: 'application/octet-stream', fileName: 'data.bin' }));
+    expect(res.status).toBe(415);
+    expect(mockParseRosterWorkbook).not.toHaveBeenCalled();
+  });
+
+  it('accepts a file with a .xlsx extension even if mime is octet-stream', async () => {
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({ fileMime: 'application/octet-stream', fileName: 'roster.xlsx', mode: 'preview' }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.mode).toBe('preview');
+  });
+
+  // ── platform_admin schoolId rules ────────────────────────────────────────────
 
   it('returns 400 when caller is platform_admin and no schoolId field is provided', async () => {
-    mockGuardSchoolAdmin.mockResolvedValue({
-      userId: 'plat-admin-1',
-      schoolId: null,        // platform_admin always has null schoolId
-      role: 'platform_admin',
-      isPlatformAdmin: true,
-    });
-
+    profileSingle.mockResolvedValue({ data: { role: 'platform_admin', school_id: null }, error: null });
     const { POST } = await import('../import/route');
     // No schoolId in form
     const res = await POST(makeFormReq({}));
@@ -174,14 +220,8 @@ describe('POST /api/admin/roster/import', () => {
     expect(mockImportRoster).not.toHaveBeenCalled();
   });
 
-  it('accepts a schoolId field when caller is platform_admin', async () => {
-    mockGuardSchoolAdmin.mockResolvedValue({
-      userId: 'plat-admin-1',
-      schoolId: null,
-      role: 'platform_admin',
-      isPlatformAdmin: true,
-    });
-
+  it('accepts a schoolId field when caller is platform_admin (preview)', async () => {
+    profileSingle.mockResolvedValue({ data: { role: 'platform_admin', school_id: null }, error: null });
     const { POST } = await import('../import/route');
     const res = await POST(makeFormReq({ mode: 'preview', schoolId: 'target-school' }));
     expect(res.status).toBe(200);
@@ -191,9 +231,61 @@ describe('POST /api/admin/roster/import', () => {
     expect(mockImportRoster).not.toHaveBeenCalled();
   });
 
-  // ── Preview mode ─────────────────────────────────────────────────────────────
+  it('platform_admin: passes the form schoolId to importRoster in commit mode', async () => {
+    profileSingle.mockResolvedValue({ data: { role: 'platform_admin', school_id: null }, error: null });
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({ mode: 'commit', schoolId: 'target-school' }));
+    expect(res.status).toBe(200);
+    expect(mockImportRoster).toHaveBeenCalledOnce();
+    expect(mockImportRoster).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ schoolId: 'target-school' }),
+    );
+  });
 
-  it('returns counts + issues in preview mode WITHOUT calling importRoster', async () => {
+  // ── Own-school-pinning: non-platform callers CANNOT import into another school ──
+
+  it('teacher: ignores any form schoolId and uses profile school_id (own-school-pinning)', async () => {
+    // Teacher profile is school-1; they try to pass school-999 in the form
+    const { createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    const fakeAdmin = {};
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(fakeAdmin as never);
+
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({ mode: 'commit', schoolId: 'school-999' }));
+    expect(res.status).toBe(200);
+
+    // importRoster must have been called with the teacher's OWN school, not school-999
+    expect(mockImportRoster).toHaveBeenCalledOnce();
+    expect(mockImportRoster).toHaveBeenCalledWith(
+      fakeAdmin,
+      expect.objectContaining({ schoolId: 'school-1' }),
+    );
+    // Explicitly: NOT called with school-999
+    const [, arg] = mockImportRoster.mock.calls[0] as [unknown, { schoolId: string }];
+    expect(arg.schoolId).toBe('school-1');
+    expect(arg.schoolId).not.toBe('school-999');
+  });
+
+  it('school_admin: ignores any form schoolId and uses profile school_id (own-school-pinning)', async () => {
+    profileSingle.mockResolvedValue({ data: { role: 'school_admin', school_id: 'school-2' }, error: null });
+    const { createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    const fakeAdmin = {};
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(fakeAdmin as never);
+
+    const { POST } = await import('../import/route');
+    // Pass a completely different schoolId in the form
+    const res = await POST(makeFormReq({ mode: 'commit', schoolId: 'school-999' }));
+    expect(res.status).toBe(200);
+    expect(mockImportRoster).toHaveBeenCalledWith(
+      fakeAdmin,
+      expect.objectContaining({ schoolId: 'school-2' }),
+    );
+  });
+
+  // ── Teacher happy-path (preview + commit) ────────────────────────────────────
+
+  it('teacher: preview mode returns counts + issues without calling importRoster', async () => {
     const { POST } = await import('../import/route');
     const res = await POST(makeFormReq({ mode: 'preview' }));
     expect(res.status).toBe(200);
@@ -201,30 +293,17 @@ describe('POST /api/admin/roster/import', () => {
     const body = await res.json();
     expect(body.mode).toBe('preview');
     expect(body.counts).toEqual({
-      teachers: FAKE_ROSTER.teachers.length,
-      classes: FAKE_ROSTER.classes.length,
-      students: FAKE_ROSTER.students.length,
+      teachers:    FAKE_ROSTER.teachers.length,
+      classes:     FAKE_ROSTER.classes.length,
+      students:    FAKE_ROSTER.students.length,
       enrollments: FAKE_ROSTER.enrollments.length,
-      parents: FAKE_ROSTER.parents.length,
+      parents:     FAKE_ROSTER.parents.length,
     });
     expect(body.issues).toEqual(FAKE_ISSUES);
-
-    // The engine must NOT be called during preview
     expect(mockImportRoster).not.toHaveBeenCalled();
   });
 
-  it('defaults to preview mode when mode field is absent', async () => {
-    const { POST } = await import('../import/route');
-    const res = await POST(makeFormReq({}));   // no mode field
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.mode).toBe('preview');
-    expect(mockImportRoster).not.toHaveBeenCalled();
-  });
-
-  // ── Commit mode ──────────────────────────────────────────────────────────────
-
-  it('calls importRoster with the correct schoolId + roster in commit mode and returns summary', async () => {
+  it('teacher: commit mode calls importRoster with profile school_id and returns summary', async () => {
     const { createAdminSupabaseClient } = await import('@/lib/supabase/server');
     const fakeAdmin = {};
     vi.mocked(createAdminSupabaseClient).mockReturnValue(fakeAdmin as never);
@@ -244,23 +323,34 @@ describe('POST /api/admin/roster/import', () => {
     );
   });
 
-  it('passes the platform_admin-supplied schoolId to importRoster in commit mode', async () => {
-    mockGuardSchoolAdmin.mockResolvedValue({
-      userId: 'plat-admin-1',
-      schoolId: null,
-      role: 'platform_admin',
-      isPlatformAdmin: true,
-    });
+  // ── school_admin happy-path ───────────────────────────────────────────────────
+
+  it('school_admin: commit mode calls importRoster with profile school_id', async () => {
+    profileSingle.mockResolvedValue({ data: { role: 'school_admin', school_id: 'school-2' }, error: null });
+    const { createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    const fakeAdmin = {};
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(fakeAdmin as never);
 
     const { POST } = await import('../import/route');
-    const res = await POST(makeFormReq({ mode: 'commit', schoolId: 'target-school' }));
+    const res = await POST(makeFormReq({ mode: 'commit' }));
     expect(res.status).toBe(200);
 
     expect(mockImportRoster).toHaveBeenCalledOnce();
     expect(mockImportRoster).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ schoolId: 'target-school' }),
+      fakeAdmin,
+      expect.objectContaining({ schoolId: 'school-2' }),
     );
+  });
+
+  // ── Defaults ─────────────────────────────────────────────────────────────────
+
+  it('defaults to preview mode when mode field is absent', async () => {
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({}));   // no mode field
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.mode).toBe('preview');
+    expect(mockImportRoster).not.toHaveBeenCalled();
   });
 
   // ── Unexpected errors ────────────────────────────────────────────────────────
