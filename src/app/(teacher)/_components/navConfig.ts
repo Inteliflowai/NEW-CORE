@@ -61,7 +61,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     groupLabel: 'INSIGHTS & TOOLS',
     items: [
       { label: 'Insights', href: '/insights', icon: 'insights' },
-      { label: 'Upload', href: '/upload', icon: 'upload' },
+      { label: 'Import Roster', href: '/import', icon: 'upload' },
     ],
   },
   {

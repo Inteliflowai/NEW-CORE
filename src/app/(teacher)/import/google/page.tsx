@@ -1,10 +1,8 @@
 // src/app/(teacher)/import/google/page.tsx
-import ImportWizard from './_components/ImportWizard';
+// The Google Classroom import wizard is now hosted in the /import page's Google tab.
+// Redirect any direct hits to /import so the full tablist is shown.
+import { redirect } from 'next/navigation';
 
-export default function GoogleImportPage() {
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <ImportWizard />
-    </div>
-  );
+export default function GoogleImportPage(): never {
+  redirect('/import');
 }

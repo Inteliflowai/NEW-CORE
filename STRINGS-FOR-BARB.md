@@ -908,3 +908,78 @@ Per Marvin (2026-06-24): the softer "reinforce" replaces "reteach" in teacher-fa
 | reteach now | reinforce now |
 
 > Still-pending "reteach" wording for Barb's broader copy sweep (NOT changed in Wave 0, flagged here): the student-facing `scoreMessage` pool ("Reteach mode" / "Reteach scope", `src/lib/quiz/scoreMessage.ts`) — entangled with the separately-deferred band/CL leak fix, so swapping one band word for another there is deferred to the leak pass; and the signature-moment prototype copy ("a 5-minute reteach", `src/app/(prototype)/signature-moment/_registers.ts`), which needs a noun-phrase rewrite rather than a word swap.
+
+---
+
+## Import Roster (Task 9, 2026-06-24) — Barb sign-off required
+
+`src/app/(teacher)/import/_components/RosterFileImport.tsx` + `RosterImportTabs.tsx` + `import/page.tsx`
+
+### Page header + nav (shared across lean + full modes)
+
+| Key | Draft |
+|---|---|
+| Page title | Import Roster |
+| Kicker (eyebrow) | Add students |
+| Nav sidebar label | Import Roster |
+
+### Tab labels (ARIA tablist)
+
+| Key | Draft |
+|---|---|
+| Tab 1 | From a file |
+| Tab 2 | From Google Classroom |
+
+### File input
+
+| Key | Draft |
+|---|---|
+| Label | Choose a file |
+| Sub-label | (.xlsx or .csv) |
+| Upload button (lean) | Upload |
+| Preview button (full) | Preview |
+| Commit button (full) | Commit |
+| Download template link (full) | Download template |
+
+### Empty / no-classes states
+
+| Key | Draft |
+|---|---|
+| No classes title | No classes yet |
+| No classes body | Once a class is set up for you, you can import a roster here. |
+| Class unavailable title | That class isn't available |
+| Class unavailable body | Use the class selector to pick one of your classes. |
+
+### Loading states
+
+| Key | Draft |
+|---|---|
+| Lean upload in-flight | Uploading… |
+| Full preview in-flight | Previewing… |
+| Full commit in-flight | Committing… |
+
+### Success — lean mode done screen
+
+| Key | Draft |
+|---|---|
+| Done heading | Roster imported |
+| Row: N students created | {N} new student(s) created |
+| Row: N enrolled | {N} enrolled |
+| Row: N skipped | {N} skipped |
+| Row: N errors | {N} could not be added |
+
+### Success — full mode done screen
+
+| Key | Draft |
+|---|---|
+| Done heading | Import complete |
+| (Rows derived from the API summary object keys — Barb to review labeling.) |
+
+### Error states
+
+| Key | Draft |
+|---|---|
+| Generic error | Something went wrong — please try again. |
+
+> Note on the lean "skipped" bucket: covers placeholder rows (emails containing 'email' or '@example'), blank rows, and any other rows the server chose not to import. Barb to confirm whether more specificity is warranted for the pilot.
+> Note on the full "preview" surface: the per-sheet counts and issue messages come directly from the API — Barb will want to review the issue text format in a follow-up pass once the API route is built.

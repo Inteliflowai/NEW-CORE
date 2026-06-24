@@ -13,7 +13,8 @@ const TITLE_MAP: Array<[string, string]> = [
   ['/library/lessons', 'Lesson Library'],
   ['/library/quizzes', 'Quiz Library'],
   ['/insights', 'Insights'],
-  ['/upload', 'Upload'],
+  ['/import', 'Import Roster'],
+  ['/upload', 'Content Studio'],
 ];
 
 export function pageTitleFor(pathname: string): string {
