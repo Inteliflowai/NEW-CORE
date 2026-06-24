@@ -40,4 +40,21 @@ describe('GenerateLessonStudio', () => {
     fireEvent.click(screen.getByRole('button', { name: /generate/i }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/busy/i));
   });
+
+  it('dictation appends the transcript to the description', async () => {
+    let rec: { state: string; ondataavailable?: (e: { data: Blob }) => void; onstop?: () => void } = { state: 'inactive' };
+    class FakeRec { state = 'inactive'; ondataavailable: ((e: { data: Blob }) => void) | null = null; onstop: (() => void) | null = null;
+      constructor() { rec = this as never; } start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['x'], { type: 'audio/webm' }) }); this.onstop?.(); }
+      static isTypeSupported() { return true; } }
+    (globalThis.navigator as unknown as { mediaDevices: unknown }).mediaDevices = { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) };
+    (globalThis as unknown as { MediaRecorder: unknown }).MediaRecorder = FakeRec;
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ transcript: 'photosynthesis basics' }), { status: 200 })) as unknown as typeof fetch;
+
+    render(<GenerateLessonStudio classId="c1" schoolState={null} />);
+    fireEvent.click(screen.getByRole('button', { name: /dictate/i }));
+    await waitFor(() => expect(rec.state).toBe('recording'));
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    await waitFor(() => expect((screen.getByLabelText(/describe what to teach/i) as HTMLTextAreaElement).value).toMatch(/photosynthesis basics/));
+  });
 });
