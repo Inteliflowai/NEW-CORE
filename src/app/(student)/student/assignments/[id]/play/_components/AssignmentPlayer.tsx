@@ -109,7 +109,8 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
   const sessKeypressCount  = useRef<number>(0);
   const stuckEraseCount    = useRef<number>(0);
 
-  const canvasUsedRef  = useRef(false);
+  const canvasUsedRef      = useRef(false);
+  const sessTtsPlayCount   = useRef<number>(0);
 
   const lastKeypressMs = useRef<number>(0);
   const pauseStartMs   = useRef<number | null>(null);
@@ -203,7 +204,7 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
       totalFocusLossMs: sessTotalFocusLossMs.current,
       backspaceCount:   sessBackspaceCount.current,
       keypressCount:    sessKeypressCount.current,
-      ttsPlayCount:     0,                        // Segment 5
+      ttsPlayCount:     sessTtsPlayCount.current,
       canvasUsed:       canvasUsedRef.current,    // flipped when the student draws (Seg 5)
       stuckEraseCount:  stuckEraseCount.current,
     };
@@ -381,7 +382,7 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
     return <SubmittingScreen />;
   }
   if (state === 'read') {
-    return <ReadPhase content={content} onStart={handleStart} />;
+    return <ReadPhase content={content} onStart={handleStart} onTtsPlay={() => { sessTtsPlayCount.current += 1; }} />;
   }
 
   // ── tasks ──────────────────────────────────────────────────────────────

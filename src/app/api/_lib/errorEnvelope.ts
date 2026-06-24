@@ -39,11 +39,13 @@ export function respondEngineError(err: unknown): NextResponse {
       { status: 503 },
     );
   }
-  const message = err instanceof Error ? err.message : String(err);
+  // Do NOT echo the raw internal error text to the client (SDK strings, model names, file
+  // fragments). The detailed error is logged server-side at each route's catch; the envelope
+  // carries only a fixed code + the generic userMessage.
   return NextResponse.json(
     errorEnvelope(
       'engine_error',
-      message,
+      'engine_error',
       false,
       'Something went wrong generating this. Please try again.',
     ),

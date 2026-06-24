@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import { US_STATES } from '@/lib/standards/frameworks';
 import LessonReviewEditor, { type GeneratedDay } from './LessonReviewEditor';
 import { SectionLabel } from '../../_components/SectionLabel';
+import MicButton from '@/app/(student)/student/assignments/[id]/play/_components/MicButton';
 
 export interface GenerateLessonStudioProps {
   classId: string;
@@ -65,14 +66,17 @@ export function GenerateLessonStudio({ classId, schoolState }: GenerateLessonStu
 
   return (
     <div className="flex flex-col gap-4">
-      <label className="flex flex-col gap-1">
-        <span className={LABEL}>What should this lesson teach?</span>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="lesson-description" className={LABEL}>What should this lesson teach?</label>
+          <MicButton label="Dictate" onTranscript={(t) => setDescription((p) => (p.trim() ? `${p.trim()} ${t}` : t))} />
+        </div>
         <textarea
-          aria-label="Describe what to teach"
+          id="lesson-description"
           className={`${INPUT} min-h-32`} value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder="e.g. A 7th-grade intro to photosynthesis: inputs, outputs, and why it matters."
         />
-      </label>
+      </div>
 
       <div className="flex flex-wrap gap-3">
         <label className="flex flex-1 flex-col gap-1">

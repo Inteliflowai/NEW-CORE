@@ -9,6 +9,7 @@
 import React, { useRef, useState } from 'react';
 import { MathText } from '@/components/core/MathText';
 import { DrawingCanvas } from './DrawingCanvas';
+import MicButton from './MicButton';
 
 export interface TaskCardProps {
   step: number;
@@ -29,6 +30,10 @@ export function TaskCard({ step, description, value, onChange, onFirstInput, ima
   const [showCanvas, setShowCanvas] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imgError, setImgError] = useState<string | null>(null);
+  // Dictation is async (record + network); read the LATEST answer text when the transcript
+  // returns, not the snapshot captured when MicButton was created, so interim typing isn't lost.
+  const valueRef = useRef(value);
+  valueRef.current = value;
 
   function fireFirstInput() {
     if (!hasInputtedRef.current) { hasInputtedRef.current = true; onFirstInput(); }
@@ -62,6 +67,13 @@ export function TaskCard({ step, description, value, onChange, onFirstInput, ima
         className="rounded-lg border-2 border-surface bg-surface text-fg px-4 py-3 text-base focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 placeholder:text-fg-muted"
         aria-label={`Answer for question ${step}`}
       />
+
+      <div>
+        <MicButton
+          label={`Speak your answer for question ${step}`}
+          onTranscript={(t) => { fireFirstInput(); const base = valueRef.current.trim(); onChange(base ? `${base} ${t}` : t); }}
+        />
+      </div>
 
       {/* Optional drawing / photo answer */}
       {imageUrl ? (

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import GenerateLessonStudio from '../GenerateLessonStudio';
 
@@ -15,6 +15,12 @@ beforeEach(() => {
         standard_framework: 'TEKS', parsed_content: { title: 'Fractions', summary: 's', objectives: [], key_concepts: [], vocabulary: [], misconception_risks: [], proposed_standards: [] } }],
     }), { status: 200 });
   }) as unknown as typeof fetch;
+});
+afterEach(() => {
+  // The dictation test stubs mic globals in its body; reset them so the suite is order-independent.
+  (globalThis as unknown as { MediaRecorder?: unknown }).MediaRecorder = undefined;
+  (globalThis.navigator as unknown as { mediaDevices?: unknown }).mediaDevices = undefined;
+  vi.restoreAllMocks();
 });
 
 describe('GenerateLessonStudio', () => {
@@ -39,5 +45,22 @@ describe('GenerateLessonStudio', () => {
     fireEvent.change(screen.getByLabelText(/describe|what.*teach|lesson/i), { target: { value: 'x' } });
     fireEvent.click(screen.getByRole('button', { name: /generate/i }));
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/busy/i));
+  });
+
+  it('dictation appends the transcript to the description', async () => {
+    let rec: { state: string; ondataavailable?: (e: { data: Blob }) => void; onstop?: () => void } = { state: 'inactive' };
+    class FakeRec { state = 'inactive'; ondataavailable: ((e: { data: Blob }) => void) | null = null; onstop: (() => void) | null = null;
+      constructor() { rec = this as never; } start() { this.state = 'recording'; }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['x'], { type: 'audio/webm' }) }); this.onstop?.(); }
+      static isTypeSupported() { return true; } }
+    (globalThis.navigator as unknown as { mediaDevices: unknown }).mediaDevices = { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) };
+    (globalThis as unknown as { MediaRecorder: unknown }).MediaRecorder = FakeRec;
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ transcript: 'photosynthesis basics' }), { status: 200 })) as unknown as typeof fetch;
+
+    render(<GenerateLessonStudio classId="c1" schoolState={null} />);
+    fireEvent.click(screen.getByRole('button', { name: /dictate/i }));
+    await waitFor(() => expect(rec.state).toBe('recording'));
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    await waitFor(() => expect((screen.getByLabelText(/what should this lesson teach/i) as HTMLTextAreaElement).value).toMatch(/photosynthesis basics/));
   });
 });
