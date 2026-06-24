@@ -333,31 +333,52 @@ export function parseStudentSheet(
  * Detect the first data row index.
  *
  * Rules (applied in order):
- * 1. If row[3] looks like a header (any cell lowercased contains 'email' or 'name'),
- *    use the V1 template convention → start at 3.
- * 2. If row[0] looks like a header (same check), start at 1 (CSV convention).
+ * 1. If the workbook has at least 4 rows AND row[2] is a CANONICAL header row
+ *    (one of its cells is an EXACT header label like 'full name', 'email',
+ *    'password', 'grade level', 'class name', 'teacher email', etc.), treat it
+ *    as the V1 template preamble → data starts at index 3.
+ *    NOTE: We require an exact whole-cell match, NOT a substring match, so that
+ *    a real student whose name/email merely CONTAINS the substring 'name' or
+ *    'email' (e.g. 'Emmanuel', 'emailfan@...') does NOT trigger this path.
+ * 2. If row[0] is a canonical header row (CSV with a single header line),
+ *    start at 1.
  * 3. Default to 3 (V1 template convention).
  */
+
+/** Exact lowercase labels that appear in the V1 column-header row. */
+const CANONICAL_HEADER_LABELS = new Set([
+  'full name',
+  'email',
+  'password',
+  'grade level',
+  'class name',
+  'subject',
+  'period',
+  'teacher email',
+  'student email',
+  'parent full name',
+  'parent email',
+]);
+
 function detectStartIndex(rows: string[][]): number {
-  const isHeaderLike = (row: string[] | undefined): boolean => {
+  /** True only when a cell's TRIMMED LOWERCASE VALUE is one of the expected
+   *  column-header labels — never fires on real student/parent data. */
+  const isCanonicalHeader = (row: string[] | undefined): boolean => {
     if (!row) return false;
-    return row.some((c) => {
-      const lower = String(c ?? '').toLowerCase();
-      return lower.includes('email') || lower.includes('name');
-    });
+    return row.some((c) => CANONICAL_HEADER_LABELS.has(String(c ?? '').trim().toLowerCase()));
   };
 
-  // If the workbook has at least 4 rows and row[2] looks like a header
-  // (V1 template structure), data starts at index 3.
-  if (rows.length >= 4 && isHeaderLike(rows[2])) {
+  // If the workbook has at least 4 rows and row[2] is a canonical header row
+  // (V1 template structure: rows 0-2 are meta, row 3+ are data).
+  if (rows.length >= 4 && isCanonicalHeader(rows[2])) {
     return 3;
   }
 
-  // If row[0] looks like a header (CSV with a single header row), start at 1.
-  if (isHeaderLike(rows[0])) {
+  // If row[0] is a canonical header row (plain CSV / no-preamble xlsx), start at 1.
+  if (isCanonicalHeader(rows[0])) {
     return 1;
   }
 
-  // Default: V1 convention
+  // Default: V1 convention (skips the first 3 rows).
   return 3;
 }

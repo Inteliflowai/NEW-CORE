@@ -33,11 +33,14 @@ function fakeAdmin(opts: {
   preExistingClasses?: FakeClass[];
   enrollmentSeat?:     Record<string, FakeSeat>;
   classInsertId?:      string;
+  /** When set, every users.update call returns this error message. */
+  usersUpdateError?:   string;
 }) {
   const preExistingUsers   = opts.preExistingUsers   ?? {};
   const preExistingClasses = opts.preExistingClasses ?? [];
   const enrollmentSeat     = opts.enrollmentSeat     ?? {};
   const classInsertId      = opts.classInsertId      ?? 'new-class-1';
+  const usersUpdateError   = opts.usersUpdateError   ?? null;
 
   // Tracks writes for assertions
   const inserts: Array<{ table: string; row: Record<string, unknown> }> = [];
@@ -83,9 +86,9 @@ function fakeAdmin(opts: {
               eq(col: string, val: string) {
                 if (col === 'id') targetId = val;
                 return {
-                  async then(resolve2: (v: { data: null; error: null }) => unknown) {
+                  async then(resolve2: (v: { data: null; error: { message: string } | null }) => unknown) {
                     if (targetId) updates.push({ table: 'users', id: targetId, data });
-                    return resolve2({ data: null, error: null });
+                    return resolve2({ data: null, error: usersUpdateError ? { message: usersUpdateError } : null });
                   },
                 };
               },
@@ -559,5 +562,111 @@ describe('importRoster — class teacher must have role=teacher', () => {
     // Must NOT have inserted any class row with student-user-id as teacher_id
     const classInserts = admin.inserts.filter(i => i.table === 'classes');
     expect(classInserts.every(i => i.row['teacher_id'] !== 'student-user-id')).toBe(true);
+  });
+});
+
+// FIX 2 — parent link-step failure must increment parents.errors.
+describe('importRoster — parent link failure increments parents.errors (FIX 2)', () => {
+  it('increments parents.errors when the student parent_id update fails, not just issues', async () => {
+    ensureAuthUser
+      .mockResolvedValueOnce('teacher-1')
+      .mockResolvedValueOnce('student-1')
+      .mockResolvedValueOnce('new-parent-id');
+
+    // usersUpdateError causes both the full_name update AND the parent_id link to fail
+    // (same fake path). We only care about the parent_id link here.
+    const admin = fakeAdmin({
+      preExistingUsers:  {},
+      preExistingClasses: [],
+      usersUpdateError:  'update or insert on table "users" violates foreign key constraint',
+    });
+
+    const roster = {
+      ...minimalRoster(),
+      parents: [{ fullName: 'Error Parent', email: 'errparent@home.edu', password: '', studentEmail: 'alice@school.edu' }],
+    };
+
+    const { importRoster } = await import('@/lib/roster/importRoster');
+    const summary = await importRoster(admin as never, {
+      schoolId: 'school-1',
+      roster,
+    });
+
+    // The parent was created; the link step failed → errors must be 1
+    expect(summary.parents.created).toBe(1);
+    expect(summary.parents.errors).toBe(1);
+    // There must be an issue for the link failure
+    expect(summary.issues.some(i => /alice@school\.edu/i.test(i))).toBe(true);
+    // The issue must NOT contain the raw constraint text
+    expect(summary.issues.every(i => !/foreign key constraint/.test(i))).toBe(true);
+    // The issue must say something generic
+    expect(summary.issues.some(i => /database error/i.test(i))).toBe(true);
+  });
+});
+
+// FIX 1 — issues must not contain raw DB error text.
+describe('importRoster — issues never contain raw DB error messages (FIX 1)', () => {
+  it('returns a generic class-lookup message, not the raw Postgres error', async () => {
+    ensureAuthUser.mockResolvedValueOnce('teacher-1');
+
+    // Build a fake admin where classes.select returns a DB error
+    const adminBase = fakeAdmin({ preExistingUsers: {}, preExistingClasses: [] });
+    // Override: intercept class selects to return a DB error
+    const adminWithClassError = {
+      ...adminBase,
+      from(table: string) {
+        if (table === 'classes') {
+          return {
+            select(_cols: string) {
+              const chain: Record<string, unknown> = {};
+              chain['eq'] = function() { return chain; };
+              chain['maybeSingle'] = async function() {
+                return { data: null, error: { message: 'relation "classes" does not exist' } };
+              };
+              return chain;
+            },
+            insert: adminBase.from('classes').insert,
+          };
+        }
+        return adminBase.from(table);
+      },
+    };
+
+    const roster = {
+      teachers: [],
+      classes:  [{ name: 'Math 8A', subject: 'Math', gradeLevel: '8', period: '1', teacherEmail: 'smith@school.edu' }],
+      students: [],
+      enrollments: [],
+      parents: [],
+    };
+    // Pre-load the cache: smith must resolve to a teacher
+    const adminWithTeacher = fakeAdmin({
+      preExistingUsers: { 'smith@school.edu|school-1': { id: 'teacher-1', role: 'teacher' } },
+      preExistingClasses: [],
+    });
+    const adminFinal = {
+      ...adminWithTeacher,
+      from(table: string) {
+        if (table === 'classes') {
+          return adminWithClassError.from('classes');
+        }
+        return adminWithTeacher.from(table);
+      },
+    };
+
+    const { importRoster } = await import('@/lib/roster/importRoster');
+    const summary = await importRoster(adminFinal as never, {
+      schoolId: 'school-1',
+      roster,
+    });
+
+    expect(summary.classes.errors).toBe(1);
+    expect(summary.issues).toHaveLength(1);
+    // Must NOT contain the raw Postgres error
+    expect(summary.issues[0]).not.toMatch(/relation.*does not exist/);
+    // Must still name the class
+    expect(summary.issues[0]).toMatch(/Math 8A/);
+    // Must use a generic phrase
+    expect(summary.issues[0]).toMatch(/database error/i);
   });
 });

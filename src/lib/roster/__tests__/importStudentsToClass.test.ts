@@ -365,3 +365,72 @@ describe('importStudentsToClass — multiple students mixed', () => {
     expect(summary.issues).toHaveLength(0);
   });
 });
+
+// FIX 3 — lean takeover bucket: ensureAuthUser throw with a role/mismatch message
+// must be classified as a skip+issue (NOT errors++), mirroring importRoster.ts.
+describe('importStudentsToClass — ensureAuthUser role/mismatch throw → skip, not error (FIX 3)', () => {
+  it('does NOT increment errors when ensureAuthUser throws a role-mismatch error', async () => {
+    ensureAuthUser.mockRejectedValueOnce(
+      new Error('Refusing to rebind existing user alice@school.edu (role mismatch)'),
+    );
+    const admin = fakeAdmin({ preExistingUsers: {} }); // alice not in DB → goes to ensureAuthUser
+
+    const { importStudentsToClass } = await import('@/lib/roster/importStudentsToClass');
+    const summary = await importStudentsToClass(admin as never, {
+      schoolId: SCHOOL_ID,
+      classId:  CLASS_ID,
+      students: [studentRow({ email: 'alice@school.edu' })],
+    });
+
+    // Must NOT count as a regular error — it's a refused rebind (skip-class)
+    expect(summary.errors).toBe(0);
+    expect(summary.issues).toHaveLength(1);
+    expect(summary.issues[0]).toMatch(/rebind/i);
+    expect(summary.issues[0]).toMatch(/alice@school\.edu/i);
+  });
+
+  it('still increments errors when ensureAuthUser throws a non-mismatch error', async () => {
+    ensureAuthUser.mockRejectedValueOnce(new Error('Network timeout'));
+    const admin = fakeAdmin({ preExistingUsers: {} });
+
+    const { importStudentsToClass } = await import('@/lib/roster/importStudentsToClass');
+    const summary = await importStudentsToClass(admin as never, {
+      schoolId: SCHOOL_ID,
+      classId:  CLASS_ID,
+      students: [studentRow({ email: 'alice@school.edu' })],
+    });
+
+    expect(summary.errors).toBe(1);
+    expect(summary.issues).toHaveLength(1);
+    // Issue must NOT expose raw DB/internal error text
+    expect(summary.issues[0]).not.toMatch(/Network timeout/);
+    expect(summary.issues[0]).toMatch(/alice@school\.edu/i);
+  });
+});
+
+// FIX 1 — issues must not contain raw DB error text (Postgres constraint/column names).
+describe('importStudentsToClass — issues never contain raw DB error messages (FIX 1)', () => {
+  it('returns a generic message (not the raw DB error) when the enrollment insert fails', async () => {
+    ensureAuthUser.mockResolvedValueOnce('new-student-id');
+    const admin = fakeAdmin({
+      preExistingUsers:  {},
+      enrollInsertError: 'duplicate key value violates unique constraint "enrollments_pkey"',
+    });
+
+    const { importStudentsToClass } = await import('@/lib/roster/importStudentsToClass');
+    const summary = await importStudentsToClass(admin as never, {
+      schoolId: SCHOOL_ID,
+      classId:  CLASS_ID,
+      students: [studentRow()],
+    });
+
+    expect(summary.errors).toBe(1);
+    expect(summary.issues).toHaveLength(1);
+    // Must NOT contain the raw Postgres constraint message
+    expect(summary.issues[0]).not.toMatch(/duplicate key|enrollments_pkey/);
+    // Must still identify the student
+    expect(summary.issues[0]).toMatch(/alice@school\.edu/i);
+    // Must contain a generic hint
+    expect(summary.issues[0]).toMatch(/database error/i);
+  });
+});

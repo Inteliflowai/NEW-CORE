@@ -68,7 +68,8 @@ export async function importStudentsToClass(
 
     if (lookupErr || !data) {
       summary.errors++;
-      summary.issues.push(`Student: DB error looking up ${lower} — ${lookupErr?.message ?? 'unknown error'}`);
+      console.error('[roster-import] Student lookup error for', lower, ':', lookupErr);
+      summary.issues.push(`Student: '${lower}' could not be looked up (a database error occurred).`);
       continue;
     }
 
@@ -100,8 +101,14 @@ export async function importStudentsToClass(
         summary.studentsCreated++;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        summary.errors++;
-        summary.issues.push(`Student: failed to create ${lower} — ${msg}`);
+        // A rebind/role/takeover-refusal throw → skip + issue (not an error),
+        // mirroring importRoster.ts's catch-classification.
+        if (/rebind|mismatch|role/i.test(msg)) {
+          summary.issues.push(`Student: rebind refused for ${lower} — existing account has a conflicting role or school.`);
+        } else {
+          summary.errors++;
+          summary.issues.push(`Student: '${lower}' could not be created (an unexpected error occurred).`);
+        }
         continue;
       }
     }
@@ -116,7 +123,8 @@ export async function importStudentsToClass(
 
     if (seatErr) {
       summary.errors++;
-      summary.issues.push(`Student: DB error checking enrollment for ${lower} — ${seatErr.message}`);
+      console.error('[roster-import] Enrollment seat-check error for', lower, ':', seatErr);
+      summary.issues.push(`Student: could not check enrollment for '${lower}' (a database error occurred).`);
       continue;
     }
 
@@ -135,7 +143,8 @@ export async function importStudentsToClass(
 
     if (insErr) {
       summary.errors++;
-      summary.issues.push(`Student: failed to enroll ${lower} — ${insErr.message}`);
+      console.error('[roster-import] Enrollment insert error for', lower, ':', insErr);
+      summary.issues.push(`Enrollment: could not enroll '${lower}' (a database error occurred).`);
       continue;
     }
 

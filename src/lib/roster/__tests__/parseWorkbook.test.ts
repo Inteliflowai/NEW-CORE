@@ -377,4 +377,63 @@ describe('parseStudentSheet', () => {
     expect(result.students).toHaveLength(0);
     expect(result.issues).toHaveLength(1);
   });
+
+  // FIX 4 — detectStartIndex must NOT mis-skip a real student row simply because
+  // their email happens to contain a substring like 'name' or 'email' (e.g.
+  // 'naomi@...' contains 'ami'... the real risk: row[2] of a plain 3-row CSV
+  // contains a cell value that happens to satisfy the header-like test, causing
+  // the engine to treat the sheet as a V1 preamble and skip to index 3,
+  // silently losing the student at row[2]).
+  it('does NOT mis-skip a real student when row[2] of the data has a cell containing "name" as a substring (detectStartIndex must not treat it as a V1 preamble)', () => {
+    // 3 students, plain CSV (header at row 0, data starts at row 1).
+    // After XLSX parses the CSV: row[0]=['Full Name','Email',...], row[1]=Alice, row[2]=Bob, row[3]=Emmanuel.
+    // row[2] is Bob's row. "bob@school.edu" does NOT contain 'name' or 'email'
+    // (to avoid the isPlaceholder filter). What matters here is that the
+    // NAME column of row[2] is "Bob Nameson" — contains 'name' as a substring.
+    // The old isHeaderLike test would have matched row[2] and returned startIndex=3,
+    // dropping Bob and Emmanuel.
+    const csv = [
+      'Full Name,Email,Password,Grade Level',
+      'Alice Green,alice@school.edu,Pass!,8',
+      'Bob Nameson,bob@school.edu,Pass!,9',
+      'Carol Brown,carol@school.edu,Pass!,10',
+    ].join('\n');
+    const bytes = new TextEncoder().encode(csv);
+    const result = parseStudentSheet(bytes.buffer);
+
+    // All 3 real data rows must be imported — Bob must NOT be mis-treated as a header
+    expect(result.students).toHaveLength(3);
+    expect(result.students.map((s) => s.email)).toContain('bob@school.edu');
+    expect(result.students.map((s) => s.email)).toContain('carol@school.edu');
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it('does NOT mis-skip a real student when row[2] name contains "email" as a substring (detectStartIndex canonical-header guard)', () => {
+    // "Nameila" has neither 'name' nor 'email' exactly — but let's use a name
+    // that clearly contains 'name' in the full name column.
+    // "Email Admin" in the name column contains 'email' as a substring in the name.
+    // The key: the EMAIL column value does NOT contain 'email' or '@example'
+    // (so isPlaceholder doesn't fire). Only the detectStartIndex path is tested.
+    const csv = [
+      'Full Name,Email,Password,Grade Level',
+      'Alice Green,alice@school.edu,Pass!,8',
+      'Bob Blue,bob@school.edu,Pass!,9',
+      'Name Admin,nameadmin@school.edu,Pass!,10',
+    ].join('\n');
+    const bytes = new TextEncoder().encode(csv);
+    const result = parseStudentSheet(bytes.buffer);
+
+    // All 3 must be imported
+    expect(result.students).toHaveLength(3);
+    expect(result.students.map((s) => s.email)).toContain('nameadmin@school.edu');
+    expect(result.issues).toHaveLength(0);
+  });
+
+  it('still correctly detects the V1 template preamble (row[2] is a canonical header like "Full Name"/"Email")', () => {
+    // V1 xlsx template: rows 0-2 are meta, row 3+ are data.
+    // row[2] EXACTLY matches a column-header label — that is the preamble signal.
+    const result = parseStudentSheet(buildStudentOnlyWorkbook());
+    expect(result.students).toHaveLength(2); // Carol + Dave (not the meta rows)
+    expect(result.students[0].email).toBe('carol@school.edu');
+  });
 });

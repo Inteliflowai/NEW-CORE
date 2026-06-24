@@ -152,7 +152,8 @@ export async function importRoster(
 
       if (selErr) {
         summary.classes.errors++;
-        summary.issues.push(`Class: DB error looking up '${row.name}' — ${selErr.message}`);
+        console.error('[roster-import] Class lookup error for', row.name, ':', selErr);
+        summary.issues.push(`Class: '${row.name}' could not be looked up (a database error occurred).`);
         continue;
       }
       if (existing) {
@@ -172,13 +173,15 @@ export async function importRoster(
 
       if (insErr) {
         summary.classes.errors++;
-        summary.issues.push(`Class: failed to insert '${row.name}' — ${insErr.message}`);
+        console.error('[roster-import] Class insert error for', row.name, ':', insErr);
+        summary.issues.push(`Class: '${row.name}' could not be saved (a database error occurred).`);
         continue;
       }
       summary.classes.created++;
     } catch (err) {
       summary.classes.errors++;
-      summary.issues.push(`Class: unexpected error for '${row.name}' — ${err instanceof Error ? err.message : String(err)}`);
+      console.error('[roster-import] Class unexpected error for', row.name, ':', err);
+      summary.issues.push(`Class: '${row.name}' could not be processed (an unexpected error occurred).`);
     }
   }
 
@@ -288,7 +291,8 @@ export async function importRoster(
 
       if (seatErr) {
         summary.enrollments.errors++;
-        summary.issues.push(`Enrollment: DB error checking seat for '${studentLower}' in class — ${seatErr.message}`);
+        console.error('[roster-import] Enrollment seat-check error for', studentLower, ':', seatErr);
+        summary.issues.push(`Enrollment: could not check existing seat for '${studentLower}' (a database error occurred).`);
         continue;
       }
       if (existingSeat) {
@@ -305,13 +309,15 @@ export async function importRoster(
 
       if (insErr) {
         summary.enrollments.errors++;
-        summary.issues.push(`Enrollment: failed to insert seat for '${studentLower}' — ${insErr.message}`);
+        console.error('[roster-import] Enrollment insert error for', studentLower, ':', insErr);
+        summary.issues.push(`Enrollment: could not enroll '${studentLower}' (a database error occurred).`);
         continue;
       }
       summary.enrollments.created++;
     } catch (err) {
       summary.enrollments.errors++;
-      summary.issues.push(`Enrollment: unexpected error for '${row.studentEmail}' — ${err instanceof Error ? err.message : String(err)}`);
+      console.error('[roster-import] Enrollment unexpected error for', row.studentEmail, ':', err);
+      summary.issues.push(`Enrollment: could not process row for '${row.studentEmail}' (an unexpected error occurred).`);
     }
   }
 
@@ -342,7 +348,8 @@ export async function importRoster(
           .update({ full_name: row.fullName })
           .eq('id', parentId) as unknown as Promise<{ error: { message: string } | null }>);
         if (nameErr) {
-          summary.issues.push(`Parent: failed to update full_name for '${lower}' — ${nameErr.message}`);
+          console.error('[roster-import] Parent name-update error for', lower, ':', nameErr);
+          summary.issues.push(`Parent: could not update name for '${lower}' (a database error occurred).`);
         }
         summary.parents.linked++;
       } else {
@@ -365,8 +372,9 @@ export async function importRoster(
         .eq('id', student.id) as unknown as Promise<{ error: { message: string } | null }>);
 
       if (linkErr) {
-        summary.issues.push(`Parent: failed to link parent_id for student '${studentLower}' — ${linkErr.message}`);
-        // Don't increment errors: the parent was still created/linked; the link step failed
+        console.error('[roster-import] Parent link error for student', studentLower, ':', linkErr);
+        summary.issues.push(`Parent: could not link parent to student '${studentLower}' (a database error occurred).`);
+        summary.parents.errors++;
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
