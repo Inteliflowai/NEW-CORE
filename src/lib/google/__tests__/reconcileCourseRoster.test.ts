@@ -16,13 +16,14 @@ vi.mock('@/lib/google/linkOrCreateStudent', () => ({ linkOrCreateStudent: (...a:
 //       then external_identities.select('core_student_id, external_id').in(chunk) for the IDs
 //  - the soft-un-enroll:    enrollments.update({is_active:false}).eq(class_id).eq(student_id) -> { error }
 // `googleSeats` supplies [{ student_id, external_id }] — THIS class's active source='google' seats.
-// `advisoryLock` lets a test simulate the pg_try_advisory_xact_lock miss.
+// `seatsReadError` lets a test simulate the enrollments candidate-set read failing (must NOT be
+// treated as "empty" — the engine should skip the remove side and flag removeSkippedSuspectEmpty).
 function fakeAdmin(opts: {
   googleSeats?: Array<{ student_id: string; external_id: string }>;   // this class's active source='google' seats
   priorSeat?: Record<string, { is_active: boolean }>;                 // prior seat state by student_id (for the count split)
   enrollError?: unknown;                                              // returned by the enroll upsert
   updateError?: unknown;                                             // returned by the soft-un-enroll update
-  advisoryLock?: boolean;                                            // pg_try_advisory_xact_lock result (default true)
+  seatsReadError?: unknown;                                          // returned by the enrollments candidate-set read
 }) {
   const enrollUpserts: Array<{ student_id: string; is_active: boolean; source?: string }> = [];
   const softRemovals: string[] = [];
@@ -31,8 +32,6 @@ function fakeAdmin(opts: {
 
   return {
     enrollUpserts, softRemovals,
-    // pg_try_advisory_xact_lock(hashtext(classId)) — modeled via .rpc
-    rpc: async () => ({ data: opts.advisoryLock ?? true, error: null }),
     from(table: string) {
       if (table === 'enrollments') {
         return {
@@ -58,10 +57,13 @@ function fakeAdmin(opts: {
             }
             // Candidate-set read: returns the list of active source='google' student_ids for this class.
             // loadActiveGoogleSeats calls this then follows up with external_identities.
+            // If seatsReadError is set, signal an error (must NOT be treated as empty).
             return {
               eq() { return this; },
-              then(r: (v: { data: unknown; error: null }) => unknown) {
-                // Return the student_id portion of googleSeats (the engine maps to student_id array).
+              then(r: (v: { data: unknown; error: unknown }) => unknown) {
+                if (opts.seatsReadError) {
+                  return r({ data: null, error: opts.seatsReadError });
+                }
                 const studentRows = googleSeats.map((s) => ({ student_id: s.student_id }));
                 return r({ data: studentRows, error: null });
               },
@@ -111,9 +113,9 @@ function fakeAdmin(opts: {
     },
   } as never as { enrollUpserts: typeof enrollUpserts; softRemovals: typeof softRemovals };
 }
-// NOTE FOR THE IMPLEMENTER: this fake mirrors the SHAPES the engine touches — the advisory-lock rpc,
-// the per-student prior-seat .eq(class_id).eq(student_id).maybeSingle() read (resolved from priorSeat),
-// the {error}-returning enroll upsert + soft-un-enroll update, and the class-scoped source='google'
+// NOTE FOR THE IMPLEMENTER: this fake mirrors the SHAPES the engine touches — the per-student
+// prior-seat .eq(class_id).eq(student_id).maybeSingle() read (resolved from priorSeat), the
+// {error}-returning enroll upsert + soft-un-enroll update, and the class-scoped source='google'
 // candidate select (enrollments → student_ids, then external_identities → external_ids). Keep each
 // as a discrete call that branches on the RETURNED { error } (never a try/catch around supabase-js).
 
@@ -244,13 +246,18 @@ describe('reconcileCourseRoster — two-way remove side', () => {
     expect(r.softRemoved).toBe(0);
     expect(r.removeSkippedSuspectEmpty).toBe(false);
   });
-  it('returns early (all-zero) when the advisory lock is not acquired (MIN-1)', async () => {
+  it('enrollments candidate-set read error → softRemoved=0, removeSkippedSuspectEmpty=true, no soft-remove attempted', async () => {
     listCourseStudents.mockResolvedValue({ complete: true, students: [{ googleId: 'g1', name: 'A', email: 'a@b.edu', photoUrl: null }] });
-    const admin = fakeAdmin({ googleSeats: [], priorSeat: {}, advisoryLock: false });
+    linkOrCreateStudent.mockResolvedValue({ outcome: 'linked', studentId: 's1' });
+    // seatsReadError simulates a DB failure on the enrollments candidate-set read.
+    // The engine must NOT treat this as "no google seats" (which would skip the remove side silently);
+    // instead it must flag removeSkippedSuspectEmpty and perform zero soft-removes.
+    const admin = fakeAdmin({ googleSeats: [{ student_id: 's2', external_id: 'g2' }], priorSeat: { s1: { is_active: true } }, seatsReadError: { message: 'connection reset' } });
     const { reconcileCourseRoster } = await import('@/lib/google/reconcileCourseRoster');
     const r = await reconcileCourseRoster(admin as never, { teacherId: 't1', schoolId: 'sch', googleCourseId: 'c1', classId: 'cl1' });
-    expect(r.created).toBe(0); expect(r.enrolled).toBe(0); expect(r.softRemoved).toBe(0);
-    expect(listCourseStudents).not.toHaveBeenCalled();   // bailed before any Google fetch
+    expect(r.softRemoved).toBe(0);
+    expect(r.removeSkippedSuspectEmpty).toBe(true);
+    expect(admin.softRemovals).toHaveLength(0);
   });
   it('propagates GoogleNotConnectedError from the token manager', async () => {
     class GoogleNotConnectedError extends Error {}

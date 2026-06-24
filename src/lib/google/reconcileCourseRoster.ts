@@ -10,6 +10,11 @@
 // (is_active=false) — never deleted, never their history. A source<>'google'/manually-added seat
 // is NEVER touched (per-class provenance — ITEM A). An empty/incomplete roster NEVER mass-removes
 // (CRIT-2). supabase-js returns { error } (does NOT throw) — every upsert/update branches on it.
+//
+// Concurrency & overlap: this engine is intentionally NOT serialized. Overlapping runs (e.g. a
+// teacher "Sync now" during the nightly cron on the same class) can momentarily produce a stale
+// soft-remove that SELF-HEALS on the next reconcile via idempotent convergence — accepted pilot
+// risk. No advisory lock / no wrapper RPC is used.
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getValidAccessTokenForTeacher } from '@/lib/google/tokens';
 import { listCourseStudents } from '@/lib/google/classroom';
@@ -48,53 +53,56 @@ function emptyResult(): ReconcileResult {
   };
 }
 
-// hashClassId — fold the uuid string into a 32-bit integer key for pg_try_advisory_xact_lock.
-// Stable per classId; the DB's own hashtext() inside the RPC wrapper does the same job.
-function hashClassId(classId: string): number {
-  let h = 0;
-  for (let i = 0; i < classId.length; i++) {
-    h = (h * 31 + classId.charCodeAt(i)) | 0;
-  }
-  return h;
-}
-
 // loadActiveGoogleSeats — THIS class's active source='google' seats with their provider='google'
 // external_id. Class-scoped (IMP-9): never load the school-wide identity set.
 // Queries enrollments for student_ids, then external_identities for their google external_ids
 // (chunked to ≤200 per .in() call — the pilot never hits the chunk boundary).
+//
+// SAFETY: a fetch error MUST NOT return [] (empty would look like "no google seats" and silently
+// skip the remove side instead of protecting against it). On any error, we return { trustworthy: false }
+// so the caller can set removeSkippedSuspectEmpty and skip the remove side entirely.
 async function loadActiveGoogleSeats(
   admin: SupabaseClient,
   classId: string,
   schoolId: string,
-): Promise<Array<{ student_id: string; external_id: string }>> {
-  const { data: seats } = await admin
+): Promise<{ trustworthy: false } | { trustworthy: true; seats: Array<{ student_id: string; external_id: string }> }> {
+  const { data: seats, error: seatsError } = await admin
     .from('enrollments')
     .select('student_id')
     .eq('class_id', classId)
     .eq('is_active', true)
     .eq('source', 'google');
 
+  if (seatsError) {
+    console.error('[gc] loadActiveGoogleSeats: enrollments read failed:', (seatsError as { message?: string }).message ?? 'unknown');
+    return { trustworthy: false };
+  }
+
   const studentIds = ((seats as Array<{ student_id: string }> | null) ?? []).map(
     (s) => s.student_id,
   );
-  if (studentIds.length === 0) return [];
+  if (studentIds.length === 0) return { trustworthy: true, seats: [] };
 
   const out: Array<{ student_id: string; external_id: string }> = [];
   for (let i = 0; i < studentIds.length; i += 200) {
     const chunk = studentIds.slice(i, i + 200);
-    const { data: ids } = await admin
+    const { data: ids, error: idsError } = await admin
       .from('external_identities')
       .select('core_student_id, external_id')
       .eq('school_id', schoolId)
       .eq('provider', 'google')
       .in('core_student_id', chunk);
+    if (idsError) {
+      console.error('[gc] loadActiveGoogleSeats: external_identities read failed:', (idsError as { message?: string }).message ?? 'unknown');
+      return { trustworthy: false };
+    }
     for (const row of (ids as Array<{ core_student_id: string | null; external_id: string }> | null) ?? []) {
       if (row.core_student_id) {
         out.push({ student_id: row.core_student_id, external_id: row.external_id });
       }
     }
   }
-  return out;
+  return { trustworthy: true, seats: out };
 }
 
 export async function reconcileCourseRoster(
@@ -102,17 +110,6 @@ export async function reconcileCourseRoster(
   args: ReconcileArgs,
 ): Promise<ReconcileResult> {
   const r = emptyResult();
-
-  // 0. Concurrency guard (MIN-1): transaction-scoped per-class advisory lock.
-  //    On a miss, another reconcile for this class is in flight — bail with all-zero (idempotent
-  //    convergence on the next run is the backstop). hashtext(classId) maps the uuid to the int.
-  //    NOTE: expose pg_try_advisory_xact_lock via a thin SECURITY DEFINER RPC wrapper so the
-  //    admin client can call it; if the wrapper is absent, a null result is treated as acquired.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: gotLock } = await (admin as unknown as { rpc: (name: string, params: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> })
-    .rpc('pg_try_advisory_xact_lock', { key: hashClassId(args.classId) })
-    .catch(() => ({ data: true, error: null }));
-  if (gotLock === false) return r;
 
   // 1–2. Token + current GC roster. Both errors propagate so the caller surfaces reconnect/scope CTAs.
   const accessToken = await getValidAccessTokenForTeacher(admin, args.teacherId);
@@ -153,12 +150,16 @@ export async function reconcileCourseRoster(
     else r.linked++;
 
     // Read the prior seat to distinguish enrolled (new) vs reactivated (was soft-removed) — IMP-3.
-    const { data: prior } = await admin
+    // On a returned error, treat as no prior row (safe: the upsert still proceeds; we count as enrolled).
+    const { data: prior, error: priorErr } = await admin
       .from('enrollments')
       .select('is_active')
       .eq('class_id', args.classId)
       .eq('student_id', res.studentId)
       .maybeSingle();
+    if (priorErr) {
+      console.error('[gc] prior-seat read failed (treating as no prior row):', (priorErr as { message?: string }).message ?? 'unknown');
+    }
 
     // Enroll with source='google' (per-class provenance — ITEM A). supabase-js returns { error } —
     // never throws. Branch on it; incl. the seat-cap check_violation (23514).
@@ -187,7 +188,14 @@ export async function reconcileCourseRoster(
 
   // 5. REMOVE side (two-way), per-class source='google' candidates only (ITEM A + IMP-9).
   //    Load FIRST so the fetch is class-scoped; then apply the trustworthy-roster guard (CRIT-2).
-  const candidates = await loadActiveGoogleSeats(admin, args.classId, args.schoolId);
+  const seatResult = await loadActiveGoogleSeats(admin, args.classId, args.schoolId);
+
+  // If the DB fetch itself failed, the candidate set is untrustworthy — skip the remove side.
+  if (!seatResult.trustworthy) {
+    r.removeSkippedSuspectEmpty = true;
+    return r;
+  }
+  const candidates = seatResult.seats;
 
   // CRIT-2: an empty OR incomplete roster MUST NOT mass-un-enroll. Skip the entire remove side
   // whenever the roster is untrustworthy AND there are google seats we would otherwise remove.
