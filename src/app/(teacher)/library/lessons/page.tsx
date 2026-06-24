@@ -15,7 +15,15 @@ import { loadLessonLibrary } from '@/lib/lessons/loadLessonLibrary';
 import { teacherClassOptions } from '@/lib/teacher/teacherClasses';
 import { EmptyState } from '@/components/core/EmptyState';
 import { PageHeader } from '../../_components/PageHeader';
-import { LessonLibrary } from './_components/LessonLibrary';
+import { LessonLibraryWithCreate } from './_components/LessonLibraryWithCreate';
+import type { UploadLessonLite } from '../../upload/_components/UploadStudio';
+
+type LessonLiteRow = {
+  id: string;
+  title: string | null;
+  status: string | null;
+  parsed_content: { key_concepts?: unknown } | null;
+};
 
 const NO_CLASSES = (
   <EmptyState variant="just-getting-started" titleOverride="No classes yet"
@@ -52,10 +60,38 @@ export default async function LessonLibraryPage({
     teacherClassOptions(admin, userId),
   ]);
 
+  // 4. Existing lessons-lite for the fuzzy duplicate check inside ContentStudioTabs (lifted from
+  //    /upload/page.tsx). Archived lessons excluded; concept_tags come from parsed_content.
+  const { data: lessonData } = await admin.from('lessons')
+    .select('id, title, status, parsed_content')
+    .eq('class_id', classId)
+    .neq('status', 'archived');
+
+  const existingLessons: UploadLessonLite[] = ((lessonData ?? []) as LessonLiteRow[]).map((l) => {
+    const raw = l.parsed_content?.key_concepts;
+    const concept_tags = Array.isArray(raw) ? raw.filter((t): t is string => typeof t === 'string') : [];
+    return { id: l.id, title: l.title, concept_tags, status: l.status ?? 'draft' };
+  });
+
+  // 5. School state (for the Generate tab's standards suggestions). Null when unset.
+  let schoolState: string | null = null;
+  const { data: classRow } = await admin.from('classes').select('school_id').eq('id', classId).maybeSingle();
+  const schoolId = (classRow as { school_id?: string | null } | null)?.school_id ?? null;
+  if (schoolId) {
+    const { data: school } = await admin.from('schools').select('state').eq('id', schoolId).maybeSingle();
+    schoolState = (school as { state?: string | null } | null)?.state ?? null;
+  }
+
   return (
     <div className="p-5 flex flex-col gap-5">
       <PageHeader title="Lesson Library" kicker="Your lessons" accent="brand" />
-      <LessonLibrary data={data} classes={classes} />
+      <LessonLibraryWithCreate
+        data={data}
+        classes={classes}
+        classId={classId}
+        existingLessons={existingLessons}
+        schoolState={schoolState}
+      />
     </div>
   );
 }

@@ -12,7 +12,7 @@ describe('SidebarNav — /students/abc (Roster alias)', () => {
     render(<SidebarNav />);
     [
       'Today', 'Roster', 'Gradebook', 'Alerts', 'High Fives',
-      'Lesson Library', 'Quiz Library', 'Insights', 'Upload',
+      'Lesson Library', 'Quiz Library', 'Insights', 'Import Roster',
       'CLASS', 'LIBRARY', 'INSIGHTS & TOOLS',
     ].forEach((t) => expect(screen.getByText(t)).toBeInTheDocument());
     expect(screen.queryByText(/Homework/i)).toBeNull();

@@ -63,9 +63,21 @@ describe('LessonLibrary', () => {
     expect(screen.getByText(/nothing matches/i)).toBeInTheDocument();
 
     const { container } = render(<LessonLibrary data={{ class_id: 'c1', lessons: [] }} now={NOW} />);
-    // Cold-start EmptyState + an "Upload a lesson" affordance carrying ?class=.
+    // Cold-start EmptyState (no onCreate) + a fallback "Upload a lesson" link carrying ?class=.
     const upload = within(container).getByRole('link', { name: /upload a lesson/i });
     expect(upload).toHaveAttribute('href', expect.stringContaining('class=c1'));
+  });
+
+  it('cold-start with onCreate prop: renders a "Create a lesson" button instead of the upload link', () => {
+    const onCreate = vi.fn();
+    render(<LessonLibrary data={{ class_id: 'c1', lessons: [] }} now={NOW} onCreate={onCreate} />);
+    // Should have a button, not a link
+    const createBtn = screen.getByRole('button', { name: /create a lesson/i });
+    expect(createBtn).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /upload a lesson/i })).not.toBeInTheDocument();
+    // Clicking the button fires the callback
+    fireEvent.click(createBtn);
+    expect(onCreate).toHaveBeenCalledOnce();
   });
 
   it('groups rows under Subject · Grade section headers', () => {

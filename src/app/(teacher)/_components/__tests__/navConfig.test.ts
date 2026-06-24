@@ -30,7 +30,7 @@ describe('navConfig', () => {
     }
     for (const l of [
       'Today', 'Roster', 'Gradebook', 'Alerts', 'High Fives',
-      'Lesson Library', 'Quiz Library', 'Insights', 'Upload',
+      'Lesson Library', 'Quiz Library', 'Insights', 'Import Roster',
       'CLASS', 'LIBRARY', 'INSIGHTS & TOOLS',
     ]) {
       expect(labels).toContain(l);

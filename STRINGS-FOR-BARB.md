@@ -908,3 +908,131 @@ Per Marvin (2026-06-24): the softer "reinforce" replaces "reteach" in teacher-fa
 | reteach now | reinforce now |
 
 > Still-pending "reteach" wording for Barb's broader copy sweep (NOT changed in Wave 0, flagged here): the student-facing `scoreMessage` pool ("Reteach mode" / "Reteach scope", `src/lib/quiz/scoreMessage.ts`) — entangled with the separately-deferred band/CL leak fix, so swapping one band word for another there is deferred to the leak pass; and the signature-moment prototype copy ("a 5-minute reteach", `src/app/(prototype)/signature-moment/_registers.ts`), which needs a noun-phrase rewrite rather than a word swap.
+
+---
+
+## Import Roster (Task 9, 2026-06-24) — Barb sign-off required
+
+`src/app/(teacher)/import/_components/RosterFileImport.tsx` + `RosterImportTabs.tsx` + `import/page.tsx`
+
+### Page header + nav (shared across lean + full modes)
+
+| Key | Draft |
+|---|---|
+| Page title | Import Roster |
+| Kicker (eyebrow) | Add students |
+| Nav sidebar label | Import Roster |
+
+### Tab labels (ARIA tablist)
+
+| Key | Draft |
+|---|---|
+| Tab 1 | From a file |
+| Tab 2 | From Google Classroom |
+
+### File input
+
+| Key | Draft |
+|---|---|
+| Label | Choose a file |
+| Sub-label | (.xlsx or .csv) |
+| Upload button (lean) | Upload |
+| Preview button (full) | Preview |
+| Commit button (full) | Commit |
+| Download template link (full) | Download template |
+
+### Empty / no-classes states
+
+| Key | Draft |
+|---|---|
+| No classes title | No classes yet |
+| No classes body | Once a class is set up for you, you can import a roster here. |
+| Class unavailable title | That class isn't available |
+| Class unavailable body | Use the class selector to pick one of your classes. |
+
+### Loading states
+
+| Key | Draft |
+|---|---|
+| Lean upload in-flight | Uploading… |
+| Full preview in-flight | Previewing… |
+| Full commit in-flight | Committing… |
+
+### Sub-selector (shown when both full and lean are available)
+
+Presented as a segmented control (two `role=radio` buttons inside a `role=group`). Lets any staff member pick which kind of import to run.
+
+| Key | Draft |
+|---|---|
+| Group label (aria-label) | Import scope |
+| Full option | Whole roster (5-sheet .xlsx) |
+| Lean option | Just this class (.csv or .xlsx) |
+
+### No-class-selected alert (lean, classId guard)
+
+| Key | Draft |
+|---|---|
+| Alert text | No class selected — open a class first. |
+
+### Success — lean mode done screen
+
+| Key | Draft |
+|---|---|
+| Done heading | Roster imported |
+| Row: N new students created | {N} new student(s) created |
+| Row: N already in CORE | {N} already in CORE |
+| Row: N enrolled | {N} enrolled |
+| Row: N already enrolled | {N} already enrolled |
+| Row: N errors | {N} could not be added |
+
+> Note: the "skipped" bucket has been replaced by the more specific `studentsExisting` ("already in CORE") and `alreadyEnrolled` counts, matching the actual API response shape. Barb to confirm the wording.
+
+### Success — full mode preview surface
+
+The preview surface renders counts from the `data.counts` object (not per-sheet rows). Barb to confirm the label+separator style:
+
+| Key | Draft |
+|---|---|
+| Preview heading | Preview |
+| Count row (one line, ·-separated) | Teachers: {N} · Classes: {N} · Students: {N} · Enrollments: {N} · Parents: {N} |
+
+### Success — full mode done screen
+
+| Key | Draft |
+|---|---|
+| Done heading | Import complete |
+| Entity row (Teachers) | Teachers: {N} created[· {N} skipped][· {N} errors] |
+| Entity row (Classes) | Classes: {N} created[· {N} skipped][· {N} errors] |
+| Entity row (Students) | Students: {N} created[· {N} skipped][· {N} errors] |
+| Entity row (Enrollments) | Enrollments: {N} created[· {N} skipped][· {N} errors] |
+| Entity row (Parents) | Parents: {N} created[· {N} linked][· {N} skipped][· {N} errors] |
+
+> Note: brackets indicate optional parts (shown only when > 0). Barb to confirm the ·-separated inline style vs separate lines.
+
+### Error states
+
+| Key | Draft |
+|---|---|
+| Generic error | Something went wrong — please try again. |
+
+---
+
+## Lesson Library — cold-start CTA + LessonLibraryWithCreate toggle (Fix wave 3, 2026-06-24) — Barb sign-off required
+
+`src/app/(teacher)/library/lessons/_components/LessonLibrary.tsx` + `LessonLibraryWithCreate.tsx`
+
+### LessonLibraryWithCreate toggle buttons
+
+| Key | Draft |
+|---|---|
+| Create button (browse view, top-right) | ＋ Create a lesson |
+| Back button (create view, top-left) | ← Back to library |
+
+### LessonLibrary cold-start CTA (when parent passes onCreate)
+
+| Key | Draft |
+|---|---|
+| Cold-start body (updated) | Create a lesson and we'll draft a quiz you can review. |
+| Cold-start CTA button | Create a lesson |
+
+> Note: when `LessonLibrary` is rendered standalone (no `onCreate` prop), the cold-start CTA remains a `/upload` link ("Upload a lesson") to preserve existing standalone-page behaviour.
