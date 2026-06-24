@@ -38,12 +38,20 @@ export const OPENAI_GEN_MODEL = process.env.OPENAI_GEN_MODEL || 'gpt-4o';
  */
 export const OPENAI_VOICE_MODEL = process.env.OPENAI_VOICE_MODEL || 'gpt-4o';
 
+/** OpenAI speech-to-text for voice dictation. The Whisper API model is fixed to whisper-1; env-overridable. */
+export const OPENAI_TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || 'whisper-1';
+
+/** OpenAI text-to-speech for read-aloud (plays an assignment's audio_script). Env-overridable. */
+export const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || 'tts-1';
+
 /** Single object the eval rig + Spark cache fingerprint read. */
 export const MODELS = {
   grading: CLAUDE_GRADING_MODEL,
   claude_generation: CLAUDE_GEN_MODEL,
   generation: OPENAI_GEN_MODEL,
   voice: OPENAI_VOICE_MODEL,
+  transcribe: OPENAI_TRANSCRIBE_MODEL,
+  tts: OPENAI_TTS_MODEL,
 } as const;
 
 /**

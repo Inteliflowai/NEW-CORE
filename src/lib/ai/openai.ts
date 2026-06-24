@@ -2,8 +2,8 @@
 // Resilient OpenAI wrapper with exponential backoff retry (LIFT V1 lib/openai/resilient.ts).
 // Throws LlmExhaustedError after all retries are exhausted; never silently returns null
 // on terminal failure so callers get a typed, catchable signal.
-import OpenAI from 'openai';
-import { usesLegacyTokenParam } from '@/lib/ai/models';
+import OpenAI, { toFile } from 'openai';
+import { usesLegacyTokenParam, OPENAI_TRANSCRIBE_MODEL, OPENAI_TTS_MODEL } from '@/lib/ai/models';
 import { LlmExhaustedError } from '@/lib/ai/errors';
 
 let _openai: OpenAI | null = null;
@@ -120,3 +120,76 @@ export async function resilientImageGeneration(
 
 // Lazy accessor for the raw client (no consumers in src/scripts — kept for compat)
 export function getOpenAIClient(): OpenAI { return getOpenAI(); }
+
+/**
+ * Resilient speech-to-text (Whisper). Retries on 429/5xx/timeout; throws LlmExhaustedError
+ * when exhausted. Returns the transcript text (response_format 'text' yields a string).
+ */
+export async function resilientAudioTranscription(
+  audio: { buffer: Buffer; filename: string },
+  options: RetryOptions = {},
+): Promise<string> {
+  const { maxRetries = 2, initialDelayMs = 1000, maxDelayMs = 10000, timeoutMs = 60000 } = options;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const file = await toFile(audio.buffer, audio.filename);
+      const result = await getOpenAI().audio.transcriptions.create(
+        { file, model: OPENAI_TRANSCRIBE_MODEL, language: 'en', response_format: 'text' },
+        { signal: controller.signal },
+      );
+      clearTimeout(timeout);
+      return typeof result === 'string' ? result : ((result as { text?: string }).text ?? '');
+    } catch (error: unknown) {
+      const err = error as { status?: number; response?: { status?: number }; message?: string };
+      const status = err?.status || err?.response?.status;
+      const isRetryable = !status || status === 429 || status >= 500;
+      lastErr = error;
+      if (!isRetryable || attempt === maxRetries) {
+        console.error(`[OpenAI Audio] Transcription failed after ${attempt + 1} attempts:`, err?.message || error);
+        throw new LlmExhaustedError('openai', lastErr);
+      }
+      const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + Math.random() * 500, maxDelayMs);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw new LlmExhaustedError('openai', lastErr);
+}
+
+/**
+ * Resilient text-to-speech. Retries on 429/5xx/timeout; throws LlmExhaustedError when exhausted.
+ * Returns MP3 bytes (audio/mpeg) as a Buffer.
+ */
+export async function resilientTextToSpeech(
+  text: string,
+  options: RetryOptions = {},
+): Promise<Buffer> {
+  const { maxRetries = 2, initialDelayMs = 1000, maxDelayMs = 10000, timeoutMs = 60000 } = options;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const result = await getOpenAI().audio.speech.create(
+        { model: OPENAI_TTS_MODEL, voice: 'nova', input: text, speed: 0.95 },
+        { signal: controller.signal },
+      );
+      clearTimeout(timeout);
+      return Buffer.from(await result.arrayBuffer());
+    } catch (error: unknown) {
+      const err = error as { status?: number; response?: { status?: number }; message?: string };
+      const status = err?.status || err?.response?.status;
+      const isRetryable = !status || status === 429 || status >= 500;
+      lastErr = error;
+      if (!isRetryable || attempt === maxRetries) {
+        console.error(`[OpenAI TTS] Speech failed after ${attempt + 1} attempts:`, err?.message || error);
+        throw new LlmExhaustedError('openai', lastErr);
+      }
+      const delay = Math.min(initialDelayMs * Math.pow(2, attempt) + Math.random() * 500, maxDelayMs);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw new LlmExhaustedError('openai', lastErr);
+}
