@@ -95,6 +95,23 @@ describe('PUT /api/attempts/homework-draft', () => {
     expect(updates).toHaveLength(1);
     expect(updates[0].responses).toEqual(RESPONSES);
   });
+
+  it('400 and NO write when a task carries a non-proxy (external) image_url', async () => {
+    const evil = { tasks: { '1': { text: 'x', image_url: 'https://attacker.example/x.gif' } } };
+    const { PUT } = await load();
+    const res = await PUT(putReq({ attempt_id: 'att1', responses: evil }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('Invalid image reference');
+    expect(updates).toHaveLength(0);
+  });
+
+  it('200 when image_url is the caller\'s own proxy URL', async () => {
+    const ok = { tasks: { '1': { text: 'x', image_url: '/api/attempts/drawing?path=u1%2Fatt1%2Ftask-1-1.png' } } };
+    const { PUT } = await load();
+    const res = await PUT(putReq({ attempt_id: 'att1', responses: ok }));
+    expect(res.status).toBe(200);
+    expect(updates).toHaveLength(1);
+  });
 });
 
 describe('GET /api/attempts/homework-draft', () => {

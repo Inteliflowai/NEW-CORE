@@ -62,6 +62,14 @@ function textFor(responses: ResponsesShape, step: number): string {
   return responses.tasks[String(step)]?.text ?? '';
 }
 
+function imageFor(responses: ResponsesShape, step: number): string | null {
+  return responses.tasks[String(step)]?.image_url ?? null;
+}
+
+function hasAnswer(responses: ResponsesShape, step: number): boolean {
+  return textFor(responses, step).trim() !== '' || imageFor(responses, step) != null;
+}
+
 export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, content, initialResponses }: AssignmentPlayerProps) {
   const tasks = content.tasks ?? [];
 
@@ -100,6 +108,8 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
   const sessBackspaceCount = useRef<number>(0);
   const sessKeypressCount  = useRef<number>(0);
   const stuckEraseCount    = useRef<number>(0);
+
+  const canvasUsedRef  = useRef(false);
 
   const lastKeypressMs = useRef<number>(0);
   const pauseStartMs   = useRef<number | null>(null);
@@ -193,8 +203,8 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
       totalFocusLossMs: sessTotalFocusLossMs.current,
       backspaceCount:   sessBackspaceCount.current,
       keypressCount:    sessKeypressCount.current,
-      ttsPlayCount:     0,      // Segment 5
-      canvasUsed:       false,  // Segment 4
+      ttsPlayCount:     0,                        // Segment 5
+      canvasUsed:       canvasUsedRef.current,    // flipped when the student draws (Seg 5)
       stuckEraseCount:  stuckEraseCount.current,
     };
   }
@@ -215,6 +225,18 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
   }
 
   // ── Autosave (debounced PUT + localStorage mirror) ───────────────────────
+  const persistDraftNow = useCallback((next: ResponsesShape) => {
+    try {
+      window.localStorage.setItem(draftKey(attemptId), JSON.stringify({ responses: next, savedAt: Date.now() }));
+    } catch { /* best-effort */ }
+    void fetch('/api/attempts/homework-draft', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({ attempt_id: attemptId, responses: next }),
+    }).catch(() => {});
+  }, [attemptId]);
+
   const scheduleAutosave = useCallback((next: ResponsesShape) => {
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
     autosaveTimer.current = setTimeout(() => {
@@ -232,8 +254,13 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
     }, AUTOSAVE_DEBOUNCE_MS);
   }, [attemptId]);
 
-  // Flush any pending autosave on unmount.
-  useEffect(() => () => { if (autosaveTimer.current) clearTimeout(autosaveTimer.current); }, []);
+  // Flush any pending autosave on unmount — fire immediately if a timer is pending.
+  useEffect(() => () => {
+    if (autosaveTimer.current) {
+      clearTimeout(autosaveTimer.current);
+      persistDraftNow(responsesRef.current);
+    }
+  }, [persistDraftNow]);
 
   // ── Response handler ───────────────────────────────────────────────────
   function handleTaskChange(step: number, value: string) {
@@ -248,6 +275,30 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
       scheduleAutosave(next);
       return next;
     });
+  }
+
+  function handleTaskImage(step: number, imageUrl: string | null) {
+    setResponses((prev) => {
+      const next: ResponsesShape = {
+        tasks: { ...prev.tasks, [String(step)]: { text: prev.tasks[String(step)]?.text ?? '', image_url: imageUrl } },
+      };
+      // Image attach/remove is a single deliberate action with no follow-on keystrokes —
+      // persist immediately (not via the 3s debounce) to avoid losing the image_url if
+      // the user closes the tab before the debounce fires.
+      persistDraftNow(next);
+      return next;
+    });
+  }
+
+  async function uploadTaskImage(step: number, blob: Blob): Promise<void> {
+    const form = new FormData();
+    form.append('file', blob, `task-${step}.png`);
+    form.append('attempt_id', attemptId);
+    form.append('step', String(step));
+    const res = await fetch('/api/attempts/drawing', { method: 'POST', body: form });
+    if (!res.ok) throw new Error('upload failed');
+    const body = (await res.json()) as { image_url: string };
+    handleTaskImage(step, body.image_url);
   }
 
   function handleFirstInput() {
@@ -336,7 +387,7 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
   // ── tasks ──────────────────────────────────────────────────────────────
   const steps = tasks.map((t) => t.step);
   const answered: Record<number, boolean> = {};
-  for (const t of tasks) answered[t.step] = textFor(responses, t.step).trim() !== '';
+  for (const t of tasks) answered[t.step] = hasAnswer(responses, t.step);
 
   const currentTask = tasks[currentIndex] ?? null;
   if (!currentTask) return null;
@@ -344,8 +395,8 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
   const currentText = textFor(responses, currentTask.step);
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === tasks.length - 1;
-  const canAdvance = currentText.trim() !== '';
-  const canSubmit = tasks.length > 0 && tasks.every((t) => textFor(responses, t.step).trim() !== '');
+  const canAdvance = hasAnswer(responses, currentTask.step);
+  const canSubmit = tasks.length > 0 && tasks.every((t) => hasAnswer(responses, t.step));
 
   return (
     <div className="min-h-screen bg-bg flex flex-col">
@@ -363,6 +414,10 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
           value={currentText}
           onChange={(v) => handleTaskChange(currentTask.step, v)}
           onFirstInput={handleFirstInput}
+          imageUrl={imageFor(responses, currentTask.step)}
+          onSaveImage={(blob) => uploadTaskImage(currentTask.step, blob)}
+          onRemoveImage={() => handleTaskImage(currentTask.step, null)}
+          onCanvasUsed={() => { canvasUsedRef.current = true; }}
         />
         <TeliPanel attemptId={attemptId} step={currentTask.step} taskDescription={currentTask.description} />
       </div>
