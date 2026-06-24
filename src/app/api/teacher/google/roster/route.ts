@@ -3,8 +3,9 @@
 // token IS the access boundary (no CORE class row exists yet for a not-yet-imported course).
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
-import { getValidAccessTokenForTeacher, GoogleNotConnectedError } from '@/lib/google/tokens';
-import { listCourseStudents, GoogleScopeError } from '@/lib/google/classroom';
+import { getValidAccessTokenForTeacher } from '@/lib/google/tokens';
+import { listCourseStudents } from '@/lib/google/classroom';
+import { gcErrorResponse } from '@/lib/google/errorEnvelope';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const supabase = await createServerSupabaseClient();
@@ -29,9 +30,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
     return NextResponse.json({ students: students.map((s) => ({ ...s, existsInCore: existing.has(s.email) })) });
   } catch (err) {
-    if (err instanceof GoogleNotConnectedError) return NextResponse.json({ connected: false });
-    if (err instanceof GoogleScopeError) return NextResponse.json({ connected: true, needsReconnect: true });
-    console.error('[gc] roster fetch failed:', err instanceof Error ? err.message : 'unknown');
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return gcErrorResponse(err);
   }
 }

@@ -5,8 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { reconcileCourseRoster } from '@/lib/google/reconcileCourseRoster';
-import { GoogleNotConnectedError } from '@/lib/google/tokens';
-import { GoogleScopeError } from '@/lib/google/classroom';
+import { gcErrorResponse } from '@/lib/google/errorEnvelope';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const supabase = await createServerSupabaseClient();
@@ -37,9 +36,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
     return NextResponse.json({ classId, ...result });
   } catch (err) {
-    if (err instanceof GoogleNotConnectedError) return NextResponse.json({ connected: false });
-    if (err instanceof GoogleScopeError) return NextResponse.json({ connected: true, needsReconnect: true });
-    console.error('[gc] sync failed:', err instanceof Error ? err.message : 'unknown');
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return gcErrorResponse(err);
   }
 }

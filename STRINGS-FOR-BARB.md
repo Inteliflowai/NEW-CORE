@@ -813,3 +813,60 @@ Note: the connect/reconnect CTAs are `<a href="/api/teacher/google/connect">` (O
 | Disconnect failed | That didn't disconnect — try again in a moment. |
 
 Note: on a disconnect failure the card stays in the connected state; the error replaces nothing (teacher can retry). On success the card transitions to not-connected.
+
+
+## Google Classroom — Seg 2 (roster import) (DRAFT — Barb gates all copy)
+
+Teacher roster import wizard (select course → review preview → import → done screen) and the on-demand sync flow. All strings are teacher-only surfaces.
+
+### Wizard step labels
+
+| Key | Draft |
+|---|---|
+| Step 1 heading | Choose a class to import |
+| Step 2 heading (with course name) | Review {course} |
+| Subject field label | Subject |
+| Grade field label | Grade |
+
+### Review-preview student counts
+
+| Key | Draft |
+|---|---|
+| New students (n = count) | {n} new |
+| Already in CORE | {n} already in CORE |
+| Skipped — no email | {n} skipped — no email |
+
+### Import action
+
+| Key | Draft |
+|---|---|
+| Import CTA | Import roster |
+| Importing (in-flight) | Importing… |
+
+### Done screen tiles
+
+| Key | Draft |
+|---|---|
+| Done heading | Done |
+| Created tile | {n} created |
+| Linked tile | {n} linked |
+| Soft-removal line | {n} no longer in this class |
+
+> **Note on "{n} no longer in this class"** — ITEM C / MIN-7: this draft deliberately uses an observation framing ("no longer in this class"), NOT "{n} removed". A roster change is a fact the teacher should see, not an alarm. Barb to confirm the exact phrasing. The other skip buckets (ambiguous match, rebind candidate, duplicate email within import, seat-cap) are intentionally NOT surfaced on the done screen for the pilot.
+
+### Reconnect CTA (shown when Google connection is missing or expired)
+
+| Key | Draft |
+|---|---|
+| Not-connected prompt | Connect Google Classroom to import a roster. |
+| Connect CTA | Connect Google Classroom |
+
+### Sync flow
+
+| Key | Draft |
+|---|---|
+| Sync CTA | Sync now |
+| Syncing (in-flight) | Syncing… |
+| Sync done summary | {n} kept · {n} new · {n} re-added · {n} no longer in this class |
+
+> **Note on sync done summary** — the four buckets are: kept (no change), new (created or linked this sync), re-added (reactivated), and no longer in this class (soft-unenrolled). Barb to confirm bucket labels and separator style.

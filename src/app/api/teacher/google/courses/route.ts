@@ -1,8 +1,9 @@
 // GET /api/teacher/google/courses — the connected teacher's active GC courses (paginated).
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
-import { getValidAccessTokenForTeacher, GoogleNotConnectedError } from '@/lib/google/tokens';
-import { listCourses, GoogleScopeError } from '@/lib/google/classroom';
+import { getValidAccessTokenForTeacher } from '@/lib/google/tokens';
+import { listCourses } from '@/lib/google/classroom';
+import { gcErrorResponse } from '@/lib/google/errorEnvelope';
 
 export async function GET(_req: NextRequest): Promise<NextResponse> {
   const supabase = await createServerSupabaseClient();
@@ -17,9 +18,6 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
     const courses = await listCourses(accessToken);
     return NextResponse.json({ courses });
   } catch (err) {
-    if (err instanceof GoogleNotConnectedError) return NextResponse.json({ connected: false });
-    if (err instanceof GoogleScopeError) return NextResponse.json({ connected: true, needsReconnect: true });
-    console.error('[gc] courses list failed:', err instanceof Error ? err.message : 'unknown');
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return gcErrorResponse(err);
   }
 }
