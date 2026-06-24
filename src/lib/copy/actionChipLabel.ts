@@ -18,7 +18,9 @@ export interface ActionChip {
 export function actionChipLabel(action: SuggestedAction): ActionChip {
   switch (action) {
     case 'reteach':
-      return { label: 'reteach now', tone: 'risk' };
+      // User-facing wording is the softer "reinforce" (Marvin, 2026-06-24); the
+      // 'reteach' enum value stays as the internal key.
+      return { label: 'reinforce now', tone: 'risk' };
     case 'verbal_check':
       return { label: 'check in', tone: 'warn' };
     case 'practice':

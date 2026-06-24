@@ -22,6 +22,7 @@ import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/sup
 import { generateGuardedHint } from '@/lib/teli/generateHint';
 import { rungForHelpCount, hintsRemaining, type HintRung } from '@/lib/teli/ladder';
 import { normalizeContent, type AssignmentContent } from '@/lib/assignments/loadAssignmentForPlay';
+import { enforceAiRateLimit } from '@/lib/rateLimit';
 
 type TutorBody = { attempt_id?: string; task_step?: number; student_message?: string; is_help_request?: boolean };
 
@@ -31,6 +32,10 @@ export async function POST(req: Request) {
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Per-user ceiling on this paid endpoint (no-op until Upstash creds are set).
+    const limited = await enforceAiRateLimit(user.id);
+    if (limited) return limited;
 
     // 2. Parse + validate.
     let body: TutorBody;
