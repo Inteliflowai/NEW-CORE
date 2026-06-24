@@ -1,0 +1,5 @@
+# Pre-push gate: run the full test suite, then the TypeScript check.
+# Each short-circuits on failure (cheaper/faster check would go first, but the
+# vitest suite is the higher-signal gate so it runs first). A failing push is
+# blocked locally before it ever reaches CI / Vercel.
+npm test && npm run typecheck

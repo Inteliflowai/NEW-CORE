@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { resilientAudioTranscription } from '@/lib/ai/openai';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
+import { enforceAiRateLimit } from '@/lib/rateLimit';
 
 const MAX_BYTES = 25 * 1024 * 1024; // OpenAI Whisper hard limit
 const MIN_BYTES = 1024;             // below this it is too short to be speech
@@ -19,6 +20,10 @@ export async function POST(req: NextRequest) {
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Per-user ceiling on this paid endpoint (no-op until Upstash creds are set).
+    const limited = await enforceAiRateLimit(user.id);
+    if (limited) return limited;
 
     let form: FormData;
     try { form = await req.formData(); } catch { return NextResponse.json({ error: 'Bad request' }, { status: 400 }); }

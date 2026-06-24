@@ -319,3 +319,20 @@ body {
   background-image: radial-gradient(color-mix(in srgb, var(--brand) 10%, transparent) 1.5px, transparent 1.7px);
   background-size: 18px 18px;
 }
+
+/* ============================================================
+   REDUCED MOTION — global safety net (WCAG 2.3.3 / a11y).
+   framer-motion surfaces already snap via useReducedMotion(); this
+   catches the CSS keyframe/transition animations + smooth scrolling
+   so a user who asked their OS for less motion gets it everywhere.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

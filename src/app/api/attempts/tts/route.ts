@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { resilientTextToSpeech } from '@/lib/ai/openai';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
+import { enforceAiRateLimit } from '@/lib/rateLimit';
 
 const MAX_CHARS = 4096; // OpenAI TTS input limit
 
@@ -16,6 +17,10 @@ export async function POST(req: NextRequest) {
     const supabase = await createServerSupabaseClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Per-user ceiling on this paid endpoint (no-op until Upstash creds are set).
+    const limited = await enforceAiRateLimit(user.id);
+    if (limited) return limited;
 
     const body = (await req.json().catch(() => null)) as { text?: string } | null;
     const text = body?.text?.trim();

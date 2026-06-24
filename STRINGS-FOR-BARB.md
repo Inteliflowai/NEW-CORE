@@ -884,3 +884,27 @@ These states appear on the "Choose a class to import" step before the course lis
 | Roster-fetch error (500 or network, after clicking a course) | Couldn't load the roster for this class — try reconnecting. |
 
 Note: the loading line and empty-state use `role="status"`. The error block uses `role="alert"` and mirrors the reconnect-card styling (border, shadow-sticker, same Connect Google Classroom CTA link). If the roster fetch for a specific course fails, the error appears on the select step (the teacher did not advance to the preview) so they can choose a different course or reconnect.
+
+---
+
+## Wave 0 hardening (2026-06-24) — Barb sign-off required
+
+### Rate-limit ceiling message (`tooManyRequests`, `src/lib/rateLimit.ts`)
+
+Returned (HTTP 429) when a user exceeds the per-user call ceiling on the paid AI endpoints (read-aloud / dictation / Teli tutor). Reaches a human (student or teacher) via the calling surface's error display, so it's user-facing.
+
+| Key | Draft |
+|---|---|
+| Over the per-user ceiling (429) | Too many requests. Please wait a moment and try again. |
+
+> Barb to confirm: warm-not-punitive tone for a ceiling-hit, no jargon ("rate limit"/"throttled" avoided on purpose), and consistency with the other "give it a moment" error messages. A student is the likeliest one to hit this.
+
+### Roster action chip relabel (`actionChipLabel`, `src/lib/copy/actionChipLabel.ts`)
+
+Per Marvin (2026-06-24): the softer "reinforce" replaces "reteach" in teacher-facing copy (the `'reteach'` enum value is unchanged; only the displayed word). Consistent with the existing CL verb "Reinforce" (`src/lib/skills/clVerbs.ts`).
+
+| Was | Now |
+|---|---|
+| reteach now | reinforce now |
+
+> Still-pending "reteach" wording for Barb's broader copy sweep (NOT changed in Wave 0, flagged here): the student-facing `scoreMessage` pool ("Reteach mode" / "Reteach scope", `src/lib/quiz/scoreMessage.ts`) — entangled with the separately-deferred band/CL leak fix, so swapping one band word for another there is deferred to the leak pass; and the signature-moment prototype copy ("a 5-minute reteach", `src/app/(prototype)/signature-moment/_registers.ts`), which needs a noun-phrase rewrite rather than a word swap.
