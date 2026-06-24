@@ -59,6 +59,8 @@ export async function importRoster(
   // hitting the DB for every row, and so that a user created by ensureAuthUser
   // (which is mocked in tests and won't actually write to the fake DB) is still
   // resolvable in subsequent processing steps.
+  // NOTE: cache key is email-only (no school_id) — safe because this Map lives for
+  // one single-school importRoster call; a multi-school engine would need (school_id,email) keys.
   const userCache = new Map<string, { id: string; role: string }>();
 
   /** Look up a user by lowercased email + school_id. Checks the session cache first,
@@ -130,6 +132,11 @@ export async function importRoster(
       if (!teacher) {
         summary.classes.errors++;
         summary.issues.push(`Class: teacher '${row.teacherEmail}' not found for class '${row.name}'`);
+        continue;
+      }
+      if (teacher.role !== 'teacher') {
+        summary.classes.errors++;
+        summary.issues.push(`Class: '${row.name}' — teacher email '${row.teacherEmail}' is not a teacher`);
         continue;
       }
 
@@ -230,7 +237,9 @@ export async function importRoster(
 
       const teacher = row.teacherEmail ? await findUserByEmail(row.teacherEmail.toLowerCase()) : null;
 
-      if (teacher) {
+      // c1: disambiguate by (name, teacher_id, period) — only when the resolved user is
+      // actually a teacher; a non-teacher id would never match a class's teacher_id
+      if (teacher && teacher.role === 'teacher') {
         const { data: c1, error: e1 } = await admin
           .from('classes')
           .select('id')
@@ -328,7 +337,13 @@ export async function importRoster(
       if (existingParent) {
         // Update full_name only (never change role/school_id)
         parentId = existingParent.id;
-        await admin.from('users').update({ full_name: row.fullName }).eq('id', parentId);
+        const { error: nameErr } = await (admin
+          .from('users')
+          .update({ full_name: row.fullName })
+          .eq('id', parentId) as unknown as Promise<{ error: { message: string } | null }>);
+        if (nameErr) {
+          summary.issues.push(`Parent: failed to update full_name for '${lower}' — ${nameErr.message}`);
+        }
         summary.parents.linked++;
       } else {
         parentId = await ensureAuthUser({

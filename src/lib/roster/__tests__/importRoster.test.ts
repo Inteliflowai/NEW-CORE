@@ -519,3 +519,45 @@ describe('importRoster — exported constants', () => {
     expect(mod.DEFAULT_STUDENT_PW).toBe('Student2026!');
   });
 });
+
+describe('importRoster — class teacher must have role=teacher', () => {
+  it('rejects a Classes row whose Teacher Email resolves to a student: increments classes.errors, records an issue, and does NOT insert a class with that student as teacher_id', async () => {
+    // student-as-teacher is pre-existing in the DB with role='student'
+    // The teacher sheet is empty; no ensureAuthUser calls needed
+    ensureAuthUser.mockResolvedValueOnce('real-student-id'); // only for the student row
+
+    const admin = fakeAdmin({
+      preExistingUsers: {
+        // This email belongs to a STUDENT, not a teacher
+        'notateacher@school.edu|school-1': { id: 'student-user-id', role: 'student' },
+      },
+      preExistingClasses: [],
+    });
+
+    const roster = {
+      teachers: [],
+      classes: [{ name: 'Bio 9A', subject: 'Biology', gradeLevel: '9', period: '2', teacherEmail: 'notateacher@school.edu' }],
+      students: [],
+      enrollments: [],
+      parents: [],
+    };
+
+    const { importRoster } = await import('@/lib/roster/importRoster');
+    const summary = await importRoster(admin as never, {
+      schoolId: 'school-1',
+      roster,
+    });
+
+    // Must count as an error (not created, not skipped)
+    expect(summary.classes.errors).toBe(1);
+    expect(summary.classes.created).toBe(0);
+    expect(summary.classes.skipped).toBe(0);
+
+    // Must record an informative issue
+    expect(summary.issues.some(i => /notateacher@school\.edu/i.test(i) && /not a teacher/i.test(i))).toBe(true);
+
+    // Must NOT have inserted any class row with student-user-id as teacher_id
+    const classInserts = admin.inserts.filter(i => i.table === 'classes');
+    expect(classInserts.every(i => i.row['teacher_id'] !== 'student-user-id')).toBe(true);
+  });
+});
