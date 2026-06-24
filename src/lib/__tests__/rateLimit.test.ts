@@ -14,6 +14,12 @@ describe('checkRateLimit', () => {
     expect(await checkRateLimit(okLimiter, 'user-1')).toEqual({ success: true, remaining: 9 });
     expect(await checkRateLimit(overLimiter, 'user-1')).toEqual({ success: false, remaining: 0 });
   });
+
+  it('fails OPEN (allows through) when the limiter throws — e.g. Upstash unreachable', async () => {
+    const throwingLimiter = { limit: async () => { throw new Error('Redis unreachable'); } };
+    // A limiter outage must NOT take down the paid endpoint for everyone — allow the call.
+    expect(await checkRateLimit(throwingLimiter, 'user-1')).toEqual({ success: true, remaining: 999 });
+  });
 });
 
 describe('tooManyRequests', () => {

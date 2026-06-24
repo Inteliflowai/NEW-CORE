@@ -31,14 +31,24 @@ export interface RateLimiterLike {
   limit(identifier: string): Promise<{ success: boolean; remaining: number }>;
 }
 
-/** Returns the limiter verdict; with no limiter configured, allows through (no ceiling). */
+/**
+ * Returns the limiter verdict. With no limiter configured, allows through (no ceiling).
+ * FAILS OPEN: if the limiter store (Upstash) is unreachable and `.limit()` throws, allow
+ * the request rather than 500 — a limiter outage must not take down the paid endpoint for
+ * every user. (Abuse during a Redis outage is the lesser risk vs. a total feature outage.)
+ */
 export async function checkRateLimit(
   limiter: RateLimiterLike | null,
   identifier: string,
 ): Promise<{ success: boolean; remaining: number }> {
   if (!limiter) return { success: true, remaining: 999 };
-  const result = await limiter.limit(identifier);
-  return { success: result.success, remaining: result.remaining };
+  try {
+    const result = await limiter.limit(identifier);
+    return { success: result.success, remaining: result.remaining };
+  } catch (err) {
+    console.error('[rateLimit] limiter store unreachable — failing open:', err);
+    return { success: true, remaining: 999 };
+  }
 }
 
 /** The standard 429 response (body shape matches the routes' other `{ error }` replies). */
