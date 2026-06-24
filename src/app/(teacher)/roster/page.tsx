@@ -126,7 +126,7 @@ export default async function RosterPage({
   return (
     <div className="p-5 flex flex-col gap-5">
       {/* Part 1 — Header */}
-      <PageHeader title="Roster" kicker="Who needs you today" accent="brand" />
+      <PageHeader title="Class Roster" kicker="Who needs you today" accent="brand" />
 
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         {/* Left column — Parts 2–5 */}
@@ -173,10 +173,13 @@ export default async function RosterPage({
           <SignalLegend />
         </div>
 
-        {/* Right rail — Part 6: Concept gaps */}
-        <aside className="w-full lg:w-72 shrink-0">
-          <ConceptGapsRail gaps={data.concept_gaps} />
-        </aside>
+        {/* Right rail — Part 6: Concept gaps. Quiet on good days (Marvin, 2026-06-24):
+            only show when there ARE class-wide gaps — no "all clear" reassurance card. */}
+        {data.concept_gaps.length > 0 && (
+          <aside className="w-full lg:w-72 shrink-0">
+            <ConceptGapsRail gaps={data.concept_gaps} />
+          </aside>
+        )}
       </div>
     </div>
   );

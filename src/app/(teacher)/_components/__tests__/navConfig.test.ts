@@ -29,7 +29,7 @@ describe('navConfig', () => {
       }
     }
     for (const l of [
-      'Today', 'Roster', 'Gradebook', 'Alerts', 'High Fives',
+      'Today', 'Class Roster', 'Gradebook', 'Alerts', 'High Fives',
       'Lesson Library', 'Quiz Library', 'Insights', 'Import Roster',
       'CLASS', 'LIBRARY', 'INSIGHTS & TOOLS',
     ]) {
