@@ -4,6 +4,7 @@
     { "path": "/api/cron/idempotency-sweep", "schedule": "0 3 * * *" },
     { "path": "/api/cron/weekly-snapshot", "schedule": "0 6 * * 1" },
     { "path": "/api/cron/parent-narrative", "schedule": "0 7 * * 1" },
-    { "path": "/api/cron/trial-expiry", "schedule": "0 8 * * *" }
+    { "path": "/api/cron/trial-expiry", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/gc-roster-sync", "schedule": "0 4 * * *" }
   ]
 }

@@ -759,3 +759,29 @@ describe('0023 behavioral_signals_rls', () => {
     expect(s()).toMatch(/CREATE POLICY behavioral_signals_platform_all ON public\.behavioral_signals FOR ALL\s+USING \(public\.is_platform_admin\(\)\) WITH CHECK \(public\.is_platform_admin\(\)\)/);
   });
 });
+
+describe('0024 gc_roster', () => {
+  const s = () => sql('0024_gc_roster.sql');
+  it('adds email + last_seen_at to external_identities (idempotent ADD COLUMN IF NOT EXISTS)', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.external_identities\s+ADD COLUMN IF NOT EXISTS email\s+text/);
+    expect(s()).toMatch(/ALTER TABLE public\.external_identities\s+ADD COLUMN IF NOT EXISTS last_seen_at\s+timestamptz/);
+  });
+  it('adds enrollments.source for per-class GC provenance (idempotent ADD COLUMN IF NOT EXISTS)', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.enrollments\s+ADD COLUMN IF NOT EXISTS source\s+text/);
+  });
+  it('does NOT recreate or rename the existing (school_id, provider, external_id) shape', () => {
+    expect(s()).not.toMatch(/CREATE TABLE[^;]*external_identities/);
+    expect(s()).not.toMatch(/external_user_id/);   // never copy V1 column names
+    // NOTE: the 0008 block (lines ~530) holds the positive "UNIQUE(school_id, provider,
+    // external_id) preserved" assertion; 0024 only asserts it does not recreate/rename the
+    // table (MIN-8 cross-reference — do not duplicate the positive assertion here).
+  });
+  it('adds a UNIQUE index on classes(school_id, google_course_id) for a clean course upsert', () => {
+    expect(s()).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_classes_school_google_course\s+ON public\.classes\s*\(\s*school_id\s*,\s*google_course_id\s*\)/);
+    // guarded so it cannot fail if pre-existing dup data exists (WHERE google_course_id IS NOT NULL)
+    expect(s()).toMatch(/WHERE google_course_id IS NOT NULL/);
+  });
+  it('adds a plain (school_id, provider, email) email lookup index on external_identities', () => {
+    expect(s()).toMatch(/CREATE INDEX IF NOT EXISTS idx_external_identities_email\s+ON public\.external_identities\s*\(\s*school_id\s*,\s*provider\s*,\s*email\s*\)/);
+  });
+});
