@@ -11,7 +11,8 @@ import RosterFileImport from './RosterFileImport';
 import ImportWizard from '../google/_components/ImportWizard';
 
 export interface RosterImportTabsProps {
-  mode: 'full' | 'lean';
+  canFull: boolean;
+  canLean: boolean;
   classId: string | null;
 }
 
@@ -21,7 +22,7 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
-export function RosterImportTabs({ mode, classId }: RosterImportTabsProps): React.JSX.Element {
+export function RosterImportTabs({ canFull, canLean, classId }: RosterImportTabsProps): React.JSX.Element {
   const [active, setActive] = useState<TabId>('file');
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -61,7 +62,7 @@ export function RosterImportTabs({ mode, classId }: RosterImportTabsProps): Reac
       </div>
 
       <div role="tabpanel" id="ri-tabpanel" aria-labelledby={`ri-tab-${active}`}>
-        {active === 'file' && <RosterFileImport mode={mode} classId={classId} />}
+        {active === 'file' && <RosterFileImport canFull={canFull} canLean={canLean} classId={classId} />}
         {active === 'google' && <ImportWizard />}
       </div>
     </div>

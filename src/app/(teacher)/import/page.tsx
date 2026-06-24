@@ -1,12 +1,15 @@
 // src/app/(teacher)/import/page.tsx
-// Server Component — async. Accessible to both teachers (lean) and school admins / platform_admin
-// (full). The (teacher) layout already gates requireRole(['teacher']) for the teacher rail; admins
-// reach here through the same layout guard but with a staff role — so we use requireRole(STAFF_ROLES)
-// to cover both. Then we compute `mode` based on whether the caller is a school-admin-tier role.
+// Server Component — async. Accessible to all staff roles (STAFF_ROLES).
+// The (teacher) layout already gates requireRole(['teacher']); admins reach here through the same
+// layout guard with a staff role — so we use requireRole(STAFF_ROLES) to cover both.
 //
-// Teacher (lean): resolve classId exactly like /upload (searchParams.class →
-//   firstClassIdForTeacher → redirect → guardClassAccess). No classId → NO_CLASSES.
-// Admin (full): classId not needed; skip the class-resolution step entirely.
+// Every staff member can run BOTH full (whole-school 5-sheet) and lean (single-class) imports.
+// canLean requires a resolved classId. Classid resolution mirrors /upload exactly:
+//   searchParams.class → firstClassIdForTeacher → redirect → guardClassAccess.
+//
+// If classId resolves to null (no classes) → NO_CLASSES empty state.
+// If classId guard fails → CLASS_UNAVAILABLE empty state.
+// canFull is always true for all staff roles.
 
 import React from 'react';
 import { redirect } from 'next/navigation';
@@ -14,7 +17,7 @@ import { requireRole } from '@/lib/auth/requireRole';
 import { firstClassIdForTeacher } from '@/lib/teacher/firstClassIdForTeacher';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { EmptyState } from '@/components/core/EmptyState';
-import { SCHOOL_ADMIN_ROLES, STAFF_ROLES } from '@/lib/auth/roles';
+import { STAFF_ROLES } from '@/lib/auth/roles';
 import { PageHeader } from '../_components/PageHeader';
 import { RosterImportTabs } from './_components/RosterImportTabs';
 
@@ -38,37 +41,40 @@ export default async function ImportPage({
 }: {
   searchParams: Promise<{ class?: string }>;
 }): Promise<React.JSX.Element> {
-  const { userId, role } = await requireRole(STAFF_ROLES);
+  const { userId } = await requireRole(STAFF_ROLES);
 
-  // Determine mode: school_admin / school_sysadmin / platform_admin → full; teacher → lean.
-  const mode = (SCHOOL_ADMIN_ROLES as readonly string[]).includes(role) ? 'full' : 'lean';
-
-  if (mode === 'lean') {
-    // Teacher path: resolve classId the same way /upload does.
-    const { class: classId } = await searchParams;
-    if (!classId) {
-      const firstId = await firstClassIdForTeacher(userId);
-      if (!firstId) return <div className="p-6">{NO_CLASSES}</div>;
-      redirect(`/import?class=${firstId}`);
+  // Resolve classId the same way /upload does so lean mode has a class to target.
+  const { class: classParam } = await searchParams;
+  if (!classParam) {
+    const firstId = await firstClassIdForTeacher(userId);
+    if (!firstId) {
+      // No classes — show the empty state (full mode is still available without a class).
+      return (
+        <div className="p-5 flex flex-col gap-5">
+          <PageHeader title="Import Roster" kicker="Add students" accent="brand" />
+          <div className="p-6">{NO_CLASSES}</div>
+        </div>
+      );
     }
+    redirect(`/import?class=${firstId}`);
+  }
 
-    // IDOR guard — teacher must own the class.
-    const guard = await guardClassAccess(classId);
-    if (guard) return <div className="p-6">{CLASS_UNAVAILABLE}</div>;
-
+  // IDOR guard — the user must own (or have admin access to) the class.
+  const guard = await guardClassAccess(classParam);
+  if (guard) {
     return (
       <div className="p-5 flex flex-col gap-5">
         <PageHeader title="Import Roster" kicker="Add students" accent="brand" />
-        <RosterImportTabs mode="lean" classId={classId} />
+        <div className="p-6">{CLASS_UNAVAILABLE}</div>
       </div>
     );
   }
 
-  // Admin (full) path: classId not needed.
+  // All staff can run full; lean is available when a classId is present (which it always is here).
   return (
     <div className="p-5 flex flex-col gap-5">
       <PageHeader title="Import Roster" kicker="Add students" accent="brand" />
-      <RosterImportTabs mode="full" classId={null} />
+      <RosterImportTabs canFull={true} canLean={true} classId={classParam} />
     </div>
   );
 }

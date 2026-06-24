@@ -69,14 +69,13 @@ export function LessonLibraryWithCreate({
           type="button"
           onClick={() => setView('create')}
           className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-          aria-pressed={false}
         >
           ＋ Create a lesson
         </button>
       </div>
 
       {/* Existing library */}
-      <LessonLibrary data={data} classes={classes} />
+      <LessonLibrary data={data} classes={classes} onCreate={() => setView('create')} />
     </div>
   );
 }

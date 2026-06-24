@@ -90,10 +90,14 @@ export function LessonLibrary({
   data,
   classes = [],
   now,
+  onCreate,
 }: {
   data: LessonLibraryData;
   classes?: LibraryClassOption[];
   now?: Date;
+  /** Optional callback to switch the parent into a create/upload view. When present, the cold-start
+   * CTA becomes a button instead of a /upload link to avoid a redirect loop. */
+  onCreate?: () => void;
 }): React.JSX.Element {
   const clock = now ?? new Date();
   const [query, setQuery] = useState('');
@@ -143,14 +147,24 @@ export function LessonLibrary({
         <EmptyState
           variant="just-getting-started"
           titleOverride="No lessons yet"
-          bodyOverride="Upload a lesson and we'll draft a quiz you can review."
+          bodyOverride="Create a lesson and we'll draft a quiz you can review."
         />
-        <Link
-          href={uploadHref}
-          className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker"
-        >
-          Upload a lesson
-        </Link>
+        {onCreate ? (
+          <button
+            type="button"
+            onClick={onCreate}
+            className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          >
+            Create a lesson
+          </button>
+        ) : (
+          <Link
+            href={uploadHref}
+            className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker"
+          >
+            Upload a lesson
+          </Link>
+        )}
       </div>
     );
   }

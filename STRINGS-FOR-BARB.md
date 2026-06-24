@@ -958,22 +958,56 @@ Per Marvin (2026-06-24): the softer "reinforce" replaces "reteach" in teacher-fa
 | Full preview in-flight | Previewing… |
 | Full commit in-flight | Committing… |
 
+### Sub-selector (shown when both full and lean are available)
+
+Presented as a segmented control (two `role=radio` buttons inside a `role=group`). Lets any staff member pick which kind of import to run.
+
+| Key | Draft |
+|---|---|
+| Group label (aria-label) | Import scope |
+| Full option | Whole roster (5-sheet .xlsx) |
+| Lean option | Just this class (.csv or .xlsx) |
+
+### No-class-selected alert (lean, classId guard)
+
+| Key | Draft |
+|---|---|
+| Alert text | No class selected — open a class first. |
+
 ### Success — lean mode done screen
 
 | Key | Draft |
 |---|---|
 | Done heading | Roster imported |
-| Row: N students created | {N} new student(s) created |
+| Row: N new students created | {N} new student(s) created |
+| Row: N already in CORE | {N} already in CORE |
 | Row: N enrolled | {N} enrolled |
-| Row: N skipped | {N} skipped |
+| Row: N already enrolled | {N} already enrolled |
 | Row: N errors | {N} could not be added |
+
+> Note: the "skipped" bucket has been replaced by the more specific `studentsExisting` ("already in CORE") and `alreadyEnrolled` counts, matching the actual API response shape. Barb to confirm the wording.
+
+### Success — full mode preview surface
+
+The preview surface renders counts from the `data.counts` object (not per-sheet rows). Barb to confirm the label+separator style:
+
+| Key | Draft |
+|---|---|
+| Preview heading | Preview |
+| Count row (one line, ·-separated) | Teachers: {N} · Classes: {N} · Students: {N} · Enrollments: {N} · Parents: {N} |
 
 ### Success — full mode done screen
 
 | Key | Draft |
 |---|---|
 | Done heading | Import complete |
-| (Rows derived from the API summary object keys — Barb to review labeling.) |
+| Entity row (Teachers) | Teachers: {N} created[· {N} skipped][· {N} errors] |
+| Entity row (Classes) | Classes: {N} created[· {N} skipped][· {N} errors] |
+| Entity row (Students) | Students: {N} created[· {N} skipped][· {N} errors] |
+| Entity row (Enrollments) | Enrollments: {N} created[· {N} skipped][· {N} errors] |
+| Entity row (Parents) | Parents: {N} created[· {N} linked][· {N} skipped][· {N} errors] |
+
+> Note: brackets indicate optional parts (shown only when > 0). Barb to confirm the ·-separated inline style vs separate lines.
 
 ### Error states
 
@@ -981,5 +1015,24 @@ Per Marvin (2026-06-24): the softer "reinforce" replaces "reteach" in teacher-fa
 |---|---|
 | Generic error | Something went wrong — please try again. |
 
-> Note on the lean "skipped" bucket: covers placeholder rows (emails containing 'email' or '@example'), blank rows, and any other rows the server chose not to import. Barb to confirm whether more specificity is warranted for the pilot.
-> Note on the full "preview" surface: the per-sheet counts and issue messages come directly from the API — Barb will want to review the issue text format in a follow-up pass once the API route is built.
+---
+
+## Lesson Library — cold-start CTA + LessonLibraryWithCreate toggle (Fix wave 3, 2026-06-24) — Barb sign-off required
+
+`src/app/(teacher)/library/lessons/_components/LessonLibrary.tsx` + `LessonLibraryWithCreate.tsx`
+
+### LessonLibraryWithCreate toggle buttons
+
+| Key | Draft |
+|---|---|
+| Create button (browse view, top-right) | ＋ Create a lesson |
+| Back button (create view, top-left) | ← Back to library |
+
+### LessonLibrary cold-start CTA (when parent passes onCreate)
+
+| Key | Draft |
+|---|---|
+| Cold-start body (updated) | Create a lesson and we'll draft a quiz you can review. |
+| Cold-start CTA button | Create a lesson |
+
+> Note: when `LessonLibrary` is rendered standalone (no `onCreate` prop), the cold-start CTA remains a `/upload` link ("Upload a lesson") to preserve existing standalone-page behaviour.

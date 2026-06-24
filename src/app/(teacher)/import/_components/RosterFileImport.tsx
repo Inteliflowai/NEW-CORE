@@ -5,40 +5,95 @@
  *
  * full mode (school admins / platform_admin):
  *   - Download template link → GET /api/admin/roster/template
- *   - Preview: POST multipart to /api/admin/roster/import (mode=preview) → per-sheet counts + issues
- *   - Commit: POST multipart to /api/admin/roster/import (mode=commit) → summary
+ *   - Preview: POST multipart to /api/admin/roster/import (mode=preview) →
+ *       { mode:'preview', counts:{teachers,classes,students,enrollments,parents}, issues:string[] }
+ *   - Commit: POST multipart to /api/admin/roster/import (mode=commit) →
+ *       { mode:'commit', summary:{ teachers:{created,skipped,errors}, classes:{...}, students:{...},
+ *         enrollments:{...}, parents:{created,linked,skipped,errors}, issues:string[] } }
  *
  * lean mode (teacher — scoped to one class):
- *   - Upload: POST multipart to /api/teacher/roster/import (file + classId) → summary
+ *   - Upload: POST multipart to /api/teacher/roster/import (file + classId) →
+ *       { summary:{ studentsCreated, studentsExisting, enrolled, alreadyEnrolled, errors, issues } }
  *
+ * A sub-selector (segmented control) lets the user pick between modes when both are available.
  * Token classes only; deep-ink text. Strings DRAFT → Barb (§ Import Roster).
  */
 import React, { useRef, useState } from 'react';
 
 export interface RosterFileImportProps {
-  mode: 'full' | 'lean';
+  /** Whether the calling user can run a full (whole-school 5-sheet) import. */
+  canFull?: boolean;
+  /** Whether the calling user can run a lean (single-class) import — requires a valid classId. */
+  canLean?: boolean;
+  /** The resolved classId for lean mode; null if none available. */
   classId: string | null;
 }
 
+// ── Type shapes ──────────────────────────────────────────────────────────────
+
+/** Lean (teacher) POST /api/teacher/roster/import response summary */
 type LeanSummary = {
   studentsCreated?: number;
+  studentsExisting?: number;
   enrolled?: number;
-  skipped?: number;
+  alreadyEnrolled?: number;
   errors?: number;
-  [key: string]: number | undefined;
+  issues?: string[];
 };
 
-type SheetResult = { rows: number; issues: string[] };
-type PreviewResult = { sheets: Record<string, SheetResult> };
+/** Full preview counts from POST /api/admin/roster/import (mode=preview) */
+type FullPreviewCounts = {
+  teachers?: number;
+  classes?: number;
+  students?: number;
+  enrollments?: number;
+  parents?: number;
+};
+
+/** Nested entity summary from POST /api/admin/roster/import (mode=commit) */
+type EntitySummary = {
+  created?: number;
+  linked?: number;
+  skipped?: number;
+  errors?: number;
+};
+
+type FullCommitSummary = {
+  teachers?: EntitySummary;
+  classes?: EntitySummary;
+  students?: EntitySummary;
+  enrollments?: EntitySummary;
+  parents?: EntitySummary;
+  issues?: string[];
+};
+
+// ── Styles ───────────────────────────────────────────────────────────────────
 
 const btnCls =
   'inline-flex items-center rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50';
 const secondaryCls =
   'inline-flex items-center rounded-md border-2 border-sidebar-edge bg-surface px-4 py-2 font-display text-sm font-bold text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50';
 
-export default function RosterFileImport({ mode, classId }: RosterFileImportProps): React.JSX.Element {
+// ── Entity label map for the commit summary (only the entity keys, not 'issues') ──
+type EntityKey = 'teachers' | 'classes' | 'students' | 'enrollments' | 'parents';
+const ENTITY_LABEL_ENTRIES: [EntityKey, string][] = [
+  ['teachers', 'Teachers'],
+  ['classes', 'Classes'],
+  ['students', 'Students'],
+  ['enrollments', 'Enrollments'],
+  ['parents', 'Parents'],
+];
+
+export default function RosterFileImport({
+  canFull = false,
+  canLean = false,
+  classId,
+}: RosterFileImportProps): React.JSX.Element {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+
+  // Sub-selector: default to full when available, otherwise lean.
+  const [subMode, setSubMode] = useState<'full' | 'lean'>(canFull ? 'full' : 'lean');
 
   // Shared
   const [loading, setLoading] = useState(false);
@@ -48,17 +103,29 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
   const [leanSummary, setLeanSummary] = useState<LeanSummary | null>(null);
 
   // full mode
-  const [preview, setPreview] = useState<PreviewResult | null>(null);
-  const [commitSummary, setCommitSummary] = useState<LeanSummary | null>(null);
+  const [previewCounts, setPreviewCounts] = useState<FullPreviewCounts | null>(null);
+  const [previewIssues, setPreviewIssues] = useState<string[]>([]);
+  const [commitSummary, setCommitSummary] = useState<FullCommitSummary | null>(null);
+
+  function resetState() {
+    setError(null);
+    setLeanSummary(null);
+    setPreviewCounts(null);
+    setPreviewIssues([]);
+    setCommitSummary(null);
+  }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = e.target.files?.[0] ?? null;
     setFile(picked);
-    // Reset state when a new file is chosen
-    setError(null);
-    setLeanSummary(null);
-    setPreview(null);
-    setCommitSummary(null);
+    resetState();
+  }
+
+  function onSubModeChange(next: 'full' | 'lean') {
+    setSubMode(next);
+    resetState();
+    setFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   async function handleLeanUpload() {
@@ -76,7 +143,7 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
         setError(data.error ?? 'Something went wrong — please try again.');
       } else {
         setLeanSummary(data.summary ?? {});
-        // M-1: reset file input so the user can import another file
+        // Reset file input so the user can import another file.
         if (fileInputRef.current) fileInputRef.current.value = '';
         setFile(null);
       }
@@ -91,18 +158,25 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
     if (!file) return;
     setLoading(true);
     setError(null);
-    setPreview(null);
+    setPreviewCounts(null);
+    setPreviewIssues([]);
     setCommitSummary(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
       fd.append('mode', 'preview');
       const res = await fetch('/api/admin/roster/import', { method: 'POST', body: fd });
-      const data = await res.json() as { sheets?: Record<string, SheetResult>; error?: string };
+      const data = await res.json() as {
+        mode?: string;
+        counts?: FullPreviewCounts;
+        issues?: string[];
+        error?: string;
+      };
       if (!res.ok || data.error) {
         setError(data.error ?? 'Something went wrong — please try again.');
       } else {
-        setPreview({ sheets: data.sheets ?? {} });
+        setPreviewCounts(data.counts ?? {});
+        setPreviewIssues(data.issues ?? []);
       }
     } catch {
       setError('Something went wrong — please try again.');
@@ -121,7 +195,7 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
       fd.append('file', file);
       fd.append('mode', 'commit');
       const res = await fetch('/api/admin/roster/import', { method: 'POST', body: fd });
-      const data = await res.json() as { summary?: LeanSummary; error?: string };
+      const data = await res.json() as { mode?: string; summary?: FullCommitSummary; error?: string };
       if (!res.ok || data.error) {
         setError(data.error ?? 'Something went wrong — please try again.');
       } else {
@@ -134,10 +208,44 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
     }
   }
 
+  const bothAvailable = canFull && canLean && !!classId;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* Sub-selector: shown only when both modes are available */}
+      {bothAvailable && (
+        <div
+          role="group"
+          aria-label="Import scope"
+          className="flex gap-2 flex-wrap"
+        >
+          {(
+            [
+              { value: 'full', label: 'Whole roster (5-sheet .xlsx)' },
+              { value: 'lean', label: 'Just this class (.csv or .xlsx)' },
+            ] as const
+          ).map(({ value, label }) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={subMode === value}
+              onClick={() => onSubModeChange(value)}
+              className={[
+                'rounded-md border-2 px-4 py-2 font-display text-sm font-bold shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
+                subMode === value
+                  ? 'border-sidebar-edge bg-brand text-fg-on-brand'
+                  : 'border-sidebar-edge bg-surface text-fg',
+              ].join(' ')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Template download — full mode only */}
-      {mode === 'full' && (
+      {subMode === 'full' && (
         <a
           href="/api/admin/roster/template"
           download
@@ -173,19 +281,19 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
       {/* Loading */}
       {loading && (
         <p role="status" className="text-sm text-fg">
-          {mode === 'lean' ? 'Uploading…' : preview ? 'Committing…' : 'Previewing…'}
+          {subMode === 'lean' ? 'Uploading…' : previewCounts ? 'Committing…' : 'Previewing…'}
         </p>
       )}
 
       {/* lean mode: classId guard */}
-      {mode === 'lean' && !classId && (
+      {subMode === 'lean' && !classId && (
         <p role="alert" className="text-sm text-fg">
           No class selected — open a class first.
         </p>
       )}
 
       {/* lean mode: Upload button + summary */}
-      {mode === 'lean' && !loading && !leanSummary && (
+      {subMode === 'lean' && !loading && !leanSummary && (
         <button
           type="button"
           disabled={!file || !classId}
@@ -195,7 +303,7 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
           Upload
         </button>
       )}
-      {mode === 'lean' && leanSummary && !loading && (
+      {subMode === 'lean' && leanSummary && !loading && (
         <div
           role="status"
           className="flex flex-col gap-2 rounded-lg border-2 border-sidebar-edge bg-surface p-4 shadow-sticker"
@@ -205,21 +313,31 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
             {typeof leanSummary.studentsCreated === 'number' && (
               <li>{leanSummary.studentsCreated} new student{leanSummary.studentsCreated !== 1 ? 's' : ''} created</li>
             )}
+            {typeof leanSummary.studentsExisting === 'number' && leanSummary.studentsExisting > 0 && (
+              <li>{leanSummary.studentsExisting} already in CORE</li>
+            )}
             {typeof leanSummary.enrolled === 'number' && (
               <li>{leanSummary.enrolled} enrolled</li>
             )}
-            {typeof leanSummary.skipped === 'number' && leanSummary.skipped > 0 && (
-              <li>{leanSummary.skipped} skipped</li>
+            {typeof leanSummary.alreadyEnrolled === 'number' && leanSummary.alreadyEnrolled > 0 && (
+              <li>{leanSummary.alreadyEnrolled} already enrolled</li>
             )}
             {typeof leanSummary.errors === 'number' && leanSummary.errors > 0 && (
               <li>{leanSummary.errors} could not be added</li>
             )}
           </ul>
+          {leanSummary.issues && leanSummary.issues.length > 0 && (
+            <ul className="mt-1 list-disc pl-4 text-sm text-fg">
+              {leanSummary.issues.map((issue, i) => (
+                <li key={`${i}-${issue}`}>{issue}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
 
       {/* full mode: Preview + Commit flow */}
-      {mode === 'full' && !loading && !preview && !commitSummary && (
+      {subMode === 'full' && !loading && !previewCounts && !commitSummary && (
         <button
           type="button"
           disabled={!file}
@@ -229,48 +347,68 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
           Preview
         </button>
       )}
-      {mode === 'full' && preview && !loading && !commitSummary && (
+      {subMode === 'full' && previewCounts && !loading && !commitSummary && (
         <div className="flex flex-col gap-3">
           <div
             role="status"
             className="rounded-lg border-2 border-sidebar-edge bg-surface p-4 shadow-sticker"
           >
             <p className="mb-2 font-display text-base font-bold text-fg">Preview</p>
-            {Object.entries(preview.sheets).map(([sheet, result]) => (
-              <div key={sheet} className="mb-2">
-                <p className="text-sm font-semibold text-fg">
-                  {sheet}: {result.rows} row{result.rows !== 1 ? 's' : ''}
-                </p>
-                {result.issues.length > 0 && (
-                  <ul className="mt-1 list-disc pl-4 text-sm text-fg">
-                    {result.issues.map((issue, i) => (
-                      <li key={`${i}-${issue}`}>{issue}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))}
+            <p className="text-sm text-fg">
+              {[
+                typeof previewCounts.teachers === 'number' && `Teachers: ${previewCounts.teachers}`,
+                typeof previewCounts.classes === 'number' && `Classes: ${previewCounts.classes}`,
+                typeof previewCounts.students === 'number' && `Students: ${previewCounts.students}`,
+                typeof previewCounts.enrollments === 'number' && `Enrollments: ${previewCounts.enrollments}`,
+                typeof previewCounts.parents === 'number' && `Parents: ${previewCounts.parents}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+            {previewIssues.length > 0 && (
+              <ul className="mt-2 list-disc pl-4 text-sm text-fg">
+                {previewIssues.map((issue, i) => (
+                  <li key={`${i}-${issue}`}>{issue}</li>
+                ))}
+              </ul>
+            )}
           </div>
           <button type="button" onClick={handleFullCommit} className={btnCls}>
             Commit
           </button>
         </div>
       )}
-      {mode === 'full' && commitSummary && !loading && (
+      {subMode === 'full' && commitSummary && !loading && (
         <div
           role="status"
           className="flex flex-col gap-2 rounded-lg border-2 border-sidebar-edge bg-surface p-4 shadow-sticker"
         >
           <p className="font-display text-base font-bold text-fg">Import complete</p>
-          <ul className="text-sm text-fg">
-            {Object.entries(commitSummary).map(([key, value]) =>
-              typeof value === 'number' ? (
-                <li key={key}>
-                  {value} {key.replace(/([A-Z])/g, ' $1').toLowerCase()}
-                </li>
-              ) : null
-            )}
-          </ul>
+          <div className="flex flex-col gap-1 text-sm text-fg">
+            {ENTITY_LABEL_ENTRIES.map(([key, label]) => {
+              const entity = commitSummary[key];
+              if (!entity || typeof entity !== 'object') return null;
+              const parts = [
+                typeof entity.created === 'number' && `${entity.created} created`,
+                typeof entity.linked === 'number' && entity.linked > 0 && `${entity.linked} linked`,
+                typeof entity.skipped === 'number' && entity.skipped > 0 && `${entity.skipped} skipped`,
+                typeof entity.errors === 'number' && entity.errors > 0 && `${entity.errors} errors`,
+              ].filter(Boolean);
+              if (parts.length === 0) return null;
+              return (
+                <p key={key}>
+                  <span className="font-semibold">{label}:</span> {parts.join(' · ')}
+                </p>
+              );
+            })}
+          </div>
+          {commitSummary.issues && commitSummary.issues.length > 0 && (
+            <ul className="mt-1 list-disc pl-4 text-sm text-fg">
+              {commitSummary.issues.map((issue, i) => (
+                <li key={`${i}-${issue}`}>{issue}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
