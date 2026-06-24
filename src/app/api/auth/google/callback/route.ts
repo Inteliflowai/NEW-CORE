@@ -33,14 +33,18 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return res;
   }
 
-  const oauthError = searchParams.get('error');
-  if (oauthError) return back(origin, 'error=denied');   // user cancelled consent (Google ?error=, no code)
+  // CSRF first: every callback (success OR Google ?error=) carries state + the cookie.
+  if (!state || !cookieState || state !== cookieState) return back(origin, 'error=state');
 
-  if (!code || !state || !cookieState || state !== cookieState) return back(origin, 'error=state');
+  const oauthError = searchParams.get('error');
+  if (oauthError) return back(origin, 'error=denied');   // user cancelled consent (valid state, no code)
+
+  if (!code) return back(origin, 'error=state');
 
   try {
     const tokens = await exchangeCodeForTokens(code);
     const gp = await getGoogleProfile(tokens.access_token);
+    if (!gp.verified_email) return back(origin, 'error=unverified');
     const admin = createAdminSupabaseClient();
     await storeConnection(admin, {
       userId: user.id, schoolId: profile?.school_id ?? null,

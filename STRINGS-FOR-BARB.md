@@ -797,3 +797,19 @@ Teacher connect/reconnect/disconnect status card at `/settings/google`.
 | Disconnect CTA | Disconnect |
 
 Note: the connect/reconnect CTAs are `<a href="/api/teacher/google/connect">` (OAuth redirect); Disconnect is a `POST /api/teacher/google/disconnect` button. All strings are teacher-only.
+
+### Callback error banners (shown on `/settings/google?error=…` redirect, one-time, above the card action)
+
+| Error code | Draft banner |
+|---|---|
+| `denied` | You cancelled before finishing — try again. |
+| `unverified` | That Google account's email isn't verified — connect a verified Google account. |
+| `state` / `exchange` / anything else | Couldn't finish connecting — please try again. |
+
+### Disconnect-failure inline error (inside the connected state, deep-ink `text-fg`, `role="alert"`)
+
+| Key | Draft |
+|---|---|
+| Disconnect failed | That didn't disconnect — try again in a moment. |
+
+Note: on a disconnect failure the card stays in the connected state; the error replaces nothing (teacher can retry). On success the card transitions to not-connected.

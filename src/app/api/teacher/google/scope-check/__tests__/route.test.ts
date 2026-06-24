@@ -51,6 +51,21 @@ describe('GET /api/teacher/google/scope-check', () => {
     const { GET } = await import('@/app/api/teacher/google/scope-check/route');
     expect(await (await GET(req())).json()).toEqual({ connected: false, needsReconnect: true, missing: [] });
   });
+  it('falls back to stored granted_scopes when tokeninfo returns 200 with no scope field', async () => {
+    getValid.mockResolvedValue('AT');
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 })) as unknown as typeof fetch;
+    grantedScopes.mockResolvedValue({ data: { granted_scopes: [
+      'https://www.googleapis.com/auth/classroom.courses.readonly',
+      'https://www.googleapis.com/auth/classroom.rosters.readonly',
+      'https://www.googleapis.com/auth/classroom.profile.emails',
+      'https://www.googleapis.com/auth/classroom.coursework.students',
+      'https://www.googleapis.com/auth/classroom.courseworkmaterials',
+    ] }, error: null });
+    const { GET } = await import('@/app/api/teacher/google/scope-check/route');
+    const body = await (await GET(req())).json();
+    expect(body.needsReconnect).toBe(false);
+    expect(body.missing).toEqual([]);
+  });
   it('falls back to stored granted_scopes when tokeninfo is unavailable (no false reconnect)', async () => {
     getValid.mockResolvedValue('AT');
     globalThis.fetch = vi.fn(async () => new Response('no', { status: 400 })) as unknown as typeof fetch;

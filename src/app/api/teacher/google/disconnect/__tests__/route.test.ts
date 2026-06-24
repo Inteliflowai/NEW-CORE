@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const getUser = vi.fn();
@@ -29,5 +29,18 @@ describe('POST /api/teacher/google/disconnect', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(eq).toHaveBeenCalledWith('user_id', 'u1');
+  });
+  it('403 for a student role and does NOT call delete', async () => {
+    single.mockResolvedValue({ data: { role: 'student', school_id: 's1' }, error: null });
+    const { POST } = await import('@/app/api/teacher/google/disconnect/route');
+    const res = await POST(req());
+    expect(res.status).toBe(403);
+    expect(del).not.toHaveBeenCalled();
+  });
+  it('500 when the delete returns a DB error', async () => {
+    del.mockResolvedValue({ error: { message: 'boom' } });
+    const { POST } = await import('@/app/api/teacher/google/disconnect/route');
+    const res = await POST(req());
+    expect(res.status).toBe(500);
   });
 });

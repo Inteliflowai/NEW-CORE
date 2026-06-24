@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 beforeEach(() => {
   process.env.GOOGLE_CLIENT_ID = 'client-123.apps.googleusercontent.com';
   process.env.GOOGLE_REDIRECT_URI = 'https://newcore.inteliflowai.com/api/auth/google/callback';
+});
+afterEach(() => {
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
+  delete process.env.GOOGLE_REDIRECT_URI;
 });
 
 describe('buildConnectAuthUrl', () => {

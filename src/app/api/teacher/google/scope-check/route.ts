@@ -33,11 +33,14 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
     const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
     if (res.ok) {
       const info = (await res.json()) as { scope?: string };
-      return diff((info.scope ?? '').split(' '));
+      const scopeStr = (info.scope ?? '').trim();
+      if (scopeStr) return diff(scopeStr.split(' '));
+      // 200 but no scope field → treat tokeninfo as unavailable; fall through to stored granted_scopes.
     }
   } catch { /* fall through to the stored-scopes fallback below */ }
   // tokeninfo unavailable (non-200 / network / sunset): fall back to last-known granted_scopes from
   // connect — avoids a false reconnect-storm for fully-authorized teachers if tokeninfo changes.
+  // Fallback trusts CONNECT-TIME scopes; a de-scope at Google without re-consent won't show until reconnect.
   const { data: conn } = await admin.from('google_connections').select('granted_scopes').eq('user_id', user.id).maybeSingle();
   return diff((conn?.granted_scopes ?? []) as string[]);
 }

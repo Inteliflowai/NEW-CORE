@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
   const state = randomUUID();
   const res = NextResponse.redirect(buildConnectAuthUrl(state));
   res.cookies.set('g_oauth_state', state, {
-    httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 600,
+    httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/', maxAge: 600,
   });
   return res;
 }

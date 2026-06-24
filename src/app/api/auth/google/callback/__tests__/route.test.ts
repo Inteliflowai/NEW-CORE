@@ -33,6 +33,7 @@ describe('GET /api/auth/google/callback', () => {
     const res = await GET(req('aaa', 'bbb'));
     expect(res.headers.get('location')).toContain('/settings/google?error=state');
     expect(exchangeCodeForTokens).not.toHaveBeenCalled();
+    expect(res.cookies.get('g_oauth_state')?.value ?? '').toBe('');
   });
   it('exchanges + stores + redirects connected=1 on the happy path', async () => {
     const { GET } = await import('@/app/api/auth/google/callback/route');
@@ -63,6 +64,7 @@ describe('GET /api/auth/google/callback', () => {
     const res = await GET(r);
     expect(res.headers.get('location')).toContain('/settings/google?error=denied');
     expect(exchangeCodeForTokens).not.toHaveBeenCalled();
+    expect(res.cookies.get('g_oauth_state')?.value ?? '').toBe('');
   });
   it('redirects error=exchange and never connected=1 when the exchange throws', async () => {
     exchangeCodeForTokens.mockRejectedValue(new Error('google token exchange failed: 400'));
@@ -70,6 +72,14 @@ describe('GET /api/auth/google/callback', () => {
     const res = await GET(req('s', 's'));
     expect(res.headers.get('location')).toContain('/settings/google?error=exchange');
     expect(res.headers.get('location')).not.toContain('connected=1');
+    expect(storeConnection).not.toHaveBeenCalled();
+    expect(res.cookies.get('g_oauth_state')?.value ?? '').toBe('');
+  });
+  it('redirects error=unverified and does NOT store when Google email is unverified', async () => {
+    getGoogleProfile.mockResolvedValue({ id: 'g1', email: 'a@b.edu', verified_email: false });
+    const { GET } = await import('@/app/api/auth/google/callback/route');
+    const res = await GET(req('s', 's'));
+    expect(res.headers.get('location')).toContain('/settings/google?error=unverified');
     expect(storeConnection).not.toHaveBeenCalled();
   });
 });

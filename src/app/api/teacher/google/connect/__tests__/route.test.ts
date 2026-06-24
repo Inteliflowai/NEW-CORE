@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const getUser = vi.fn();
@@ -16,6 +16,11 @@ beforeEach(() => {
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   single.mockResolvedValue({ data: { role: 'teacher', school_id: 's1' }, error: null });
 });
+afterEach(() => {
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
+  delete process.env.GOOGLE_REDIRECT_URI;
+});
 const req = () => new NextRequest('http://x/api/teacher/google/connect');
 
 describe('GET /api/teacher/google/connect', () => {
@@ -30,18 +35,25 @@ describe('GET /api/teacher/google/connect', () => {
     expect((await GET(req())).status).toBe(403);
   });
   it('302 to Google consent with a state cookie that matches the state param', async () => {
-    const { GET } = await import('@/app/api/teacher/google/connect/route');
-    const res = await GET(req());
-    expect(res.status).toBe(307); // NextResponse.redirect default
-    const loc = res.headers.get('location')!;
-    expect(loc).toContain('accounts.google.com/o/oauth2/v2/auth');
-    const stateParam = new URL(loc).searchParams.get('state')!;
-    const cookie = res.cookies.get('g_oauth_state')!;
-    expect(cookie.value).toBe(stateParam);
-    expect(cookie.httpOnly).toBe(true);
-    expect(cookie.secure).toBe(true);
-    expect(cookie.sameSite).toBe('lax');
-    expect(cookie.maxAge).toBe(600);
+    const env = process.env as Record<string, string | undefined>;
+    const prev = env.NODE_ENV;
+    try {
+      env.NODE_ENV = 'production';
+      const { GET } = await import('@/app/api/teacher/google/connect/route');
+      const res = await GET(req());
+      expect(res.status).toBe(307); // NextResponse.redirect default
+      const loc = res.headers.get('location')!;
+      expect(loc).toContain('accounts.google.com/o/oauth2/v2/auth');
+      const stateParam = new URL(loc).searchParams.get('state')!;
+      const cookie = res.cookies.get('g_oauth_state')!;
+      expect(cookie.value).toBe(stateParam);
+      expect(cookie.httpOnly).toBe(true);
+      expect(cookie.secure).toBe(true);
+      expect(cookie.sameSite).toBe('lax');
+      expect(cookie.maxAge).toBe(600);
+    } finally {
+      env.NODE_ENV = prev;
+    }
   });
   it('generates a fresh random state on each call (CSRF nonce)', async () => {
     const { GET } = await import('@/app/api/teacher/google/connect/route');

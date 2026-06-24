@@ -4,7 +4,13 @@ beforeEach(() => {
   process.env.GOOGLE_CLIENT_ID = 'cid'; process.env.GOOGLE_CLIENT_SECRET = 'csec';
   process.env.GOOGLE_REDIRECT_URI = 'https://x/api/auth/google/callback';
 });
-afterEach(() => { globalThis.fetch = origFetch; vi.restoreAllMocks(); });
+afterEach(() => {
+  globalThis.fetch = origFetch;
+  vi.restoreAllMocks();
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
+  delete process.env.GOOGLE_REDIRECT_URI;
+});
 describe('exchangeCodeForTokens', () => {
   it('POSTs the code and returns the token response', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ access_token: 'at', refresh_token: 'rt', expires_in: 3599, scope: 'a b' }), { status: 200 }));
