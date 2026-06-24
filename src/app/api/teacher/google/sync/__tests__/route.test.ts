@@ -14,6 +14,7 @@ vi.mock('@/lib/auth/guards', () => ({ guardClassAccess: (...a: unknown[]) => gua
 vi.mock('@/lib/google/reconcileCourseRoster', () => ({ reconcileCourseRoster: (...a: unknown[]) => reconcile(...a) }));
 vi.mock('@/lib/google/tokens', async () => { class GoogleNotConnectedError extends Error {} return { GoogleNotConnectedError }; });
 vi.mock('@/lib/google/classroom', async () => { class GoogleScopeError extends Error {} return { GoogleScopeError }; });
+vi.mock('@/lib/auth/roles', () => ({ STAFF_ROLES: ['teacher', 'school_admin', 'school_sysadmin', 'platform_admin'] }));
 
 beforeEach(() => {
   for (const m of [getUser, single, classRow, guard, reconcile]) m.mockReset();
@@ -53,5 +54,32 @@ describe('POST /api/teacher/google/sync', () => {
     reconcile.mockRejectedValue(new GoogleNotConnectedError());
     const { POST } = await import('@/app/api/teacher/google/sync/route');
     expect(await (await POST(req({ classId: 'cl1' }))).json()).toEqual({ connected: false });
+  });
+
+  // --- STAFF_ROLES widening ---
+
+  it('school_admin whose guardClassAccess allows: reconcile runs as class teacher-of-record', async () => {
+    single.mockResolvedValue({ data: { role: 'school_admin', school_id: 's1' }, error: null });
+    guard.mockResolvedValue(null); // same-school admin permitted
+    const { POST } = await import('@/app/api/teacher/google/sync/route');
+    const body = await (await POST(req({ classId: 'cl1' }))).json();
+    expect(reconcile).toHaveBeenCalledWith(expect.anything(), { teacherId: 't1', schoolId: 's1', googleCourseId: 'c1', classId: 'cl1' });
+    expect(body).toMatchObject({ classId: 'cl1', linked: 3 });
+  });
+
+  it('school_admin whose guardClassAccess denies: returns 403 as-is, engine NOT called', async () => {
+    single.mockResolvedValue({ data: { role: 'school_admin', school_id: 's1' }, error: null });
+    guard.mockResolvedValue(NextResponse.json({ error: 'Forbidden' }, { status: 403 }));
+    const { POST } = await import('@/app/api/teacher/google/sync/route');
+    expect((await POST(req({ classId: 'cl1' }))).status).toBe(403);
+    expect(reconcile).not.toHaveBeenCalled();
+  });
+
+  it('non-staff role (student) → 403 before any class lookup', async () => {
+    single.mockResolvedValue({ data: { role: 'student', school_id: 's1' }, error: null });
+    const { POST } = await import('@/app/api/teacher/google/sync/route');
+    expect((await POST(req({ classId: 'cl1' }))).status).toBe(403);
+    expect(guard).not.toHaveBeenCalled();
+    expect(reconcile).not.toHaveBeenCalled();
   });
 });

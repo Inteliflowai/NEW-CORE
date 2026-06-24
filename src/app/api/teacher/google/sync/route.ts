@@ -1,8 +1,11 @@
 // POST /api/teacher/google/sync — on-demand "Sync now" for one already-imported GC-mirrored class.
-// Teacher-only (role==='teacher' gate). guardClassAccess then gates the specific class by id;
-// the reconcile runs as the class's teacher-of-record (the per-teacher Google grant owns the course).
+// Accessible to any STAFF_ROLES caller (teacher, school_admin, school_sysadmin, platform_admin).
+// guardClassAccess gates the specific class by id — permits the owning teacher OR a same-school admin
+// OR platform admin; the reconcile always runs as the class's teacher-of-record (the per-teacher
+// Google grant owns the course). connect/courses/roster/import-roster stay teacher-only.
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
+import { STAFF_ROLES } from '@/lib/auth/roles';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { reconcileCourseRoster } from '@/lib/google/reconcileCourseRoster';
 import { gcErrorResponse } from '@/lib/google/errorEnvelope';
@@ -12,7 +15,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { data: profile } = await supabase.from('users').select('role, school_id').eq('id', user.id).single();
-  if ((profile?.role ?? null) !== 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!STAFF_ROLES.includes(profile?.role as typeof STAFF_ROLES[number])) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   let body: { classId?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Bad Request' }, { status: 400 }); }
