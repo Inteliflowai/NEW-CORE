@@ -23,6 +23,8 @@ export default function ImportWizard(): React.JSX.Element {
   const [step, setStep] = useState<'select' | 'preview' | 'importing' | 'done'>('select');
   const [courses, setCourses] = useState<Course[]>([]);
   const [reconnect, setReconnect] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
   const [students, setStudents] = useState<PreviewStudent[]>([]);
   const [subject, setSubject] = useState('');
@@ -34,17 +36,20 @@ export default function ImportWizard(): React.JSX.Element {
     let alive = true;
     fetch('/api/teacher/google/courses').then((r) => r.json()).then((d) => {
       if (!alive) return;
-      if (d.connected === false || d.needsReconnect) { setReconnect(true); return; }
-      setCourses(d.courses ?? []);
-    }).catch(() => { if (alive) setReconnect(true); });
+      if (d.connected === false || d.needsReconnect) { setReconnect(true); setLoading(false); return; }
+      if (!Array.isArray(d.courses)) { setLoadError('Couldn\'t load your Google courses — try reconnecting.'); setLoading(false); return; }
+      setCourses(d.courses);
+      setLoading(false);
+    }).catch(() => { if (alive) { setLoadError('Couldn\'t load your Google courses — try reconnecting.'); setLoading(false); } });
     return () => { alive = false; };
   }, []);
 
   async function pickCourse(c: Course) {
-    setCourse(c); setSubject(''); setGrade('');
+    setCourse(c); setSubject(''); setGrade(''); setLoadError(null);
     const d = await fetch(`/api/teacher/google/roster?courseId=${encodeURIComponent(c.id)}`).then((r) => r.json());
     if (d.connected === false || d.needsReconnect) { setReconnect(true); return; }
-    setStudents(d.students ?? []);
+    if (!Array.isArray(d.students)) { setLoadError('Couldn\'t load the roster for this class — try reconnecting.'); return; }
+    setStudents(d.students);
     setStep('preview');
   }
 
@@ -89,10 +94,21 @@ export default function ImportWizard(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-4">
-      {step === 'select' && (
+      {step === 'select' && loading && (
+        <p role="status" className="text-fg text-sm">Loading your Google Classroom courses…</p>
+      )}
+      {step === 'select' && !loading && loadError && (
+        <div className="flex flex-col gap-3 rounded-lg border-2 border-sidebar-edge bg-surface p-5 shadow-sticker">
+          <p role="alert" className="text-fg text-sm">{loadError}</p>
+          <a href="/api/teacher/google/connect" className={linkCls}>Connect Google Classroom</a>
+        </div>
+      )}
+      {step === 'select' && !loading && !loadError && (
         <div className="flex flex-col gap-2">
           <h2 className="font-display text-lg font-extrabold text-fg">Choose a class to import</h2>
-          {courses.map((c) => (
+          {courses.length === 0 ? (
+            <p role="status" className="text-fg text-sm">No active Google Classroom courses found in your account.</p>
+          ) : courses.map((c) => (
             <button key={c.id} type="button" onClick={() => pickCourse(c)} className={btnCls + ' justify-start'}>
               <span>{c.name}</span>{c.section ? <span className="ml-1 font-normal opacity-70"> · {c.section}</span> : null}
             </button>

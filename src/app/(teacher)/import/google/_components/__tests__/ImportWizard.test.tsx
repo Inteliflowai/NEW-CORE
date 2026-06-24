@@ -101,4 +101,54 @@ describe('ImportWizard', () => {
     // Must still show the preview (not advance to 'done')
     expect(screen.queryByText(/^Done$/)).not.toBeInTheDocument();
   });
+
+  it('initial render shows a loading line before the courses fetch settles', async () => {
+    // Use a promise that we resolve manually so we can inspect the loading state first
+    let resolveFetch!: (value: Response) => void;
+    const fetchPromise = new Promise<Response>((resolve) => { resolveFetch = resolve; });
+    globalThis.fetch = vi.fn(() => fetchPromise) as unknown as typeof fetch;
+    render(<ImportWizard />);
+    // Loading paragraph is present immediately (before the fetch resolves)
+    const loadingEl = screen.getByText(/loading your google classroom courses/i);
+    expect(loadingEl).toBeInTheDocument();
+    expect(loadingEl).toHaveAttribute('role', 'status');
+    // Resolve so the component is not left in a dangling state
+    resolveFetch(new Response(JSON.stringify({ courses: [] }), { status: 200 }));
+    await waitFor(() => expect(screen.queryByText(/loading your google classroom courses/i)).not.toBeInTheDocument());
+  });
+
+  it('courses fetch resolving a 500 {error} envelope → shows loadError block + reconnect CTA, NOT a bare heading', async () => {
+    route({ '/courses': { error: 'Internal Server Error' } });
+    render(<ImportWizard />);
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByText(/couldn't load your google courses/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /connect google classroom/i })).toHaveAttribute('href', '/api/teacher/google/connect');
+    // Must NOT render the "Choose a class" heading
+    expect(screen.queryByText(/choose a class/i)).not.toBeInTheDocument();
+  });
+
+  it('courses fetch resolving {courses:[]} → shows the empty-state message', async () => {
+    route({ '/courses': { courses: [] } });
+    render(<ImportWizard />);
+    await waitFor(() => {
+      const el = screen.getByText(/no active google classroom courses found in your account/i);
+      expect(el).toBeInTheDocument();
+      expect(el).toHaveAttribute('role', 'status');
+    });
+  });
+
+  it('pickCourse getting a {error}/no-students response → does NOT advance to preview, shows loadError', async () => {
+    route({
+      '/courses': { courses: [{ id: 'c1', name: 'Math', section: '1st', enrollmentCode: 'z' }] },
+      '/roster': { error: 'Internal Server Error' },
+    });
+    render(<ImportWizard />);
+    await waitFor(() => screen.getByText('Math'));
+    fireEvent.click(screen.getByRole('button', { name: /math/i }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByText(/couldn't load the roster/i)).toBeInTheDocument();
+    // Must NOT advance to the preview step
+    expect(screen.queryByText(/review/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^import/i })).not.toBeInTheDocument();
+  });
 });

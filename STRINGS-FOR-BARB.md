@@ -870,3 +870,17 @@ Teacher roster import wizard (select course → review preview → import → do
 | Sync done summary | {n} kept · {n} new · {n} re-added · {n} no longer in this class |
 
 > **Note on sync done summary** — the four buckets are: kept (no change), new (created or linked this sync), re-added (reactivated), and no longer in this class (soft-unenrolled). Barb to confirm bucket labels and separator style.
+
+### Course-select loading / error / empty states (DRAFT, Barb sign-off required)
+
+These states appear on the "Choose a class to import" step before the course list is available.
+
+| Key | Draft |
+|---|---|
+| Loading (in-flight) | Loading your Google Classroom courses… |
+| Courses-fetch error (500 or network) | Couldn't load your Google courses — try reconnecting. |
+| Reconnect CTA on error | Connect Google Classroom |
+| Empty courses list | No active Google Classroom courses found in your account. |
+| Roster-fetch error (500 or network, after clicking a course) | Couldn't load the roster for this class — try reconnecting. |
+
+Note: the loading line and empty-state use `role="status"`. The error block uses `role="alert"` and mirrors the reconnect-card styling (border, shadow-sticker, same Connect Google Classroom CTA link). If the roster fetch for a specific course fails, the error appears on the select step (the teacher did not advance to the preview) so they can choose a different course or reconnect.
