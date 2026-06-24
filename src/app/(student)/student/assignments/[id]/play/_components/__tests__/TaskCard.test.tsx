@@ -1,10 +1,32 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { TaskCard } from '../TaskCard';
 
 const base = { step: 1, description: 'Sketch the force diagram.', value: '', onChange: () => {}, onFirstInput: () => {} };
+
+// ── MicButton stubs (mirrors MicButton.test.tsx) ──────────────────────────────
+let recorder: { start: () => void; stop: () => void; state: string; ondataavailable?: (e: { data: Blob }) => void; onstop?: () => void };
+
+class FakeRecorder {
+  state = 'inactive';
+  ondataavailable: ((e: { data: Blob }) => void) | null = null;
+  onstop: (() => void) | null = null;
+  constructor() { recorder = this as never; }
+  start() { this.state = 'recording'; }
+  stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['x'], { type: 'audio/webm' }) }); this.onstop?.(); }
+  static isTypeSupported() { return true; }
+}
+
+beforeEach(() => {
+  (globalThis.navigator as unknown as { mediaDevices: unknown }).mediaDevices = {
+    getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })),
+  };
+  (globalThis as unknown as { MediaRecorder: unknown }).MediaRecorder = FakeRecorder;
+  globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ transcript: 'my spoken answer' }), { status: 200 })) as unknown as typeof fetch;
+});
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe('TaskCard image affordance', () => {
   it('offers drawing + photo when no image is attached', () => {
@@ -27,5 +49,15 @@ describe('TaskCard image affordance', () => {
     fireEvent.click(await screen.findByRole('button', { name: /use this drawing/i }));
     await waitFor(() => expect(onSaveImage).toHaveBeenCalledTimes(1));
     expect(onSaveImage.mock.calls[0][0]).toBeInstanceOf(Blob);
+  });
+
+  it('dictation appends the transcript via onChange', async () => {
+    const onChange = vi.fn();
+    render(<TaskCard {...base} value="Already typed." onChange={onChange} imageUrl={null} onSaveImage={async () => {}} onRemoveImage={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /speak your answer/i }));
+    // wait for getUserMedia to resolve and recording to begin before stopping
+    await waitFor(() => expect(recorder.state).toBe('recording'));
+    fireEvent.click(screen.getByRole('button', { name: /stop/i }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith('Already typed. my spoken answer'));
   });
 });

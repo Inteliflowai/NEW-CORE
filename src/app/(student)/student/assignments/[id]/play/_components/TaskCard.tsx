@@ -9,6 +9,7 @@
 import React, { useRef, useState } from 'react';
 import { MathText } from '@/components/core/MathText';
 import { DrawingCanvas } from './DrawingCanvas';
+import MicButton from './MicButton';
 
 export interface TaskCardProps {
   step: number;
@@ -62,6 +63,13 @@ export function TaskCard({ step, description, value, onChange, onFirstInput, ima
         className="rounded-lg border-2 border-surface bg-surface text-fg px-4 py-3 text-base focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 placeholder:text-fg-muted"
         aria-label={`Answer for question ${step}`}
       />
+
+      <div>
+        <MicButton
+          label="Speak your answer"
+          onTranscript={(t) => { fireFirstInput(); onChange(value.trim() ? `${value.trim()} ${t}` : t); }}
+        />
+      </div>
 
       {/* Optional drawing / photo answer */}
       {imageUrl ? (
