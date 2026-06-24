@@ -54,6 +54,7 @@ describe('Config files', () => {
         'GOOGLE_CLIENT_ID',
         'GOOGLE_CLIENT_SECRET',
         'GOOGLE_REDIRECT_URI',
+        'GOOGLE_TOKEN_ENC_KEY',
         // CRM
         'HIGHLEVEL_WEBHOOK_URL',
         'HIGHLEVEL_WEBHOOK_SECRET',
