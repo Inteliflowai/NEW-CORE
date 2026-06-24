@@ -16,7 +16,7 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (t: string) => {
       if (t === 'classes') return {
         select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: existingClass }) }) }),
-        update: (v: unknown) => { classUpdateSpy(v); return { eq: () => ({ eq: () => classUpdateResult() }) }; },
+        update: (v: unknown) => { classUpdateSpy(v); return { eq: () => classUpdateResult() }; },
         insert: (v: unknown) => { classInsertSpy(v); return { select: () => ({ single: () => classInsertResult() }) }; },
       };
       return {};
@@ -26,10 +26,6 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/google/reconcileCourseRoster', () => ({ reconcileCourseRoster: (...a: unknown[]) => reconcile(...a) }));
 vi.mock('@/lib/google/tokens', async () => { class GoogleNotConnectedError extends Error {} return { GoogleNotConnectedError }; });
 vi.mock('@/lib/google/classroom', async () => { class GoogleScopeError extends Error {} return { GoogleScopeError }; });
-
-// Aliases kept so existing tests that reference classUpdate / classInsert still compile.
-const classUpdate = classUpdateSpy;
-const classInsert = classInsertSpy;
 
 beforeEach(() => {
   for (const m of [getUser, single, reconcile, existingClass, classUpdateResult, classUpdateSpy, classInsertResult, classInsertSpy]) m.mockReset();
@@ -45,6 +41,16 @@ function req(body: object) {
 }
 
 describe('POST /api/teacher/google/import-roster', () => {
+  it('401 when auth.getUser returns no user', async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: null });
+    const { POST } = await import('@/app/api/teacher/google/import-roster/route');
+    expect((await POST(req({ courseId: 'c1', name: 'Math' }))).status).toBe(401);
+  });
+  it('403 when the teacher profile has no school_id (null)', async () => {
+    single.mockResolvedValue({ data: { role: 'teacher', school_id: null }, error: null });
+    const { POST } = await import('@/app/api/teacher/google/import-roster/route');
+    expect((await POST(req({ courseId: 'c1', name: 'Math' }))).status).toBe(403);
+  });
   it('403 for a non-teacher', async () => {
     single.mockResolvedValue({ data: { role: 'student', school_id: 's1' }, error: null });
     const { POST } = await import('@/app/api/teacher/google/import-roster/route');
@@ -57,7 +63,7 @@ describe('POST /api/teacher/google/import-roster', () => {
   it('inserts a new class with teacher-confirmed subject/grade then reconciles', async () => {
     const { POST } = await import('@/app/api/teacher/google/import-roster/route');
     const body = await (await POST(req({ courseId: 'c1', name: 'Math', subject: 'Math', gradeLevel: '8' }))).json();
-    expect(classInsert).toHaveBeenCalledWith(expect.objectContaining({ google_course_id: 'c1', teacher_id: 'u1', school_id: 's1', subject: 'Math', grade_level: '8', name: 'Math' }));
+    expect(classInsertSpy).toHaveBeenCalledWith(expect.objectContaining({ google_course_id: 'c1', teacher_id: 'u1', school_id: 's1', subject: 'Math', grade_level: '8', name: 'Math' }));
     expect(reconcile).toHaveBeenCalledWith(expect.anything(), { teacherId: 'u1', schoolId: 's1', googleCourseId: 'c1', classId: 'newCls' });
     expect(body).toMatchObject({ classId: 'newCls', created: 2, linked: 1, skippedNoEmail: 1 });
   });
@@ -65,7 +71,7 @@ describe('POST /api/teacher/google/import-roster', () => {
     existingClass.mockResolvedValue({ data: { id: 'oldCls', teacher_id: 'u1' }, error: null });   // u1 owns it
     const { POST } = await import('@/app/api/teacher/google/import-roster/route');
     await POST(req({ courseId: 'c1', name: 'Math 2', subject: 'Science', gradeLevel: '9' }));
-    const updateArg = classUpdate.mock.calls[0][0] as Record<string, unknown>;
+    const updateArg = classUpdateSpy.mock.calls[0][0] as Record<string, unknown>;
     expect('subject' in updateArg).toBe(false);
     expect('grade_level' in updateArg).toBe(false);
     expect(updateArg.name).toBe('Math 2');
@@ -77,7 +83,7 @@ describe('POST /api/teacher/google/import-roster', () => {
     const res = await POST(req({ courseId: 'c1', name: 'Math', subject: 'Math', gradeLevel: '8' }));
     expect(res.status).toBe(403);
     expect(reconcile).not.toHaveBeenCalled();
-    expect(classUpdate).not.toHaveBeenCalled();
+    expect(classUpdateSpy).not.toHaveBeenCalled();
   });
   it('connected:false on GoogleNotConnectedError from the engine', async () => {
     const { GoogleNotConnectedError } = await import('@/lib/google/tokens');

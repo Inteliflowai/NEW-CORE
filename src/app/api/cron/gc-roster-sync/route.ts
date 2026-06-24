@@ -40,6 +40,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   let classesSeen = 0;
   let reconciled = 0;
   let errors = 0;
+  let guardTripped = 0;   // MIN-6: classes where removeSkippedSuspectEmpty fired (suspect-empty guard)
+  let engineErrors = 0;   // MIN-6: sum of errors from reconcile results across all classes
   let truncated = false;
   let processed = 0;   // connections fully processed (for the remaining count)
   const flaggedReconnect: Array<{ teacherId: string; reason: ReconnectReason }> = [];
@@ -65,11 +67,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (!c.school_id) continue;
       classesSeen++;
       try {
-        await reconcileCourseRoster(admin, {
+        const result = await reconcileCourseRoster(admin, {
           teacherId: conn.user_id, schoolId: c.school_id,
           googleCourseId: c.google_course_id, classId: c.id,
         });
         reconciled++;
+        // MIN-6: aggregate engine-level observability so a guard-tripping nightly run is
+        // distinguishable from a clean one in the cron summary JSON.
+        if (result.removeSkippedSuspectEmpty) guardTripped++;
+        engineErrors += result.errors;
       } catch (err) {
         const reason = reconnectReason(err);
         if (reason) {
@@ -85,7 +91,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({
     ok: true, teachers: connections.length, classes: classesSeen, reconciled,
-    flaggedReconnect, errors, truncated, remaining: connections.length - processed,
+    flaggedReconnect, errors, guardTripped, engineErrors, truncated, remaining: connections.length - processed,
   });
 }
 

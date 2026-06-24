@@ -19,4 +19,31 @@ describe('SyncNowButton', () => {
     expect((init as RequestInit).method).toBe('POST');
     expect(String((init as RequestInit).body)).toContain('cl1');
   });
+
+  it('IMP-3: {connected:false} → shows reconnect hint, not "undefined" counts', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ connected: false }), { status: 200 })) as unknown as typeof fetch;
+    render(<SyncNowButton classId="cl1" />);
+    fireEvent.click(screen.getByRole('button', { name: /sync now/i }));
+    await waitFor(() => expect(screen.getByText(/reconnect google/i)).toBeInTheDocument());
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
+    // Must NOT show the "kept · new · re-added" summary line
+    expect(screen.queryByText(/kept/i)).not.toBeInTheDocument();
+  });
+
+  it('IMP-3: {needsReconnect:true} → shows reconnect hint', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ needsReconnect: true }), { status: 200 })) as unknown as typeof fetch;
+    render(<SyncNowButton classId="cl1" />);
+    fireEvent.click(screen.getByRole('button', { name: /sync now/i }));
+    await waitFor(() => expect(screen.getByText(/reconnect google/i)).toBeInTheDocument());
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
+  });
+
+  it('IMP-3: {error:"..."} (non-numeric body) → shows error message, not "undefined" counts', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 })) as unknown as typeof fetch;
+    render(<SyncNowButton classId="cl1" />);
+    fireEvent.click(screen.getByRole('button', { name: /sync now/i }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/kept/i)).not.toBeInTheDocument();
+  });
 });

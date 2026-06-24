@@ -53,4 +53,52 @@ describe('ImportWizard', () => {
     await waitFor(() => expect(screen.getByText(/created/i)).toBeInTheDocument());
     expect(screen.getByText(/1/)).toBeInTheDocument();
   });
+
+  it('IMP-2: {connected:false} from import-roster → shows reconnect CTA, not "undefined" counts', async () => {
+    route({
+      '/courses': { courses: [{ id: 'c1', name: 'Math', section: '1st', enrollmentCode: 'z' }] },
+      '/roster': { students: [{ googleId: 'g1', name: 'A', email: 'a@b.edu', existsInCore: false }] },
+      '/import-roster': { connected: false },
+    });
+    render(<ImportWizard />);
+    await waitFor(() => screen.getByText('Math'));
+    fireEvent.click(screen.getByRole('button', { name: /math/i }));
+    await waitFor(() => screen.getByRole('button', { name: /^import/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^import/i }));
+    await waitFor(() => expect(screen.getByRole('link', { name: /connect|reconnect/i })).toBeInTheDocument());
+    // Must NOT render "undefined created" / "undefined linked" / etc.
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
+  });
+
+  it('IMP-2: {needsReconnect:true} from import-roster → shows reconnect CTA', async () => {
+    route({
+      '/courses': { courses: [{ id: 'c1', name: 'Math', section: '1st', enrollmentCode: 'z' }] },
+      '/roster': { students: [{ googleId: 'g1', name: 'A', email: 'a@b.edu', existsInCore: false }] },
+      '/import-roster': { needsReconnect: true },
+    });
+    render(<ImportWizard />);
+    await waitFor(() => screen.getByText('Math'));
+    fireEvent.click(screen.getByRole('button', { name: /math/i }));
+    await waitFor(() => screen.getByRole('button', { name: /^import/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^import/i }));
+    await waitFor(() => expect(screen.getByRole('link', { name: /connect|reconnect/i })).toBeInTheDocument());
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
+  });
+
+  it('IMP-2: 500 {error} envelope from import-roster → shows an error, not "undefined" counts', async () => {
+    route({
+      '/courses': { courses: [{ id: 'c1', name: 'Math', section: '1st', enrollmentCode: 'z' }] },
+      '/roster': { students: [{ googleId: 'g1', name: 'A', email: 'a@b.edu', existsInCore: false }] },
+      '/import-roster': { error: 'Internal Server Error' },
+    });
+    render(<ImportWizard />);
+    await waitFor(() => screen.getByText('Math'));
+    fireEvent.click(screen.getByRole('button', { name: /math/i }));
+    await waitFor(() => screen.getByRole('button', { name: /^import/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^import/i }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.queryByText(/undefined/i)).not.toBeInTheDocument();
+    // Must still show the preview (not advance to 'done')
+    expect(screen.queryByText(/^Done$/)).not.toBeInTheDocument();
+  });
 });

@@ -1,6 +1,6 @@
 // POST /api/teacher/google/sync — on-demand "Sync now" for one already-imported GC-mirrored class.
-// guardClassAccess gates the class by id; the reconcile runs as the class's teacher-of-record
-// (the per-teacher Google grant owns the course), even if a same-school admin triggers it.
+// Teacher-only (role==='teacher' gate). guardClassAccess then gates the specific class by id;
+// the reconcile runs as the class's teacher-of-record (the per-teacher Google grant owns the course).
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { guardClassAccess } from '@/lib/auth/guards';

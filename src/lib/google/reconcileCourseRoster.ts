@@ -54,7 +54,9 @@ function emptyResult(): ReconcileResult {
 }
 
 // loadActiveGoogleSeats — THIS class's active source='google' seats with their provider='google'
-// external_id. Class-scoped (IMP-9): never load the school-wide identity set.
+// external_id (resolved via LEFT-join semantics: IMP-4 — a seat with no identity row is included
+// with external_id undefined so it can still be soft-removed when absent from the roster).
+// Class-scoped (IMP-9): never load the school-wide identity set.
 // Queries enrollments for student_ids, then external_identities for their google external_ids
 // (chunked to ≤200 per .in() call — the pilot never hits the chunk boundary).
 //
@@ -65,7 +67,7 @@ async function loadActiveGoogleSeats(
   admin: SupabaseClient,
   classId: string,
   schoolId: string,
-): Promise<{ trustworthy: false } | { trustworthy: true; seats: Array<{ student_id: string; external_id: string }> }> {
+): Promise<{ trustworthy: false } | { trustworthy: true; seats: Array<{ student_id: string; external_id: string | undefined }> }> {
   const { data: seats, error: seatsError } = await admin
     .from('enrollments')
     .select('student_id')
@@ -83,7 +85,11 @@ async function loadActiveGoogleSeats(
   );
   if (studentIds.length === 0) return { trustworthy: true, seats: [] };
 
-  const out: Array<{ student_id: string; external_id: string }> = [];
+  // Build a map from student_id → external_id using LEFT-join semantics (IMP-4): a source='google'
+  // enrollment with no corresponding external_identities row produces external_id=undefined (not
+  // excluded). This ensures orphaned google seats (identity row deleted/never written) are still
+  // surfaced as remove candidates.
+  const idMap = new Map<string, string>();
   for (let i = 0; i < studentIds.length; i += 200) {
     const chunk = studentIds.slice(i, i + 200);
     const { data: ids, error: idsError } = await admin
@@ -98,10 +104,15 @@ async function loadActiveGoogleSeats(
     }
     for (const row of (ids as Array<{ core_student_id: string | null; external_id: string }> | null) ?? []) {
       if (row.core_student_id) {
-        out.push({ student_id: row.core_student_id, external_id: row.external_id });
+        idMap.set(row.core_student_id, row.external_id);
       }
     }
   }
+
+  // LEFT-join: every student_id gets an entry; those without an identity row get external_id=undefined.
+  const out: Array<{ student_id: string; external_id: string | undefined }> = studentIds.map(
+    (sid) => ({ student_id: sid, external_id: idMap.get(sid) }),
+  );
   return { trustworthy: true, seats: out };
 }
 
@@ -150,10 +161,12 @@ export async function reconcileCourseRoster(
     else r.linked++;
 
     // Read the prior seat to distinguish enrolled (new) vs reactivated (was soft-removed) — IMP-3.
+    // Also select source for IMP-1: a pre-existing manual seat (source NULL/other) must keep its
+    // provenance; stamping source='google' on it would pull it into the remove scope on a later run.
     // On a returned error, treat as no prior row (safe: the upsert still proceeds; we count as enrolled).
     const { data: prior, error: priorErr } = await admin
       .from('enrollments')
-      .select('is_active')
+      .select('is_active, source')
       .eq('class_id', args.classId)
       .eq('student_id', res.studentId)
       .maybeSingle();
@@ -161,10 +174,20 @@ export async function reconcileCourseRoster(
       console.error('[gc] prior-seat read failed (treating as no prior row):', (priorErr as { message?: string }).message ?? 'unknown');
     }
 
-    // Enroll with source='google' (per-class provenance — ITEM A). supabase-js returns { error } —
-    // never throws. Branch on it; incl. the seat-cap check_violation (23514).
+    // IMP-1 provenance guard: only stamp source='google' when there is no prior seat OR the prior
+    // seat already has source='google'. A pre-existing manual seat (source NULL/other) must keep its
+    // provenance so it stays OUT of the per-class source='google' remove candidates on future runs.
+    const priorSource = (prior as { is_active: boolean; source?: string | null } | null)?.source ?? null;
+    const hasNonGoogleSeat = prior !== null && priorSource !== 'google';
+    const enrollRow: { class_id: string; student_id: string; is_active: boolean; source?: string } = {
+      class_id: args.classId, student_id: res.studentId, is_active: true,
+      ...(hasNonGoogleSeat ? {} : { source: 'google' }),
+    };
+
+    // Enroll the student. supabase-js returns { error } — never throws.
+    // Branch on it; incl. the seat-cap check_violation (23514).
     const { error: enrollErr } = await admin.from('enrollments').upsert(
-      { class_id: args.classId, student_id: res.studentId, is_active: true, source: 'google' },
+      enrollRow,
       { onConflict: 'class_id,student_id' },
     );
     if (enrollErr) {
@@ -197,19 +220,21 @@ export async function reconcileCourseRoster(
   }
   const candidates = seatResult.seats;
 
-  // CRIT-2: an empty OR incomplete roster MUST NOT mass-un-enroll. Skip the entire remove side
-  // whenever the roster is untrustworthy AND there are google seats we would otherwise remove.
-  // A genuinely-empty trustworthy roster (complete===true + no students) IS allowed to remove.
+  // CRIT-2: A genuinely-empty roster with NO active google seats is a clean no-op; an empty roster
+  // WITH active google seats is treated as a suspect/transient empty and skips removal — a true
+  // mass-un-enroll is never auto-applied. An incomplete (partial-page) roster also always skips.
   if ((complete === false || presentGoogleIds.size === 0) && candidates.length > 0) {
     r.removeSkippedSuspectEmpty = true;
     return r;
   }
 
-  // For each active source='google' seat in THIS class whose google id is absent from the current
-  // roster → soft un-enroll (is_active=false). Branch on returned { error } (IMP-2 — a failed
-  // soft-remove increments errors, not softRemoved; never abort the loop on a single failure).
+  // For each active source='google' seat in THIS class: soft un-enroll (is_active=false) when the
+  // seat's google external_id is absent from the current roster OR when the seat has no resolvable
+  // external_id (orphaned seat — IMP-4 LEFT-join). Branch on returned { error } (a failed soft-remove
+  // increments errors, not softRemoved; never abort the loop on a single failure).
   for (const seat of candidates) {
-    if (presentGoogleIds.has(seat.external_id)) continue; // still in the trustworthy roster → keep
+    // A seat with a known external_id that is still present in the roster → keep.
+    if (seat.external_id !== undefined && presentGoogleIds.has(seat.external_id)) continue;
 
     const { error: updErr } = await admin
       .from('enrollments')

@@ -7,7 +7,14 @@ import SyncNowButton from './SyncNowButton';
 
 interface Course { id: string; name: string; section: string | null; enrollmentCode: string | null }
 interface PreviewStudent { googleId: string; name: string; email: string; existsInCore: boolean }
-interface ImportResult { classId: string; created: number; linked: number; skippedNoEmail: number; reactivated: number; softRemoved: number }
+// ImportResult is a discriminated union: the route returns either an error envelope or the real
+// ReconcileResult shape. MIN-2: widening the type forces IMP-2 to branch explicitly.
+// ITEM C (intentional pilot scope): the done-screen only shows the no-email skip bucket; the other
+// skip buckets and errors are coach-posture noise — revisit with Barb before expanding.
+type ImportResult =
+  | { connected: false; needsReconnect?: boolean; error?: string }   // auth/reconnect envelope
+  | { error: string; connected?: never }                              // 500 error envelope
+  | { classId: string; created: number; linked: number; skippedNoEmail: number; reactivated: number; softRemoved: number };   // real result
 
 const linkCls = 'inline-flex items-center rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
 const btnCls = 'inline-flex items-center rounded-md border-2 border-sidebar-edge bg-surface px-4 py-2 font-display text-sm font-bold text-fg shadow-sticker disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
@@ -20,7 +27,8 @@ export default function ImportWizard(): React.JSX.Element {
   const [students, setStudents] = useState<PreviewStudent[]>([]);
   const [subject, setSubject] = useState('');
   const [grade, setGrade] = useState('');
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [result, setResult] = useState<Extract<ImportResult, { classId: string }> | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -43,11 +51,27 @@ export default function ImportWizard(): React.JSX.Element {
   async function doImport() {
     if (!course) return;
     setStep('importing');
+    setImportError(null);
     const d: ImportResult = await fetch('/api/teacher/google/import-roster', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ courseId: course.id, name: course.name, subject, gradeLevel: grade }),
     }).then((r) => r.json());
-    setResult(d); setStep('done');
+    // IMP-2: branch before setStep('done'). Auth/reconnect → show reconnect CTA. Error envelope or
+    // non-numeric counts (500 body) → show an error. Only a real ReconcileResult advances to 'done'.
+    // Cast through unknown so the discriminated-union narrowing works correctly.
+    const resp = d as unknown as Record<string, unknown>;
+    if (resp['connected'] === false || resp['needsReconnect'] === true) {
+      setReconnect(true);
+      setStep('select');
+      return;
+    }
+    if (typeof resp['created'] !== 'number') {
+      setImportError('Something went wrong — please try again.');
+      setStep('preview');
+      return;
+    }
+    setResult(d as Extract<ImportResult, { classId: string }>);
+    setStep('done');
   }
 
   if (reconnect) {
@@ -85,6 +109,7 @@ export default function ImportWizard(): React.JSX.Element {
             <li>{existing} already in CORE</li>
             <li>{noEmail} skipped — no email</li>
           </ul>
+          {importError && <p role="alert" className="text-fg text-sm">{importError}</p>}
           <button type="button" onClick={doImport} className={linkCls}>Import roster</button>
         </div>
       )}

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // teacher B could re-point teacher A's class to B's Google token. Generic 403; engine not called.
       if (existing.teacher_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       classId = existing.id as string;
-      const { error: updateErr } = await admin.from('classes').update({ name }).eq('school_id', schoolId).eq('google_course_id', courseId);
+      const { error: updateErr } = await admin.from('classes').update({ name }).eq('id', classId);
       if (updateErr) console.error('[gc] class rename failed (non-fatal):', updateErr.message);
     } else {
       const { data: created, error: insErr } = await admin.from('classes').insert({
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           // IMP-6 on the now-found row: only its owner may proceed.
           if (raced.teacher_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
           classId = raced.id as string;
-          const { error: updateErr } = await admin.from('classes').update({ name }).eq('school_id', schoolId).eq('google_course_id', courseId);
+          const { error: updateErr } = await admin.from('classes').update({ name }).eq('id', classId);
           if (updateErr) console.error('[gc] class rename failed (non-fatal):', updateErr.message);
         } else {
           return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

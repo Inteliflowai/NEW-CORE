@@ -109,4 +109,46 @@ describe('POST /api/cron/gc-roster-sync', () => {
     expect(body.errors).toBe(1);
     expect(body.reconciled).toBe(1);
   });
+
+  // MIN-6: aggregated observability
+  it('MIN-6: summary includes guardTripped and engineErrors aggregates', async () => {
+    connectionsList.mockReturnValue([{ user_id: 't1', school_id: 's1' }]);
+    classesFor.mockReturnValueOnce([
+      { id: 'cl1', google_course_id: 'c1', school_id: 's1' },
+      { id: 'cl2', google_course_id: 'c2', school_id: 's1' },
+    ]);
+    // cl1: guard tripped + 2 engine errors; cl2: clean
+    reconcile
+      .mockResolvedValueOnce({ ...RESULT, removeSkippedSuspectEmpty: true, errors: 2 })
+      .mockResolvedValueOnce(RESULT);
+    const { POST } = await import('@/app/api/cron/gc-roster-sync/route');
+    const body = await (await POST(req({ xheader: 'sek' }))).json();
+    expect(body.guardTripped).toBe(1);
+    expect(body.engineErrors).toBe(2);
+    expect(body.reconciled).toBe(2);
+    expect(body.errors).toBe(0);   // throw-level errors vs engine-level are separate
+  });
+
+  // MIN-7: null school_id skips
+  it('MIN-7: conn.school_id===null → skipped (not passed to engine)', async () => {
+    connectionsList.mockReturnValue([{ user_id: 't1', school_id: null }]);
+    classesFor.mockReturnValue([{ id: 'cl1', google_course_id: 'c1', school_id: 's1' }]);
+    const { POST } = await import('@/app/api/cron/gc-roster-sync/route');
+    const body = await (await POST(req({ xheader: 'sek' }))).json();
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(body.classes).toBe(0);
+  });
+
+  it('MIN-7: class.school_id===null → skipped (not passed to engine)', async () => {
+    connectionsList.mockReturnValue([{ user_id: 't1', school_id: 's1' }]);
+    classesFor.mockReturnValueOnce([
+      { id: 'cl1', google_course_id: 'c1', school_id: null },    // no school — skip
+      { id: 'cl2', google_course_id: 'c2', school_id: 's1' },    // ok — reconcile
+    ]);
+    const { POST } = await import('@/app/api/cron/gc-roster-sync/route');
+    const body = await (await POST(req({ xheader: 'sek' }))).json();
+    expect(reconcile).toHaveBeenCalledTimes(1);
+    expect(reconcile).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ classId: 'cl2' }));
+    expect(body.classes).toBe(1);   // only cl2 was counted (cl1 skipped before classesSeen++)
+  });
 });
