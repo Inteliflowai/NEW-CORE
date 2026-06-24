@@ -63,6 +63,7 @@ export default function GoogleConnectCard({ initialError, justConnected }: Googl
         <>
           <p role="status" className="text-fg text-sm">Connected.</p>
           {error && <p role="alert" className="text-fg text-sm">{error}</p>}
+          <a href="/import/google" className={linkCls}>Import a class roster</a>
           <button type="button" onClick={disconnect} disabled={busy} className={btnCls}>Disconnect</button>
         </>
       ) : (
