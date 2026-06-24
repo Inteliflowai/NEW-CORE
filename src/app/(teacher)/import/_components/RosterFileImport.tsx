@@ -62,20 +62,23 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
   }
 
   async function handleLeanUpload() {
-    if (!file) return;
+    if (!file || !classId) return;
     setLoading(true);
     setError(null);
     setLeanSummary(null);
     try {
       const fd = new FormData();
       fd.append('file', file);
-      if (classId) fd.append('classId', classId);
+      fd.append('classId', classId);
       const res = await fetch('/api/teacher/roster/import', { method: 'POST', body: fd });
       const data = await res.json() as { summary?: LeanSummary; error?: string };
       if (!res.ok || data.error) {
         setError(data.error ?? 'Something went wrong — please try again.');
       } else {
         setLeanSummary(data.summary ?? {});
+        // M-1: reset file input so the user can import another file
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        setFile(null);
       }
     } catch {
       setError('Something went wrong — please try again.');
@@ -174,11 +177,18 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
         </p>
       )}
 
+      {/* lean mode: classId guard */}
+      {mode === 'lean' && !classId && (
+        <p role="alert" className="text-sm text-fg">
+          No class selected — open a class first.
+        </p>
+      )}
+
       {/* lean mode: Upload button + summary */}
       {mode === 'lean' && !loading && !leanSummary && (
         <button
           type="button"
-          disabled={!file}
+          disabled={!file || !classId}
           onClick={handleLeanUpload}
           className={btnCls}
         >
@@ -234,7 +244,7 @@ export default function RosterFileImport({ mode, classId }: RosterFileImportProp
                 {result.issues.length > 0 && (
                   <ul className="mt-1 list-disc pl-4 text-sm text-fg">
                     {result.issues.map((issue, i) => (
-                      <li key={i}>{issue}</li>
+                      <li key={`${i}-${issue}`}>{issue}</li>
                     ))}
                   </ul>
                 )}
