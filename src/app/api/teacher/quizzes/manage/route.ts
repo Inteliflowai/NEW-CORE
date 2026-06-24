@@ -62,6 +62,14 @@ export async function POST(req: Request) {
     if (guard) return guard;
 
     if (body.action === 'publish') {
+      // Never publish a question-less quiz to students. Since quiz generation is now
+      // backgrounded (the quiz row exists before its questions), a 0-question quiz is
+      // "still building" — block publish server-side, not just in the UI (a stale client
+      // or a direct call must not reach students with an empty quiz).
+      const { count, error: countErr } = await admin.from('quiz_questions')
+        .select('id', { count: 'exact', head: true }).eq('quiz_id', quiz.id);
+      if (countErr) return NextResponse.json({ error: 'Server error' }, { status: 500 });
+      if (!count || count === 0) return NextResponse.json({ error: 'quiz_not_ready' }, { status: 409 });
       const patch = { status: 'published', published_at: new Date().toISOString() };
       const { error } = await admin.from('quizzes').update(patch).eq('id', quiz.id);
       if (error) return NextResponse.json({ error: 'Server error' }, { status: 500 });
