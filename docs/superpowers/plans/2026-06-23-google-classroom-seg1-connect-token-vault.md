@@ -13,7 +13,11 @@
 - **Zero new npm dependencies.** Google HTTP is raw `fetch`; crypto/HMAC is `node:crypto` (`import { ... } from 'crypto'`, matching `src/lib/spark/signLaunchJwt.ts:4`).
 - **Per-teacher OAuth** (D3): tokens belong to a teacher (`google_connections.user_id`); GC calls run as the linked teacher.
 - **Encrypt tokens at rest** (D4): access + refresh tokens are AES-256-GCM ciphertext; **plaintext tokens are NEVER logged, NEVER returned to the client**, only decrypted inside the token-manager.
-- **Auth chain on every protected route:** `await createServerSupabaseClient()` → `auth.getUser()` (401) → `users.role` ∈ `STAFF_ROLES` (403; teacher-scoped routes additionally require `role === 'teacher'` OR allow staff — see each task) → `createAdminSupabaseClient()` (synchronous; bypasses RLS) for the RLS-locked `google_connections` reads/writes. RLS is NOT the IDOR backstop.
+- **Auth chain on every protected route:** `await createServerSupabaseClient()` → `auth.getUser()` (401) → **`role === 'teacher'` (403 otherwise — teacher-only, NOT the broader `STAFF_ROLES`)** → `createAdminSupabaseClient()` (synchronous; bypasses RLS) for the RLS-locked `google_connections` reads/writes. RLS is NOT the IDOR backstop. **All four Seg-1 routes (connect, callback, scope-check, disconnect) are teacher-only:** per-teacher OAuth (D3), the connect UI lives under the `(teacher)` layout (`requireRole(['teacher'])`), and a non-teacher has no class-of-record to act as — STAFF_ROLES would mean unreachable UI + orphan connections.
+- **Node runtime default:** API routes default to the Node serverless runtime — do NOT add `export const runtime` for `node:crypto` (`randomUUID`/`createCipheriv`); matches the existing `spark-enable`/`lessons/upload` routes. (Only `tts`/`transcribe` declare it, for audio reasons.)
+- **Migration 0022 is `google_connections` ONLY.** `external_identities.email`/`last_seen_at` (+ the resolve helper) move to **Seg 2's migration 0023** (its first consumer); `schools.state` **population** is deferred (open item #13, value source TBD) — a populate step, not a column-add. Hand both to the Seg-2 plan author.
+- **Callback proxy note (forward-looking):** `/api/auth/google/callback` does NOT match `src/proxy.ts` `PUBLIC_PREFIXES` (`/auth` ≠ `/api/auth/...`), so it is logged-in-gated — correct for connect. The **Seg-4** student-launch branch (no session yet) will need a `PUBLIC_PREFIXES` carve-out; the route handler must then keep its own connect-branch auth and branch connect-vs-launch by request shape.
+- **Pre-build sanity (carry from spec §10):** before building, confirm `oauth2.googleapis.com/tokeninfo`, `oauth2/v2/userinfo`, `classroom/v1` are still current (grounding §5 flags `tokeninfo` soft-deprecation as unverified). Keep `tokeninfo` for Seg 1; revisit if sunset.
 - **New tables RLS-enabled, deny-by-default** (only `is_platform_admin()` policy; all real access via the admin client), mirroring `external_identities`/`platform_links` in `0008_platform.sql`.
 - **Migrations are static-text-asserted** in `supabase/migrations/__tests__/migrations.test.ts` — every new table/column/RLS/grant gets an assertion. Next migration number is **`0022`**.
 - **`.env.example` rule:** the config test asserts every non-comment line is `KEY=` with an **empty** value (`src/lib/__tests__/config.test.ts:69-85`). New keys are added as `KEY=` (empty) and to the `requiredKeys` list.
@@ -241,7 +245,7 @@ describe('0022 google_connections', () => {
   });
   it('enables RLS deny-by-default (platform-admin policy only) + grants', () => {
     expect(s()).toMatch(/ALTER TABLE public\.google_connections\s+ENABLE ROW LEVEL SECURITY/);
-    expect(s()).toMatch(/CREATE POLICY [^\n]*google_connections[^\n]*USING \(public\.is_platform_admin\(\)\)/);
+    expect(s()).toMatch(/CREATE POLICY [\s\S]*google_connections[\s\S]*USING \(public\.is_platform_admin\(\)\)/);
     expect(s()).toMatch(/GRANT ALL ON public\.google_connections\s+TO authenticated, anon, service_role/);
   });
 });
@@ -371,11 +375,13 @@ export function buildConnectAuthUrl(state: string): string {
 
 `src/lib/google/__tests__/tokens.test.ts`:
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+const origFetch = globalThis.fetch;
 beforeEach(() => {
   process.env.GOOGLE_CLIENT_ID = 'cid'; process.env.GOOGLE_CLIENT_SECRET = 'csec';
   process.env.GOOGLE_REDIRECT_URI = 'https://x/api/auth/google/callback';
 });
+afterEach(() => { globalThis.fetch = origFetch; vi.restoreAllMocks(); });
 describe('exchangeCodeForTokens', () => {
   it('POSTs the code and returns the token response', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ access_token: 'at', refresh_token: 'rt', expires_in: 3599, scope: 'a b' }), { status: 200 }));
@@ -398,7 +404,9 @@ describe('exchangeCodeForTokens', () => {
 
 `src/lib/google/__tests__/profile.test.ts`:
 ```typescript
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+const origFetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = origFetch; vi.restoreAllMocks(); });
 describe('getGoogleProfile', () => {
   it('GETs userinfo with the bearer token and returns the profile', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ id: 'g1', email: 'a@b.edu', name: 'A B', verified_email: true }), { status: 200 }));
@@ -529,6 +537,7 @@ describe('storeConnection', () => {
       tokens: { access_token: 'AT', expires_in: 3600 },
     });
     expect('refresh_token_enc' in admin.calls[0].row).toBe(false);
+    expect(admin.calls[0].onConflict).toBe('user_id');   // still an upsert keyed on user_id → preserve path
   });
 });
 ```
@@ -561,7 +570,8 @@ export async function storeConnection(admin: SupabaseClient, args: StoreConnecti
     granted_scopes: tokens.scope ? tokens.scope.split(' ') : [],
     last_refresh_at: new Date().toISOString(),
   };
-  // Only overwrite the refresh token when Google actually returns one (re-consent may omit it).
+  // Omit refresh_token_enc on re-consent so the upsert's ON CONFLICT (user_id) DO UPDATE leaves the
+  // saved refresh token intact (omission is load-bearing — never write refresh_token_enc: null).
   if (tokens.refresh_token) row.refresh_token_enc = encryptToken(tokens.refresh_token);
   const { error } = await admin.from('google_connections').upsert(row, { onConflict: 'user_id' });
   if (error) throw new Error(`storeConnection failed: ${error.message}`);
@@ -587,14 +597,16 @@ export async function storeConnection(admin: SupabaseClient, args: StoreConnecti
 - [ ] **Step 1: Write the failing test** — `src/lib/google/__tests__/getValidAccessToken.test.ts`
 
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { randomBytes } from 'crypto';
-import { encryptToken } from '@/lib/google/crypto';
+import { encryptToken, decryptToken } from '@/lib/google/crypto';
 
+const origFetch = globalThis.fetch;
 beforeEach(() => {
   process.env.GOOGLE_TOKEN_ENC_KEY = randomBytes(32).toString('base64');
   process.env.GOOGLE_CLIENT_ID = 'cid'; process.env.GOOGLE_CLIENT_SECRET = 'csec';
 });
+afterEach(() => { globalThis.fetch = origFetch; vi.restoreAllMocks(); });
 
 function adminWith(row: Record<string, unknown> | null) {
   const updates: Record<string, unknown>[] = [];
@@ -631,8 +643,11 @@ describe('getValidAccessTokenForTeacher', () => {
     const { getValidAccessTokenForTeacher } = await import('@/lib/google/tokens');
     expect(await getValidAccessTokenForTeacher(admin as never, 'u1')).toBe('FRESH');
     expect(admin.updates).toHaveLength(1);
-    expect('access_token_enc' in admin.updates[0]).toBe(true);
+    // Prove the persisted token is ENCRYPTED ciphertext of 'FRESH' (D4), not plaintext/stale.
+    expect(admin.updates[0].access_token_enc).not.toBe('FRESH');
+    expect(decryptToken(admin.updates[0].access_token_enc as string)).toBe('FRESH');
     expect('refresh_token_enc' in admin.updates[0]).toBe(false);  // refresh token not re-persisted
+    expect(new Date(admin.updates[0].token_expiry as string).getTime()).toBeGreaterThan(Date.now());
   });
 });
 ```
@@ -675,11 +690,14 @@ export async function getValidAccessTokenForTeacher(admin: SupabaseClient, teach
   });
   if (!res.ok) throw new Error(`google token refresh failed: ${res.status}`);
   const fresh = (await res.json()) as GoogleTokenResponse;
-  await admin.from('google_connections').update({
+  const { error: persistErr } = await admin.from('google_connections').update({
     access_token_enc: encryptToken(fresh.access_token),
     token_expiry: new Date(Date.now() + fresh.expires_in * 1000).toISOString(),
     last_refresh_at: new Date().toISOString(),
   }).eq('user_id', teacherId);
+  // Non-fatal: the fresh token is still returned; surface a failed persist for observability
+  // (else the same expired token re-refreshes on every call). Matches the repo soft-error idiom.
+  if (persistErr) console.error('[gc] token persist after refresh failed (non-fatal):', persistErr.message);
   return fresh.access_token;
 }
 ```
@@ -744,6 +762,15 @@ describe('GET /api/teacher/google/connect', () => {
     const cookie = res.cookies.get('g_oauth_state')!;
     expect(cookie.value).toBe(stateParam);
     expect(cookie.httpOnly).toBe(true);
+    expect(cookie.secure).toBe(true);
+    expect(cookie.sameSite).toBe('lax');
+    expect(cookie.maxAge).toBe(600);
+  });
+  it('generates a fresh random state on each call (CSRF nonce)', async () => {
+    const { GET } = await import('@/app/api/teacher/google/connect/route');
+    const s1 = new URL((await GET(req())).headers.get('location')!).searchParams.get('state');
+    const s2 = new URL((await GET(req())).headers.get('location')!).searchParams.get('state');
+    expect(s1).not.toBe(s2);
   });
 });
 ```
@@ -758,7 +785,6 @@ describe('GET /api/teacher/google/connect', () => {
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { STAFF_ROLES } from '@/lib/auth/roles';
 import { buildConnectAuthUrl } from '@/lib/google/oauthUrls';
 
 export async function GET(_req: NextRequest): Promise<NextResponse> {
@@ -768,7 +794,7 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 
   const { data: profile } = await supabase.from('users').select('role, school_id').eq('id', user.id).single();
   const role = profile?.role ?? null;
-  if (!role || !new Set(STAFF_ROLES).has(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (role !== 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const state = randomUUID();
   const res = NextResponse.redirect(buildConnectAuthUrl(state));
@@ -846,6 +872,28 @@ describe('GET /api/auth/google/callback', () => {
     const { GET } = await import('@/app/api/auth/google/callback/route');
     expect((await GET(req('s', 's'))).status).toBe(401);
   });
+  it('403 for a non-teacher (student) role', async () => {
+    single.mockResolvedValue({ data: { role: 'student', school_id: 's1' }, error: null });
+    const { GET } = await import('@/app/api/auth/google/callback/route');
+    expect((await GET(req('s', 's'))).status).toBe(403);
+    expect(exchangeCodeForTokens).not.toHaveBeenCalled();
+  });
+  it('redirects error=denied when the user cancels consent (Google ?error=, no code)', async () => {
+    const r = new NextRequest('http://x/api/auth/google/callback?error=access_denied&state=s');
+    r.cookies.set('g_oauth_state', 's');
+    const { GET } = await import('@/app/api/auth/google/callback/route');
+    const res = await GET(r);
+    expect(res.headers.get('location')).toContain('/settings/google?error=denied');
+    expect(exchangeCodeForTokens).not.toHaveBeenCalled();
+  });
+  it('redirects error=exchange and never connected=1 when the exchange throws', async () => {
+    exchangeCodeForTokens.mockRejectedValue(new Error('google token exchange failed: 400'));
+    const { GET } = await import('@/app/api/auth/google/callback/route');
+    const res = await GET(req('s', 's'));
+    expect(res.headers.get('location')).toContain('/settings/google?error=exchange');
+    expect(res.headers.get('location')).not.toContain('connected=1');
+    expect(storeConnection).not.toHaveBeenCalled();
+  });
 });
 ```
 
@@ -859,7 +907,6 @@ describe('GET /api/auth/google/callback', () => {
 // Google profile, and stores the ENCRYPTED connection for that teacher. Never creates a session.
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
-import { STAFF_ROLES } from '@/lib/auth/roles';
 import { exchangeCodeForTokens, storeConnection } from '@/lib/google/tokens';
 import { getGoogleProfile } from '@/lib/google/profile';
 
@@ -880,7 +927,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { data: profile } = await supabase.from('users').select('role, school_id').eq('id', user.id).single();
   const role = profile?.role ?? null;
-  if (!role || !new Set(STAFF_ROLES).has(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (role !== 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  const oauthError = searchParams.get('error');
+  if (oauthError) return back(origin, 'error=denied');   // user cancelled consent (Google ?error=, no code)
 
   if (!code || !state || !cookieState || state !== cookieState) return back(origin, 'error=state');
 
@@ -918,25 +968,29 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 - [ ] **Step 1: Write the failing test** — `src/app/api/teacher/google/scope-check/__tests__/route.test.ts`
 
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const getUser = vi.fn();
 const single = vi.fn();
 const getValid = vi.fn();
+const grantedScopes = vi.fn();           // the admin granted_scopes maybeSingle (fallback path)
+const origFetch = globalThis.fetch;
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: async () => ({ auth: { getUser }, from: () => ({ select: () => ({ eq: () => ({ single }) }) }) }),
-  createAdminSupabaseClient: () => ({}),
+  createAdminSupabaseClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: grantedScopes }) }) }) }),
 }));
 vi.mock('@/lib/google/tokens', async () => {
   class GoogleNotConnectedError extends Error {}
   return { getValidAccessTokenForTeacher: (...a: unknown[]) => getValid(...a), GoogleNotConnectedError };
 });
 beforeEach(() => {
-  getUser.mockReset(); single.mockReset(); getValid.mockReset();
+  getUser.mockReset(); single.mockReset(); getValid.mockReset(); grantedScopes.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   single.mockResolvedValue({ data: { role: 'teacher', school_id: 's1' }, error: null });
+  grantedScopes.mockResolvedValue({ data: { granted_scopes: [] }, error: null });
 });
+afterEach(() => { globalThis.fetch = origFetch; vi.restoreAllMocks(); });
 const req = () => new NextRequest('http://x/api/teacher/google/scope-check');
 
 describe('GET /api/teacher/google/scope-check', () => {
@@ -962,6 +1016,25 @@ describe('GET /api/teacher/google/scope-check', () => {
     expect(body.connected).toBe(true); expect(body.needsReconnect).toBe(true);
     expect(body.missing).toContain('https://www.googleapis.com/auth/classroom.coursework.students');
   });
+  it('connected:false needsReconnect:true when token refresh fails (non not-connected error)', async () => {
+    getValid.mockRejectedValue(new Error('refresh failed'));   // plain Error, NOT GoogleNotConnectedError
+    const { GET } = await import('@/app/api/teacher/google/scope-check/route');
+    expect(await (await GET(req())).json()).toEqual({ connected: false, needsReconnect: true, missing: [] });
+  });
+  it('falls back to stored granted_scopes when tokeninfo is unavailable (no false reconnect)', async () => {
+    getValid.mockResolvedValue('AT');
+    globalThis.fetch = vi.fn(async () => new Response('no', { status: 400 })) as unknown as typeof fetch;
+    grantedScopes.mockResolvedValue({ data: { granted_scopes: [
+      'https://www.googleapis.com/auth/classroom.courses.readonly',
+      'https://www.googleapis.com/auth/classroom.rosters.readonly',
+      'https://www.googleapis.com/auth/classroom.profile.emails',
+      'https://www.googleapis.com/auth/classroom.coursework.students',
+      'https://www.googleapis.com/auth/classroom.courseworkmaterials',
+    ] }, error: null });
+    const { GET } = await import('@/app/api/teacher/google/scope-check/route');
+    const body = await (await GET(req())).json();
+    expect(body.connected).toBe(true); expect(body.needsReconnect).toBe(false); expect(body.missing).toEqual([]);
+  });
 });
 ```
 
@@ -974,7 +1047,6 @@ describe('GET /api/teacher/google/scope-check', () => {
 // scopes CORE needs? Refreshes the token if needed, reads live scopes from tokeninfo, diffs.
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
-import { STAFF_ROLES } from '@/lib/auth/roles';
 import { getValidAccessTokenForTeacher, GoogleNotConnectedError } from '@/lib/google/tokens';
 import { GC_REQUIRED_SCOPES } from '@/lib/google/config';
 
@@ -984,7 +1056,7 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { data: profile } = await supabase.from('users').select('role, school_id').eq('id', user.id).single();
   const role = profile?.role ?? null;
-  if (!role || !new Set(STAFF_ROLES).has(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (role !== 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const admin = createAdminSupabaseClient();
   let accessToken: string;
@@ -995,12 +1067,24 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ connected: false, needsReconnect: true, missing: [] });
   }
 
-  const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
-  if (!res.ok) return NextResponse.json({ connected: true, needsReconnect: true, missing: GC_REQUIRED_SCOPES });
-  const info = (await res.json()) as { scope?: string };
-  const live = new Set((info.scope ?? '').split(' '));
-  const missing = GC_REQUIRED_SCOPES.filter((s) => !live.has(s));
-  return NextResponse.json({ connected: true, needsReconnect: missing.length > 0, missing });
+  const diff = (scopes: Iterable<string>) => {
+    const live = new Set(scopes);
+    const missing = GC_REQUIRED_SCOPES.filter((s) => !live.has(s));
+    return NextResponse.json({ connected: true, needsReconnect: missing.length > 0, missing });
+  };
+  try {
+    // Access token in the tokeninfo query string is a conscious V1-parity exception to Constraint
+    // D4's never-logged posture: the call is server-to-Google only and CORE never logs it.
+    const res = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
+    if (res.ok) {
+      const info = (await res.json()) as { scope?: string };
+      return diff((info.scope ?? '').split(' '));
+    }
+  } catch { /* fall through to the stored-scopes fallback below */ }
+  // tokeninfo unavailable (non-200 / network / sunset): fall back to last-known granted_scopes from
+  // connect — avoids a false reconnect-storm for fully-authorized teachers if tokeninfo changes.
+  const { data: conn } = await admin.from('google_connections').select('granted_scopes').eq('user_id', user.id).maybeSingle();
+  return diff((conn?.granted_scopes ?? []) as string[]);
 }
 ```
 
@@ -1066,7 +1150,6 @@ describe('POST /api/teacher/google/disconnect', () => {
 // POST /api/teacher/google/disconnect — remove the caller's own stored Google connection.
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
-import { STAFF_ROLES } from '@/lib/auth/roles';
 
 export async function POST(_req: NextRequest): Promise<NextResponse> {
   const supabase = await createServerSupabaseClient();
@@ -1074,7 +1157,7 @@ export async function POST(_req: NextRequest): Promise<NextResponse> {
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { data: profile } = await supabase.from('users').select('role, school_id').eq('id', user.id).single();
   const role = profile?.role ?? null;
-  if (!role || !new Set(STAFF_ROLES).has(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (role !== 'teacher') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const admin = createAdminSupabaseClient();
   const { error } = await admin.from('google_connections').delete().eq('user_id', user.id);
@@ -1095,6 +1178,9 @@ export async function POST(_req: NextRequest): Promise<NextResponse> {
 - Create: `src/app/(teacher)/settings/google/page.tsx` (server)
 - Create: `src/app/(teacher)/settings/google/_components/GoogleConnectCard.tsx` (client)
 - Create: `src/app/(teacher)/settings/google/_components/__tests__/GoogleConnectCard.test.tsx`
+- Modify: `src/app/(teacher)/_components/navConfig.ts` (add the nav entry + `NavIconKey`)
+- Modify: `src/app/(teacher)/_components/SidebarNav.tsx` (add the `ICON`-map entry)
+- Modify: `src/app/(teacher)/_components/__tests__/navConfig.test.ts` (assert the new entry)
 - Modify: `STRINGS-FOR-BARB.md` (append a `## Google Classroom — Seg 1` section with the connect-card strings)
 
 **Interfaces:**
@@ -1212,9 +1298,38 @@ export default function GoogleSettingsPage() {
 
 - [ ] **Step 4: Run tests** — `npx vitest run "src/app/(teacher)/settings/google/_components/__tests__/GoogleConnectCard.test.tsx"` → PASS. `npx tsc --noEmit` → 0.
 
-- [ ] **Step 5: Append strings to `STRINGS-FOR-BARB.md`** — a `## Google Classroom — Seg 1 (connect)` section listing: "Google Classroom", "Checking your connection…", "Connected.", "Your Google access needs renewing.", "Connect your Google account to import rosters and sync assignments.", "Connect Google Classroom", "Reconnect Google Classroom", "Disconnect".
+- [ ] **Step 5: Wire the nav entry (make the page reachable)** — the teacher sidebar is driven SOLELY by `NAV_ENTRIES` (`src/app/(teacher)/_components/navConfig.ts`); a route absent from it cannot be reached in the shell.
 
-- [ ] **Step 6: Commit** — `git add "src/app/(teacher)/settings/google" STRINGS-FOR-BARB.md && git commit -m "feat(gc): teacher connect/reconnect/disconnect UI"`
+  (a) In `navConfig.ts`, add `| 'googleClassroom'` to the `NavIconKey` union, and append a new group after the `'INSIGHTS & TOOLS'` group object:
+
+```typescript
+  {
+    groupLabel: 'SETTINGS',
+    items: [
+      { label: 'Google Classroom', href: '/settings/google', icon: 'googleClassroom' },
+    ],
+  },
+```
+
+  (b) In `SidebarNav.tsx`, add one entry to the `ICON` record: `googleClassroom: IconUpload,` (reuse an existing icon — the glyph is cosmetic and design/Barb may swap it; do NOT invent a new icon component in this segment).
+
+  (c) In `navConfig.test.ts`, add a test (the existing 'has 9 destinations' test uses `toContain`, not a length assertion, so it still passes — its title is now informally stale):
+
+```typescript
+  it('has a Google Classroom settings entry → /settings/google', () => {
+    const flat = NAV_ENTRIES.flatMap((e) => (isGroup(e) ? e.items : [e]));
+    const gc = flat.find((i) => i.href === '/settings/google');
+    expect(gc).toBeDefined();
+    expect(gc!.label).toBe('Google Classroom');
+    expect(gc!.icon).toBe('googleClassroom');
+  });
+```
+
+  Run `npx vitest run "src/app/(teacher)/_components/__tests__/navConfig.test.ts"` → PASS. `npx tsc --noEmit` → 0 (the `ICON` record is `Record<NavIconKey, …>`, so the new key MUST be in the map or tsc fails — this is the guard that keeps icon + key in sync).
+
+- [ ] **Step 6: Append strings to `STRINGS-FOR-BARB.md`** — a `## Google Classroom — Seg 1 (connect)` section listing: "Google Classroom", "Checking your connection…", "Connected.", "Your Google access needs renewing.", "Connect your Google account to import rosters and sync assignments.", "Connect Google Classroom", "Reconnect Google Classroom", "Disconnect".
+
+- [ ] **Step 7: Commit** — `git add "src/app/(teacher)/settings/google" "src/app/(teacher)/_components/navConfig.ts" "src/app/(teacher)/_components/SidebarNav.tsx" "src/app/(teacher)/_components/__tests__/navConfig.test.ts" STRINGS-FOR-BARB.md && git commit -m "feat(gc): teacher connect/reconnect/disconnect UI + nav entry"`
 
 ---
 
@@ -1234,3 +1349,6 @@ export default function GoogleSettingsPage() {
 1. **Spec coverage:** token vault table (§4 `google_connections`) → Task 3 ✓; encryption (§8) → Task 2 ✓; per-teacher OAuth + connect/callback (§6) → Tasks 4/8/9 ✓; centralized token-manager / single refresh (§2 default) → Tasks 5–7 ✓; scope-check/reconnect (§6) → Task 10 ✓; disconnect + UI → Tasks 11/12 ✓; new env key `GOOGLE_TOKEN_ENC_KEY` (§5) → Task 1 ✓. **Deferred out of Seg 1 (documented):** `external_identities` email/last_seen_at columns + resolve helper (land in Seg 2, their first consumer); `schools.state` population (open item #13 — value source undecided; not built here); `GOOGLE_LAUNCH_STATE_SECRET` (Seg 4).
 2. **Placeholder scan:** no TBD/"handle errors"/"similar to" — every code step is complete. ✓
 3. **Type consistency:** `GoogleTokenResponse` (Task 5) reused in Tasks 6/7; `storeConnection(admin, args)` signature consistent across Task 6 def and Task 9 call; `getValidAccessTokenForTeacher(admin, teacherId)` consistent across Tasks 7/10; `GoogleNotConnectedError` thrown in Task 7, caught in Task 10. ✓
+
+## Plan-review pass (adversarial, 2026-06-23 — folded in)
+A 4-lens adversarial review (22 confirmed, 3 refuted) ran BEFORE any code. Applied: **auth grain tightened to teacher-only** on all four routes (was inconsistent STAFF_ROLES vs the teacher-only `(teacher)` layout) + stated once in Global Constraints; **nav entry wired** so the connect page is reachable (Task 12 Step 5); **Task 3 policy regex** fixed (`[^\n]*`→`[\s\S]*` — would have false-failed the TDD step); **encrypt-at-rest proven** at the refresh-persist call site (Task 7 decrypt round-trip); **failure-path tests added** (callback exchange-error + denied-consent + 403; scope-check refresh-fail + tokeninfo-down); **granted_scopes fallback** in scope-check (no false reconnect-storm if tokeninfo is unavailable); soft-log the refresh-persist error; **fetch-mock restore** (afterEach) in the lib/route tests; cookie-flag + state-randomness assertions; storeConnection preserve-path assertion; doc notes (Node-runtime default, tokeninfo query-string parity exception). **Refuted (correctly, no change):** disconnect-CSRF (Supabase cookies are SameSite=Lax — matches the whole codebase's POST pattern), refresh `invalid_grant` (V1 parity; scope-check already surfaces reconnect), storeConnection stale-refresh (claims factually wrong). **Forward-looking notes recorded** for Seg 2 (`external_identities` 0023 + `schools.state` populate) and Seg 4 (proxy carve-out for the shared callback URI).
