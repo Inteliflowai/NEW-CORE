@@ -66,6 +66,11 @@ function statusWord(status: string): string {
   return 'Draft';
 }
 
+/** True when the quiz has 0 questions — it is still being built in the background. */
+function isBuilding(row: QuizLibRow): boolean {
+  return row.question_count === 0 && row.status !== 'archived';
+}
+
 export function QuizLibrary({ data, classId, questions, classes = [], now }: QuizLibraryProps) {
   const clock = now ?? new Date();
   const [search, setSearch] = useState('');
@@ -135,32 +140,43 @@ export function QuizLibrary({ data, classId, questions, classes = [], now }: Qui
                 {group.label}
               </h2>
               <ul className="flex flex-col gap-3">
-                {group.items.map((row) => (
-                  <li key={row.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(row.id)}
-                      aria-label={`${row.title} — ${statusWord(row.status)}`}
-                      className="flex w-full flex-col gap-1 rounded-lg border-2 border-sidebar-edge bg-surface p-4 text-left shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-                    >
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="font-display text-base font-extrabold text-fg">{row.title}</span>
-                        <SectionLabel tone={row.status === 'published' ? 'ok' : 'warn'}>
-                          {statusWord(row.status)}
-                        </SectionLabel>
-                      </span>
-                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg">
-                        {row.lesson_title && <span>{row.lesson_title}</span>}
-                        <span className="text-fg-muted">
-                          {row.question_count === 1 ? '1 question' : `${row.question_count} questions`}
+                {group.items.map((row) => {
+                  const building = isBuilding(row);
+                  return (
+                    <li key={row.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(row.id)}
+                        aria-label={building ? `${row.title} — Building` : `${row.title} — ${statusWord(row.status)}`}
+                        className="flex w-full flex-col gap-1 rounded-lg border-2 border-sidebar-edge bg-surface p-4 text-left shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                      >
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className="font-display text-base font-extrabold text-fg">{row.title}</span>
+                          {building ? (
+                            <SectionLabel tone="brand">Building…</SectionLabel>
+                          ) : (
+                            <SectionLabel tone={row.status === 'published' ? 'ok' : 'warn'}>
+                              {statusWord(row.status)}
+                            </SectionLabel>
+                          )}
                         </span>
-                        {row.published_at && (
-                          <span className="text-fg-muted">{publishedDateLabel(row.published_at)}</span>
-                        )}
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg">
+                          {row.lesson_title && <span>{row.lesson_title}</span>}
+                          {building ? (
+                            <span role="status" className="text-fg-muted">Questions on their way — check back in a moment.</span>
+                          ) : (
+                            <span className="text-fg-muted">
+                              {row.question_count === 1 ? '1 question' : `${row.question_count} questions`}
+                            </span>
+                          )}
+                          {row.published_at && (
+                            <span className="text-fg-muted">{publishedDateLabel(row.published_at)}</span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ))}
@@ -191,6 +207,8 @@ interface QuizEditPanelProps {
 function QuizEditPanel({ quiz, classId, questions, onClose }: QuizEditPanelProps) {
   const router = useRouter();
   const isPublished = quiz.status === 'published';
+  // A quiz with 0 questions is still being built in the background — publishing it is not allowed.
+  const isStillBuilding = isBuilding(quiz);
 
   const [title, setTitle] = useState(quiz.title);
   const [edited, setEdited] = useState<Record<string, { question_text: string; rubric: string }>>(() => {
@@ -297,6 +315,11 @@ function QuizEditPanel({ quiz, classId, questions, onClose }: QuizEditPanelProps
         {isPublished && (
           <p className="text-sm text-fg-muted">Published — students can see it now.</p>
         )}
+        {isStillBuilding && (
+          <p role="status" className="text-sm text-fg">
+            Questions are being built. Come back in a moment to publish.
+          </p>
+        )}
 
         {/* Title */}
         <div className="flex flex-col gap-1">
@@ -369,7 +392,9 @@ function QuizEditPanel({ quiz, classId, questions, onClose }: QuizEditPanelProps
             <button
               type="button"
               onClick={onPublish}
-              disabled={busy}
+              disabled={busy || isStillBuilding}
+              aria-disabled={isStillBuilding}
+              title={isStillBuilding ? 'Questions are still being built — come back in a moment' : undefined}
               className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-bold text-fg-on-brand shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
             >
               Publish for students

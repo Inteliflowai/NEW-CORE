@@ -72,9 +72,19 @@ describe('LessonReviewEditor', () => {
     expect(calls.filter((c) => c.url.includes('/manage')).length).toBe(2);
   });
 
-  it('shows a done state with library links after success', async () => {
+  it('shows a "building" done state with library links after success — teacher is freed immediately', async () => {
     render(<LessonReviewEditor days={[day()]} chapterTitle={null} framework="TEKS" classId="c1" />);
     fireEvent.click(screen.getByRole('button', { name: /make quiz/i }));
     await waitFor(() => expect(screen.getByRole('link', { name: /quiz library|open the quiz/i })).toBeInTheDocument());
+    // The done state should indicate the quiz is being built (not that it's ready).
+    expect(screen.getByText(/being built/i)).toBeInTheDocument();
+  });
+
+  it('multi-day done state shows "quizzes are being built"', async () => {
+    const days = [day({ lesson_id: 'L1', day_index: 1, title: 'Day 1' }), day({ lesson_id: 'L2', day_index: 2, title: 'Day 2' })];
+    render(<LessonReviewEditor days={days} chapterTitle="Unit" framework="TEKS" classId="c1" />);
+    fireEvent.click(screen.getByRole('button', { name: /make quiz/i }));
+    await waitFor(() => expect(screen.getByRole('link', { name: /quiz library|open the quiz/i })).toBeInTheDocument());
+    expect(screen.getByText(/quizzes are being built/i)).toBeInTheDocument();
   });
 });
