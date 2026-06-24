@@ -38,6 +38,14 @@ describe('navConfig', () => {
     expect(labels.join(' ')).not.toMatch(/Homework/i);
   });
 
+  it('has a Google Classroom settings entry → /settings/google', () => {
+    const flat = NAV_ENTRIES.flatMap((e) => (isGroup(e) ? e.items : [e]));
+    const gc = flat.find((i) => i.href === '/settings/google');
+    expect(gc).toBeDefined();
+    expect(gc!.label).toBe('Google Classroom');
+    expect(gc!.icon).toBe('googleClassroom');
+  });
+
   it('matchActive: exact, prefix, and alsoActiveWhen', () => {
     expect(matchActive('/roster', '/roster')).toBe(true);
     expect(matchActive('/roster/x', '/roster')).toBe(true);
