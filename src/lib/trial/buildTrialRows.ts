@@ -60,7 +60,7 @@ export interface TrialQuiz {
 
 export interface TrialQuizQuestion {
   position: number;
-  question_type: 'mcq' | 'open' | 'numeric';
+  question_type: 'mcq' | 'open'; // schema CHECK: question_type IN ('mcq','open') — 'numeric' rejected
   question_text: string;
 }
 

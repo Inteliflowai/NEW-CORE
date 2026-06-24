@@ -34,7 +34,8 @@ describe('buildTrialRows', () => {
     expect(rows.lesson.status).toBe('published');
     expect(rows.quiz.status).toBe('published');
     expect(rows.quiz_questions).toHaveLength(5);
-    const QTYPE = new Set(['mcq', 'open', 'numeric']);
+    // Schema CHECK constraint: question_type IN ('mcq','open') — 'numeric' is NOT valid
+    const QTYPE = new Set(['mcq', 'open']);
     rows.quiz_questions.forEach(q => expect(QTYPE.has(q.question_type)).toBe(true));
     expect(rows.quiz_questions.filter(q => q.question_type === 'mcq')).toHaveLength(3);
     expect(rows.quiz_questions.filter(q => q.question_type === 'open')).toHaveLength(2);
