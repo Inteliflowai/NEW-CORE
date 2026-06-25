@@ -12,7 +12,7 @@ it('redirects an unauthenticated visitor to /login', async () => {
   vi.mocked(createServerSupabaseClient).mockResolvedValue({
     auth: { getUser: async () => ({ data: { user: null } }) },
   } as never);
-  await expect(Home()).rejects.toThrow('REDIRECT:/login');
+  await expect(Home({ searchParams: Promise.resolve({}) } as never)).rejects.toThrow('REDIRECT:/login');
 });
 
 it('redirects an authenticated teacher to /today', async () => {
@@ -20,5 +20,5 @@ it('redirects an authenticated teacher to /today', async () => {
     auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { role: 'teacher' } }) }) }) }),
   } as never);
-  await expect(Home()).rejects.toThrow('REDIRECT:/today');
+  await expect(Home({ searchParams: Promise.resolve({}) } as never)).rejects.toThrow('REDIRECT:/today');
 });

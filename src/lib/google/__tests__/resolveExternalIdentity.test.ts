@@ -5,7 +5,7 @@ import { describe, it, expect } from 'vitest';
 // returns rows the test supplies.
 function fakeAdmin(opts: {
   byExternalId?: { core_student_id: string } | null;
-  byEmailRows?: Array<{ core_student_id: string }>;
+  byEmailRows?: Array<{ core_student_id: string; external_id?: string | null }>;
 }) {
   return {
     from() {
@@ -55,5 +55,23 @@ describe('resolveExternalIdentity', () => {
       schoolId: 's1', provider: 'google', externalId: 'gX', email: null,
     });
     expect(out).toBeNull();
+  });
+  // Regression (whole-branch review): email match must NOT override a row already linked to a
+  // different Google id — recycled/reassigned school email account-takeover guard.
+  it('email fallback returns null when the matched row is linked to a DIFFERENT Google id', async () => {
+    const { resolveExternalIdentity } = await import('@/lib/google/resolveExternalIdentity');
+    const out = await resolveExternalIdentity(
+      fakeAdmin({ byExternalId: null, byEmailRows: [{ core_student_id: 'stu5', external_id: 'G_X' }] }) as never,
+      { schoolId: 's1', provider: 'google', externalId: 'G_Y', email: 'e@s.edu' },
+    );
+    expect(out).toBeNull();
+  });
+  it('email fallback resolves an UNLINKED row (external_id null) — first-login by email', async () => {
+    const { resolveExternalIdentity } = await import('@/lib/google/resolveExternalIdentity');
+    const out = await resolveExternalIdentity(
+      fakeAdmin({ byExternalId: null, byEmailRows: [{ core_student_id: 'stu5', external_id: null }] }) as never,
+      { schoolId: 's1', provider: 'google', externalId: 'G_Y', email: 'e@s.edu' },
+    );
+    expect(out).toBe('stu5');
   });
 });

@@ -18,6 +18,7 @@ vi.mock('@supabase/ssr', () => ({
 
 import { NextRequest } from 'next/server';
 import { proxy } from '../proxy';
+import { LAUNCH_STATE_PREFIX } from '@/lib/google/launchState';
 
 function req(path: string): NextRequest {
   return new NextRequest(new URL(`https://app.test${path}`));
@@ -78,6 +79,41 @@ describe('proxy (auth gate + session refresh)', () => {
     userRole = null;
     getUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
     const res = await proxy(req('/login'));
+    expect(res.headers.get('location')).toBeNull();
+  });
+
+  it('diverts an unauthenticated /?gc= link to the launch initiator', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await proxy(req('/?gc=assignment&id=L1'));
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe('https://app.test/api/auth/google/launch?gc=assignment&id=L1');
+  });
+  it('an invalid gc on / still goes to /login', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await proxy(req('/?gc=bogus&id=L1'));
+    expect(res.headers.get('location')).toBe('https://app.test/login');
+  });
+  it('lets the launch callback through when it carries a launch: state', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    // Use LAUNCH_STATE_PREFIX so a future rename fails this test (the proxy hardcodes the literal
+    // and can't import node:crypto — proxy.test.ts is the coupling point). (whole-branch review)
+    const res = await proxy(req(`/api/auth/google/callback?state=${LAUNCH_STATE_PREFIX}abc&code=x`));
+    expect(res.headers.get('location')).toBeNull();
+  });
+  it('still gates the callback (no launch state) to /login?expired=true', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await proxy(req('/api/auth/google/callback?state=csrf&code=x'));
+    expect(res.headers.get('location')).toBe('https://app.test/login?expired=true');
+  });
+  it('passes /launch/unmatched through unauthenticated (public)', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await proxy(req('/launch/unmatched'));
+    expect(res.headers.get('location')).toBeNull();
+  });
+  it('an authenticated student\'s /?gc= falls through to page.tsx (no role redirect)', async () => {
+    userRole = 'student';
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    const res = await proxy(req('/?gc=assignment&id=L1'));
     expect(res.headers.get('location')).toBeNull();
   });
 });
