@@ -22,11 +22,14 @@ function fakeAdmin(opts: {
   enrollmentSeat?:    Record<string, FakeSeat>;
   usersSelectError?:  string;
   enrollInsertError?: string;
+  /** If set, the enrollment insert resolves with { error: { code, message } } */
+  enrollInsertCode?:  string;
 }) {
   const preExistingUsers  = opts.preExistingUsers  ?? {};
   const enrollmentSeat    = opts.enrollmentSeat    ?? {};
   const usersSelectError  = opts.usersSelectError  ?? null;
   const enrollInsertError = opts.enrollInsertError ?? null;
+  const enrollInsertCode  = opts.enrollInsertCode  ?? null;
 
   const inserts: Array<{ table: string; row: Record<string, unknown> }> = [];
 
@@ -88,6 +91,9 @@ function fakeAdmin(opts: {
           },
           insert(row: Record<string, unknown>) {
             inserts.push({ table: 'enrollments', row });
+            if (enrollInsertCode) {
+              return Promise.resolve({ error: { code: enrollInsertCode, message: enrollInsertError ?? 'Enrollment limit reached' } });
+            }
             return Promise.resolve({ error: enrollInsertError ? { message: enrollInsertError } : null });
           },
         };
@@ -405,6 +411,35 @@ describe('importStudentsToClass — ensureAuthUser role/mismatch throw → skip,
     // Issue must NOT expose raw DB/internal error text
     expect(summary.issues[0]).not.toMatch(/Network timeout/);
     expect(summary.issues[0]).toMatch(/alice@school\.edu/i);
+  });
+});
+
+// Task 8 — 23514 seat-cap: count as a skip (not an error) and surface a friendly message.
+describe('importStudentsToClass — enrollment insert 23514 (check_violation) → skip, not error', () => {
+  it('records a friendly "seat limit reached" issue and does NOT increment errors', async () => {
+    ensureAuthUser.mockResolvedValueOnce('new-student-id');
+    const admin = fakeAdmin({
+      preExistingUsers: {},
+      enrollInsertCode: '23514',
+      enrollInsertError: 'Enrollment limit reached for school',
+    });
+
+    const { importStudentsToClass } = await import('@/lib/roster/importStudentsToClass');
+    const summary = await importStudentsToClass(admin as never, {
+      schoolId: SCHOOL_ID,
+      classId:  CLASS_ID,
+      students: [studentRow()],
+    });
+
+    // 23514 is a skip, not an error
+    expect(summary.errors).toBe(0);
+    // A friendly message must appear in issues
+    expect(summary.issues).toHaveLength(1);
+    expect(summary.issues[0]).toMatch(/seat limit reached/i);
+    // The raw DB message must NOT appear
+    expect(summary.issues[0]).not.toMatch(/Enrollment limit reached for school/);
+    // enrolled counter must NOT have incremented
+    expect(summary.enrolled).toBe(0);
   });
 });
 

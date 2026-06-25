@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const logAudit = vi.fn();
+vi.mock('@/lib/audit/logAudit', () => ({ logAudit: (...a: unknown[]) => logAudit(...a) }));
+
 const getUser = vi.fn();
 const single = vi.fn();
 const reconcile = vi.fn();
@@ -28,7 +31,7 @@ vi.mock('@/lib/google/tokens', async () => { class GoogleNotConnectedError exten
 vi.mock('@/lib/google/classroom', async () => { class GoogleScopeError extends Error {} return { GoogleScopeError }; });
 
 beforeEach(() => {
-  for (const m of [getUser, single, reconcile, existingClass, classUpdateResult, classUpdateSpy, classInsertResult, classInsertSpy]) m.mockReset();
+  for (const m of [logAudit, getUser, single, reconcile, existingClass, classUpdateResult, classUpdateSpy, classInsertResult, classInsertSpy]) m.mockReset();
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   single.mockResolvedValue({ data: { role: 'teacher', school_id: 's1' }, error: null });
   existingClass.mockResolvedValue({ data: null, error: null });
@@ -144,5 +147,23 @@ describe('POST /api/teacher/google/import-roster', () => {
     const res = await POST(req({ courseId: 'c1', name: 'Math Renamed' }));
     expect(res.status).toBe(200);
     expect(reconcile).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ classId: 'oldCls' }));
+  });
+
+  // Audit: logAudit wired on import (via:'import' distinguishes first import from recurring sync)
+  it('logs roster.sync with via:import when reconcile reports changes', async () => {
+    // Default reconcile returns enrolled:3 — satisfies the change-guard
+    const { POST } = await import('@/app/api/teacher/google/import-roster/route');
+    await POST(req({ courseId: 'c1', name: 'Math' }));
+    expect(logAudit).toHaveBeenCalledTimes(1);
+    const [, entry] = logAudit.mock.calls[0];
+    expect(entry).toMatchObject({ action: 'roster.sync', resourceType: 'class', resourceId: 'newCls' });
+    expect(entry.metadata).toMatchObject({ enrolled: 3, source: 'google', via: 'import' });
+  });
+
+  it('does NOT log when reconcile reports no changes (no-op import)', async () => {
+    reconcile.mockResolvedValueOnce({ created: 0, linked: 0, skippedNoEmail: 0, skippedOther: 0, enrolled: 0, reactivated: 0, softRemoved: 0, errors: 0, removeSkippedSuspectEmpty: false });
+    const { POST } = await import('@/app/api/teacher/google/import-roster/route');
+    await POST(req({ courseId: 'c1', name: 'Math' }));
+    expect(logAudit).not.toHaveBeenCalled();
   });
 });

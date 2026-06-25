@@ -23,6 +23,7 @@ import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/sup
 import { STAFF_ROLES } from '@/lib/auth/roles';
 import { parseRosterWorkbook } from '@/lib/roster/parseWorkbook';
 import { importRoster } from '@/lib/roster/importRoster';
+import { logAudit } from '@/lib/audit/logAudit';
 
 export const runtime = 'nodejs';
 
@@ -116,6 +117,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const admin = createAdminSupabaseClient();
       const summary = await importRoster(admin, { schoolId, roster });
       console.info('[roster-import] actor=%s school=%s summary=%o', user.id, schoolId, summary);
+      // Log audit on successful commit (best-effort, never-fatal)
+      await logAudit(admin, {
+        actorId:      user.id,
+        schoolId,
+        action:       'roster.import',
+        resourceType: 'school',
+        resourceId:   schoolId,
+        metadata: {
+          studentsCreated:    summary.students.created,
+          enrollmentsCreated: summary.enrollments.created,
+        },
+      });
       return NextResponse.json({ mode: 'commit', summary });
     }
 

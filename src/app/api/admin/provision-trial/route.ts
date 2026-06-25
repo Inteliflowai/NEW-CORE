@@ -18,15 +18,20 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAdminSupabaseClient } from '@/lib/supabase/server';
+import { createAdminSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 import { guardPlatformAdmin } from '@/lib/auth/guards';
 import { provisionTrial } from '@/lib/trial/provisionTrial';
 import { validateProvisionInput } from './validate';
+import { logAudit } from '@/lib/audit/logAudit';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // ── 1. Auth — guardPlatformAdmin handles session (401) + role (403) ───────
   const guard = await guardPlatformAdmin();
   if (guard) return guard;
+
+  // Obtain actor id — guardPlatformAdmin does NOT expose the caller id.
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   // ── 2. Parse + validate body ──────────────────────────────────────────────
   let rawBody: unknown;
@@ -62,7 +67,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 
-  // ── 4. Build response — credentials_summary surfaced once, never logged ───
+  // ── 4. Audit ──────────────────────────────────────────────────────────────
+  await logAudit(admin, {
+    actorId: user?.id ?? null,
+    schoolId: provisionResult.schoolId,
+    action: 'school.provision',
+    resourceType: 'school',
+    resourceId: provisionResult.schoolId,
+    metadata: { school_name, teacher_email },
+  });
+
+  // ── 5. Build response — credentials_summary surfaced once, never logged ───
   const accounts: Record<string, { email: string }> = {};
   for (const [role, cred] of Object.entries(provisionResult.credentials)) {
     accounts[role] = { email: cred.email };

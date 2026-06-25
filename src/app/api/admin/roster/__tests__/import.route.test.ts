@@ -5,6 +5,10 @@
 // Node env (xlsx + FormData round-trip). Hoisted-mock pattern.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// ─── Audit mock (must be hoisted before any import of the route) ──────────────
+const mockLogAudit = vi.fn();
+vi.mock('@/lib/audit/logAudit', () => ({ logAudit: (...a: unknown[]) => mockLogAudit(...a) }));
+
 // ─── Shared mock state ────────────────────────────────────────────────────────
 
 const getUser = vi.fn();
@@ -101,6 +105,7 @@ describe('POST /api/admin/roster/import', () => {
   beforeEach(() => {
     mockParseRosterWorkbook.mockReset();
     mockImportRoster.mockReset();
+    mockLogAudit.mockReset();
     getUser.mockReset();
     profileSingle.mockReset();
 
@@ -376,5 +381,60 @@ describe('POST /api/admin/roster/import', () => {
     const body = await res.json();
     expect(body.error).toBe('Internal Server Error');
     expect(JSON.stringify(body)).not.toContain('corrupt file');
+  });
+
+  // ── Audit logging ────────────────────────────────────────────────────────────
+
+  it('audit: logs roster.import with school resource + nested summary metadata on commit', async () => {
+    const { createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    const fakeAdmin = {};
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(fakeAdmin as never);
+
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({ mode: 'commit' }));
+    expect(res.status).toBe(200);
+
+    expect(mockLogAudit).toHaveBeenCalledOnce();
+    const [, entry] = mockLogAudit.mock.calls[0] as [unknown, import('@/lib/audit/logAudit').AuditEntry];
+    expect(entry.action).toBe('roster.import');
+    expect(entry.actorId).toBe('teacher-1');
+    expect(entry.schoolId).toBe('school-1');
+    expect(entry.resourceType).toBe('school');
+    expect(entry.resourceId).toBe('school-1');
+    // Metadata must map the REAL ImportSummary nested fields (not undefined)
+    expect(entry.metadata).toEqual({
+      studentsCreated:     FAKE_SUMMARY.students.created,     // 2
+      enrollmentsCreated:  FAKE_SUMMARY.enrollments.created,  // 2
+    });
+  });
+
+  it('audit: does NOT log on preview mode (dry-run)', async () => {
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({ mode: 'preview' }));
+    expect(res.status).toBe(200);
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
+
+  it('audit: does NOT log on a failed commit (importRoster throws)', async () => {
+    mockImportRoster.mockRejectedValue(new Error('DB down'));
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({ mode: 'commit' }));
+    expect(res.status).toBe(500);
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
+
+  it('audit: platform_admin commit logs with the supplied schoolId', async () => {
+    profileSingle.mockResolvedValue({ data: { role: 'platform_admin', school_id: null }, error: null });
+    const { createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createAdminSupabaseClient).mockReturnValue({} as never);
+
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({ mode: 'commit', schoolId: 'target-school' }));
+    expect(res.status).toBe(200);
+
+    expect(mockLogAudit).toHaveBeenCalledOnce();
+    const [, entry] = mockLogAudit.mock.calls[0] as [unknown, import('@/lib/audit/logAudit').AuditEntry];
+    expect(entry.schoolId).toBe('target-school');
+    expect(entry.resourceId).toBe('target-school');
   });
 });

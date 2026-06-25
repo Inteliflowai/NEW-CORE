@@ -6,6 +6,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// ─── Audit mock (must be hoisted before any import of the route) ──────────────
+const mockLogAudit = vi.fn();
+vi.mock('@/lib/audit/logAudit', () => ({ logAudit: (...a: unknown[]) => mockLogAudit(...a) }));
+
 // ─── Shared mock state ────────────────────────────────────────────────────────
 
 const getUser = vi.fn();
@@ -113,6 +117,7 @@ describe('POST /api/teacher/roster/import', () => {
     mockGuardClassAccess.mockReset();
     mockParseStudentSheet.mockReset();
     mockImportStudentsToClass.mockReset();
+    mockLogAudit.mockReset();
     getUser.mockReset();
     profileSingle.mockReset();
     classMaybeSingle.mockReset();
@@ -331,5 +336,35 @@ describe('POST /api/teacher/roster/import', () => {
     const body = await res.json();
     expect(body.error).toBe('Internal Server Error');
     expect(JSON.stringify(body)).not.toContain('corrupt CSV');
+  });
+
+  // ── Audit logging ────────────────────────────────────────────────────────────
+
+  it('audit: logs roster.import with class resource + correct metadata on successful import', async () => {
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({}));
+    expect(res.status).toBe(200);
+
+    expect(mockLogAudit).toHaveBeenCalledOnce();
+    const [, entry] = mockLogAudit.mock.calls[0] as [unknown, import('@/lib/audit/logAudit').AuditEntry];
+    expect(entry.action).toBe('roster.import');
+    expect(entry.actorId).toBe('teacher-1');
+    expect(entry.schoolId).toBe('school-1');
+    expect(entry.resourceType).toBe('class');
+    expect(entry.resourceId).toBe('class-1');
+    // Metadata must map the REAL LeanImportSummary fields (not undefined)
+    expect(entry.metadata).toEqual({
+      studentsCreated: FAKE_SUMMARY.studentsCreated,   // 2
+      enrolled:        FAKE_SUMMARY.enrolled,           // 2
+      errors:          FAKE_SUMMARY.errors,             // 0
+    });
+  });
+
+  it('audit: does NOT log on a failed (thrown) import', async () => {
+    mockImportStudentsToClass.mockRejectedValue(new Error('DB down'));
+    const { POST } = await import('../import/route');
+    const res = await POST(makeFormReq({}));
+    expect(res.status).toBe(500);
+    expect(mockLogAudit).not.toHaveBeenCalled();
   });
 });

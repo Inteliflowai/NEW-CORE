@@ -11,6 +11,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { reconcileCourseRoster } from '@/lib/google/reconcileCourseRoster';
 import { GoogleNotConnectedError } from '@/lib/google/tokens';
 import { GoogleScopeError } from '@/lib/google/classroom';
+import { logAudit } from '@/lib/audit/logAudit';
 
 // Vercel allows up to 300s; this is the warranted exception to the global "don't add runtime" rule
 // (the voice routes already set maxDuration). Bounds a large multi-school nightly sweep (MIN-2).
@@ -76,6 +77,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         // distinguishable from a clean one in the cron summary JSON.
         if (result.removeSkippedSuspectEmpty) guardTripped++;
         engineErrors += result.errors;
+        if (result.softRemoved + result.reactivated + result.enrolled > 0 || result.skippedOther > 0 || result.errors > 0) {
+          await logAudit(admin, {
+            actorId: null,
+            schoolId: c.school_id,
+            action: 'roster.sync',
+            resourceType: 'class',
+            resourceId: c.id,
+            metadata: { enrolled: result.enrolled, reactivated: result.reactivated, softRemoved: result.softRemoved, skippedOther: result.skippedOther, errors: result.errors, source: 'google' },
+          });
+        }
       } catch (err) {
         const reason = reconnectReason(err);
         if (reason) {

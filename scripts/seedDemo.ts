@@ -136,7 +136,8 @@ async function main() {
     console.log(`[seed] Created school ${schoolId}`);
   }
 
-  // Ensure a trialing school_license so enrollment trigger doesn't block inserts
+  // Ensure a trialing school_license (student_limit 300 ≫ 8 demo students; the seat-cap trigger
+  // enforces trialing as of migration 0026, so this generous limit keeps the reseed unblocked)
   try {
     const trialEnd = new Date(now.getTime() + 365 * 86_400_000);
     await admin.from('school_licenses').upsert(

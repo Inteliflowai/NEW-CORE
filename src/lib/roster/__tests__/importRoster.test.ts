@@ -35,12 +35,17 @@ function fakeAdmin(opts: {
   classInsertId?:      string;
   /** When set, every users.update call returns this error message. */
   usersUpdateError?:   string;
+  /** If set, every enrollment insert resolves with { error: { code, message } } */
+  enrollInsertCode?:   string;
+  enrollInsertError?:  string;
 }) {
   const preExistingUsers   = opts.preExistingUsers   ?? {};
   const preExistingClasses = opts.preExistingClasses ?? [];
   const enrollmentSeat     = opts.enrollmentSeat     ?? {};
   const classInsertId      = opts.classInsertId      ?? 'new-class-1';
   const usersUpdateError   = opts.usersUpdateError   ?? null;
+  const enrollInsertCode   = opts.enrollInsertCode   ?? null;
+  const enrollInsertError  = opts.enrollInsertError  ?? null;
 
   // Tracks writes for assertions
   const inserts: Array<{ table: string; row: Record<string, unknown> }> = [];
@@ -155,7 +160,10 @@ function fakeAdmin(opts: {
           },
           insert(row: Record<string, unknown>) {
             inserts.push({ table: 'enrollments', row });
-            return Promise.resolve({ error: null });
+            if (enrollInsertCode) {
+              return Promise.resolve({ error: { code: enrollInsertCode, message: enrollInsertError ?? 'Enrollment limit reached' } });
+            }
+            return Promise.resolve({ error: enrollInsertError ? { message: enrollInsertError } : null });
           },
         };
       }
@@ -668,5 +676,36 @@ describe('importRoster — issues never contain raw DB error messages (FIX 1)', 
     expect(summary.issues[0]).toMatch(/Math 8A/);
     // Must use a generic phrase
     expect(summary.issues[0]).toMatch(/database error/i);
+  });
+});
+
+// Task 8 — 23514 seat-cap: count as a skip (not an error) and surface a friendly message.
+describe('importRoster — enrollment insert 23514 (check_violation) → skip, not error', () => {
+  it('records a friendly "seat limit reached" issue and does NOT increment enrollments.errors', async () => {
+    ensureAuthUser
+      .mockResolvedValueOnce('teacher-1')
+      .mockResolvedValueOnce('student-1');
+
+    const admin = fakeAdmin({
+      preExistingUsers: {},
+      preExistingClasses: [],
+      enrollInsertCode: '23514',
+      enrollInsertError: 'Enrollment limit reached for school',
+    });
+
+    const { importRoster } = await import('@/lib/roster/importRoster');
+    const summary = await importRoster(admin as never, {
+      schoolId: 'school-1',
+      roster: minimalRoster(),
+    });
+
+    // 23514 is a skip, not an error
+    expect(summary.enrollments.errors).toBe(0);
+    // A friendly message must appear in issues
+    expect(summary.issues.some(i => /seat limit reached/i.test(i))).toBe(true);
+    // The raw DB message must NOT appear
+    expect(summary.issues.every(i => !/Enrollment limit reached for school/.test(i))).toBe(true);
+    // enrolled counter must NOT have incremented
+    expect(summary.enrollments.created).toBe(0);
   });
 });

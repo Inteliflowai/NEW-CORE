@@ -73,6 +73,12 @@ vi.mock('@/lib/auth/guards', () => ({
   guardPlatformAdmin: () => mockGuardPlatformAdmin(),
 }));
 
+// Mock logAudit — spy on calls
+const mockLogAudit = vi.fn();
+vi.mock('@/lib/audit/logAudit', () => ({
+  logAudit: (...a: unknown[]) => mockLogAudit(...a),
+}));
+
 // Mock the supabase server module
 vi.mock('@/lib/supabase/server', () => ({
   createAdminSupabaseClient: vi.fn(),
@@ -96,11 +102,19 @@ vi.mock('@/lib/spark/sparkLink', () => ({
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('POST /api/admin/spark-enable', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mockGuardPlatformAdmin.mockReset();
+    mockLogAudit.mockReset();
     mockProvisionSparkSchool.mockReset();
     mockProvisionSparkLink.mockReset();
     vi.resetModules();
+
+    // Default: createServerSupabaseClient returns a stub with getUser → no user.
+    // Tests that need a real actor id override this after vi.resetModules().
+    const { createServerSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
+    } as never);
   });
 
   // ── Guard rejection → guard response returned, no provisioning called ──────
@@ -303,5 +317,65 @@ describe('POST /api/admin/spark-enable', () => {
     // but link should still be attempted
     expect(mockProvisionSparkLink).toHaveBeenCalledOnce();
     expect(body.steps.link).toBe('ok');
+  });
+
+  // ── Audit logging ───────────────────────────────────────────────────────────
+  it('calls logAudit with action spark.enable and actorId from getUser when ok===true', async () => {
+    const ADMIN_USER_ID = 'admin-user-uuid-spark';
+    mockGuardPlatformAdmin.mockResolvedValue(null);
+
+    const { createAdminSupabaseClient, createServerSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(makeAdminMock() as never);
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: ADMIN_USER_ID } } }),
+      },
+    } as never);
+
+    mockProvisionSparkSchool.mockResolvedValue({ success: true, sparkSchoolId: 'spark-school-1' });
+    mockProvisionSparkLink.mockResolvedValue(undefined);
+
+    const { POST } = await import('@/app/api/admin/spark-enable/route');
+    const res = await POST(makeRequest({ school_id: 'school-1' }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+
+    expect(mockLogAudit).toHaveBeenCalledOnce();
+    expect(mockLogAudit).toHaveBeenCalledWith(
+      expect.anything(), // admin client
+      expect.objectContaining({
+        actorId: ADMIN_USER_ID,
+        schoolId: 'school-1',
+        action: 'spark.enable',
+        resourceType: 'school',
+        resourceId: 'school-1',
+        metadata: expect.objectContaining({ school_id: 'school-1' }),
+      }),
+    );
+  });
+
+  it('does NOT call logAudit when ok===false (a step failed)', async () => {
+    mockGuardPlatformAdmin.mockResolvedValue(null);
+
+    const { createAdminSupabaseClient, createServerSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(makeAdminMock() as never);
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'admin-uuid' } } }),
+      },
+    } as never);
+
+    // Fail the SPARK step → ok===false
+    mockProvisionSparkSchool.mockResolvedValue({ success: false, error: 'SPARK HTTP 503' });
+    mockProvisionSparkLink.mockResolvedValue(undefined);
+
+    const { POST } = await import('@/app/api/admin/spark-enable/route');
+    const res = await POST(makeRequest({ school_id: 'school-1' }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+
+    expect(mockLogAudit).not.toHaveBeenCalled();
   });
 });

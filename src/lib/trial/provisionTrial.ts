@@ -114,7 +114,7 @@ export async function provisionTrial(input: ProvisionTrialInput): Promise<Provis
       {
         school_id: schoolId,
         tier: 'professional',
-        status: 'trialing', // 'trialing' bypasses the enrollment seat-cap trigger
+        status: 'trialing', // enforced by the seat-cap trigger as of migration 0026; default student_limit 300 gives pilots ample headroom
         student_limit: studentLimit,
         trial_starts_at: now.toISOString(),
         trial_ends_at: trialExpiresAt.toISOString(),

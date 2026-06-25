@@ -6,6 +6,7 @@ import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/sup
 import { STAFF_ROLES } from '@/lib/auth/roles';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { recomputeSkillStatesForStudent } from '@/lib/skills/recomputeSkillStates';
+import { logAudit } from '@/lib/audit/logAudit';
 
 type Body = { attempt_id?: string; teacher_score?: number | null; teacher_notes?: string | null; allow_redo?: boolean };
 const MAX_NOTES = 2000;
@@ -47,6 +48,9 @@ export async function POST(req: Request) {
     const guard = await guardClassAccess(asg.class_id);
     if (guard) return guard;
 
+    const { data: clsRow } = await admin.from('classes').select('school_id').eq('id', asg.class_id).maybeSingle();
+    const schoolId = (clsRow as { school_id?: string | null } | null)?.school_id ?? null;
+
     // 409 only when a GRADE override targets a non-graded attempt.
     if (hasScore && body.teacher_score != null && attempt.status !== 'graded')
       return NextResponse.json({ error: 'not_graded' }, { status: 409 });
@@ -58,6 +62,20 @@ export async function POST(req: Request) {
     // Fail loud on a write error — never return 200 on a silent grade-write failure (I1).
     const { error: writeErr } = await admin.from('homework_attempts').update(patch).eq('id', attempt.id);
     if (writeErr) return NextResponse.json({ error: 'Server error' }, { status: 500 });
+
+    try {
+      await logAudit(admin, {
+        actorId: user.id,
+        schoolId,
+        action: 'grade.override',
+        resourceType: 'homework_attempt',
+        resourceId: attempt.id,
+        metadata: {
+          before: { teacher_score: attempt.teacher_score, score_pct: attempt.score_pct },
+          after: { teacher_score: hasScore ? body.teacher_score : attempt.teacher_score, allow_redo: hasRedo ? body.allow_redo : undefined, notes_changed: hasNotes },
+        },
+      });
+    } catch (err) { console.warn('[gradebook-override] audit failed (non-fatal):', err); }
 
     after(async () => {
       try { await recomputeSkillStatesForStudent(admin, { studentId: attempt.student_id, schoolId: null }); }

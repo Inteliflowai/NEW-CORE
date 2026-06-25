@@ -5,15 +5,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { guardPlatformAdmin } from '@/lib/auth/guards';
-import { createAdminSupabaseClient } from '@/lib/supabase/server';
+import { createAdminSupabaseClient, createServerSupabaseClient } from '@/lib/supabase/server';
 import { provisionSparkSchool } from '@/lib/spark/provisionSparkSchool';
 import { provisionSparkLink } from '@/lib/spark/sparkLink';
+import { logAudit } from '@/lib/audit/logAudit';
 
 const CORE_BASE_URL = 'https://newcore.inteliflowai.com';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const guard = await guardPlatformAdmin();
   if (guard) return guard;
+
+  // Obtain actor id — guardPlatformAdmin does NOT expose the caller id.
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
   let body: { school_id?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'Malformed JSON' }, { status: 400 }); }
@@ -54,5 +59,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   } catch (e) { steps.license = `failed: ${(e as Error).message}`; }
 
   const ok = sparkRes.success && steps.link === 'ok' && (steps.license === 'ok' || steps.license.startsWith('skipped'));
+
+  if (ok) {
+    await logAudit(admin, {
+      actorId: user?.id ?? null,
+      schoolId: school.id as string,
+      action: 'spark.enable',
+      resourceType: 'school',
+      resourceId: school.id as string,
+      metadata: { school_id: school.id },
+    });
+  }
+
   return NextResponse.json({ ok, spark_school_id: sparkRes.sparkSchoolId ?? null, steps });
 }
