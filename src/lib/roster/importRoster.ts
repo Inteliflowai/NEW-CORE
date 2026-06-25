@@ -308,9 +308,15 @@ export async function importRoster(
       });
 
       if (insErr) {
-        summary.enrollments.errors++;
-        console.error('[roster-import] Enrollment insert error for', studentLower, ':', insErr);
-        summary.issues.push(`Enrollment: could not enroll '${studentLower}' (a database error occurred).`);
+        // 23514 = check_violation — seat cap; count as a skip, not an error.
+        const code = (insErr as { code?: string }).code;
+        if (code === '23514') {
+          summary.issues.push(`Seat limit reached for this school's license — '${studentLower}' was not enrolled.`);
+        } else {
+          summary.enrollments.errors++;
+          console.error('[roster-import] Enrollment insert error for', studentLower, ':', insErr);
+          summary.issues.push(`Enrollment: could not enroll '${studentLower}' (a database error occurred).`);
+        }
         continue;
       }
       summary.enrollments.created++;
