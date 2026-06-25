@@ -80,4 +80,37 @@ describe('proxy (auth gate + session refresh)', () => {
     const res = await proxy(req('/login'));
     expect(res.headers.get('location')).toBeNull();
   });
+
+  it('diverts an unauthenticated /?gc= link to the launch initiator', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await proxy(req('/?gc=assignment&id=L1'));
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe('https://app.test/api/auth/google/launch?gc=assignment&id=L1');
+  });
+  it('an invalid gc on / still goes to /login', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await proxy(req('/?gc=bogus&id=L1'));
+    expect(res.headers.get('location')).toBe('https://app.test/login');
+  });
+  it('lets the launch callback through when it carries a launch: state', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await proxy(req('/api/auth/google/callback?state=launch:abc&code=x'));
+    expect(res.headers.get('location')).toBeNull();
+  });
+  it('still gates the callback (no launch state) to /login?expired=true', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await proxy(req('/api/auth/google/callback?state=csrf&code=x'));
+    expect(res.headers.get('location')).toBe('https://app.test/login?expired=true');
+  });
+  it('passes /launch/unmatched through unauthenticated (public)', async () => {
+    getUser.mockResolvedValue({ data: { user: null } });
+    const res = await proxy(req('/launch/unmatched'));
+    expect(res.headers.get('location')).toBeNull();
+  });
+  it('an authenticated student\'s /?gc= falls through to page.tsx (no role redirect)', async () => {
+    userRole = 'student';
+    getUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
+    const res = await proxy(req('/?gc=assignment&id=L1'));
+    expect(res.headers.get('location')).toBeNull();
+  });
 });
