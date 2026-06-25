@@ -191,4 +191,64 @@ describe('QuizLibrary', () => {
     const publishBtn = dialog.getByRole('button', { name: /Publish for students/i });
     expect(publishBtn).not.toBeDisabled();
   });
+
+  // ── Google Classroom publish state ───────────────────────────────────────────
+  it('a quiz in publishedQuizIds (with googleCourseId) shows "✓ In Google Classroom" — not a button', () => {
+    render(
+      <QuizLibrary
+        data={data()}
+        classId="c1"
+        now={FIXED_NOW}
+        googleCourseId="gc-course-1"
+        publishedQuizIds={['q1']}
+      />,
+    );
+    // The already-published row shows the indicator text.
+    expect(screen.getByText('✓ In Google Classroom')).toBeInTheDocument();
+    // The indicator is NOT a button.
+    const indicator = screen.getByText('✓ In Google Classroom');
+    expect(indicator.tagName.toLowerCase()).not.toBe('button');
+    expect(indicator).not.toHaveAttribute('onclick');
+  });
+
+  it('a quiz NOT in publishedQuizIds (with googleCourseId) shows the "Publish to Classroom" button', () => {
+    render(
+      <QuizLibrary
+        data={data()}
+        classId="c1"
+        now={FIXED_NOW}
+        googleCourseId="gc-course-1"
+        publishedQuizIds={['q1']}
+      />,
+    );
+    // q2 and q3 are not published — they should each have the publish button.
+    const publishBtns = screen.getAllByRole('button', { name: /Publish to Classroom/i });
+    expect(publishBtns.length).toBeGreaterThanOrEqual(1);
+    // "✓ In Google Classroom" appears exactly once (only for q1).
+    expect(screen.getAllByText('✓ In Google Classroom')).toHaveLength(1);
+  });
+
+  it('after clicking Publish and the fetch resolves {ok:true} the row shows "✓ In Google Classroom"', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <QuizLibrary
+        data={data()}
+        classId="c1"
+        now={FIXED_NOW}
+        googleCourseId="gc-course-1"
+        publishedQuizIds={[]}
+      />,
+    );
+    // Click the "Publish to Classroom" button for q2 (Cells — Check row)
+    const publishBtns = screen.getAllByRole('button', { name: /Publish to Classroom/i });
+    fireEvent.click(publishBtns[0]);
+    // After the fetch resolves, the row should show the indicator.
+    await vi.waitFor(() => expect(screen.getByText('✓ In Google Classroom')).toBeInTheDocument());
+    // "Publish to Classroom" for that row is gone (it is now the indicator).
+    // There may be fewer publish buttons (or none if only one quiz had the button).
+  });
 });

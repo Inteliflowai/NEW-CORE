@@ -50,12 +50,16 @@ function LessonRow({
   onView,
   gcState,
   onPublishToClassroom,
+  isAlreadyPublished,
 }: {
   lesson: LessonLibRow;
   classId: string;
   onView: () => void;
   gcState?: GcPublishState;
   onPublishToClassroom?: () => void;
+  /** True when this lesson was already published to Classroom (from server-fetched publishedLessonIds).
+   *  Shows "✓ In Google Classroom" instead of the publish button. */
+  isAlreadyPublished?: boolean;
 }): React.JSX.Element {
   const pill = statusPill(lesson.status);
   const meta = [lesson.subject, lesson.grade_level ? `Grade ${lesson.grade_level}` : null]
@@ -97,11 +101,13 @@ function LessonRow({
         >
           {hasQuiz ? 'Open quiz' : 'Make a quiz'}
         </Link>
-        {/* GC publish — gated on presence of onPublishToClassroom (passed only when googleCourseId is set) */}
+        {/* GC publish — gated on presence of onPublishToClassroom (passed only when googleCourseId is set).
+            Already-published rows (isAlreadyPublished or optimistic 'done') show a static
+            "✓ In Google Classroom" indicator instead of the publish button. */}
         {onPublishToClassroom && (
           <>
-            {rowGcState === 'done' ? (
-              <span className="text-sm text-fg-muted">Sent to Classroom</span>
+            {isAlreadyPublished || rowGcState === 'done' ? (
+              <span className="text-sm text-fg-muted">✓ In Google Classroom</span>
             ) : rowGcState === 'needsReconnect' ? (
               <a
                 href="/settings/google"
@@ -133,6 +139,7 @@ export function LessonLibrary({
   now,
   onCreate,
   googleCourseId,
+  publishedLessonIds,
 }: {
   data: LessonLibraryData;
   classes?: LibraryClassOption[];
@@ -143,6 +150,9 @@ export function LessonLibrary({
   /** When set, shows "Publish to Classroom" on each row (fetched server-side via admin client).
    *  Absent/null → the action is hidden (class is not GC-mirrored). */
   googleCourseId?: string | null;
+  /** Lesson ids already published to Classroom for this class (fetched server-side via admin client).
+   *  A lesson whose id is in this list shows "✓ In Google Classroom" instead of the publish button. */
+  publishedLessonIds?: string[];
 }): React.JSX.Element {
   const clock = now ?? new Date();
   const [query, setQuery] = useState('');
@@ -152,6 +162,8 @@ export function LessonLibrary({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Per-lesson GC publish state (keyed by lesson id).
   const [gcState, setGcState] = useState<Record<string, GcPublishState>>({});
+  // Set of lesson ids already published to Classroom (from server-fetched publishedLessonIds).
+  const publishedSet = useMemo(() => new Set(publishedLessonIds ?? []), [publishedLessonIds]);
 
   async function publishLessonToClassroom(lessonId: string) {
     if (gcState[lessonId] === 'busy') return;
@@ -281,6 +293,7 @@ export function LessonLibrary({
                   onView={() => setSelectedId(l.id)}
                   gcState={gcState[l.id]}
                   onPublishToClassroom={googleCourseId ? () => void publishLessonToClassroom(l.id) : undefined}
+                  isAlreadyPublished={publishedSet.has(l.id)}
                 />
               ))}
             </section>

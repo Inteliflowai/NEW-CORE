@@ -119,7 +119,7 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
 
     fireEvent.click(screen.getByRole('button', { name: /publish to classroom/i }));
 
-    await waitFor(() => expect(screen.getByText(/sent to classroom/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('✓ In Google Classroom')).toBeInTheDocument());
   });
 
   it('shows a "Reconnect Google" link when needsReconnect:true is returned', async () => {
@@ -174,7 +174,7 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
     await waitFor(() =>
       expect(screen.getByRole('link', { name: /reconnect google/i })).toBeInTheDocument(),
     );
-    expect(screen.queryByText(/sent to classroom/i)).toBeNull();
+    expect(screen.queryByText('✓ In Google Classroom')).toBeNull();
   });
 
   // plain failure: non-ok with no reconnect fields → button stays (idle), NOT "Sent to Classroom"
@@ -201,7 +201,7 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
     await waitFor(() =>
       expect(screen.getByRole('button', { name: /publish to classroom/i })).toBeInTheDocument(),
     );
-    expect(screen.queryByText(/sent to classroom/i)).toBeNull();
+    expect(screen.queryByText('✓ In Google Classroom')).toBeNull();
     expect(screen.queryByRole('link', { name: /reconnect google/i })).toBeNull();
   });
 });

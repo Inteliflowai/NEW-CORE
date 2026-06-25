@@ -53,6 +53,9 @@ export interface QuizLibraryProps {
   /** When set, shows "Publish to Classroom" on each row (fetched server-side via admin client).
    *  Absent/null → the action is hidden (class is not GC-mirrored). */
   googleCourseId?: string | null;
+  /** Quiz ids already published to Classroom for this class (fetched server-side via admin client).
+   *  A quiz whose id is in this list shows "✓ In Google Classroom" instead of the publish button. */
+  publishedQuizIds?: string[];
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -77,7 +80,7 @@ function isBuilding(row: QuizLibRow): boolean {
 /** Per-quiz GC publish state: idle | busy | done | needsReconnect. */
 type GcPublishState = 'idle' | 'busy' | 'done' | 'needsReconnect';
 
-export function QuizLibrary({ data, classId, questions, classes = [], now, googleCourseId }: QuizLibraryProps) {
+export function QuizLibrary({ data, classId, questions, classes = [], now, googleCourseId, publishedQuizIds }: QuizLibraryProps) {
   const clock = now ?? new Date();
   const [search, setSearch] = useState('');
   // Calendar buckets (shared with the Lesson Library) so "Today"/"This week" mean the same on both.
@@ -87,6 +90,8 @@ export function QuizLibrary({ data, classId, questions, classes = [], now, googl
   const [selectedId, setSelectedId] = useState<string | null>(null);
   // Per-quiz GC publish state (keyed by quiz id).
   const [gcState, setGcState] = useState<Record<string, GcPublishState>>({});
+  // Set of quiz ids already published to Classroom (from server-fetched publishedQuizIds).
+  const publishedSet = useMemo(() => new Set(publishedQuizIds ?? []), [publishedQuizIds]);
 
   async function publishToClassroom(quizId: string) {
     if (gcState[quizId] === 'busy') return;
@@ -207,11 +212,13 @@ export function QuizLibrary({ data, classId, questions, classes = [], now, googl
                           )}
                         </span>
                       </button>
-                      {/* GC publish — gated on googleCourseId (threaded from server page) */}
+                      {/* GC publish — gated on googleCourseId (threaded from server page).
+                          Already-published rows (publishedSet or optimistic 'done') show a static
+                          "✓ In Google Classroom" indicator instead of the publish button. */}
                       {googleCourseId && (
                         <div className="flex items-center gap-2 px-1">
-                          {gcRowState === 'done' ? (
-                            <span className="text-sm text-fg-muted">Sent to Classroom</span>
+                          {publishedSet.has(row.id) || gcRowState === 'done' ? (
+                            <span className="text-sm text-fg-muted">✓ In Google Classroom</span>
                           ) : gcRowState === 'needsReconnect' ? (
                             <a
                               href="/settings/google"
