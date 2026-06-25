@@ -71,6 +71,15 @@ function fakeAdmin(opts: {
           },
           upsert(row: unknown, _opts?: unknown) {
             upserts.push(row);
+            // Simulate DB 23502 NOT NULL violation when the caller sets max_points to an explicit
+            // null (as the pre-fix code did for quizzes). The column is NOT NULL DEFAULT 100; an
+            // explicit null bypasses the default. This makes the test pin the M1 bug: without the
+            // fix the quiz publish would throw; with the fix the key is absent and this branch
+            // is never taken.
+            const r = row as Record<string, unknown>;
+            if ('max_points' in r && r.max_points === null) {
+              return Promise.resolve({ error: { code: '23502', message: 'null value in column "max_points" of relation "google_publications"' } });
+            }
             return Promise.resolve({ error: null });
           },
           insert(row: unknown) {
@@ -162,7 +171,7 @@ describe('publishToClassroom — re-publish (idempotent)', () => {
 });
 
 describe('publishToClassroom — quiz', () => {
-  it('sets grade_passback_enabled:false and passes maxPoints:null to createCourseWork', async () => {
+  it('sets grade_passback_enabled:false, passes maxPoints:null to GC, and does NOT include max_points key in the DB upsert row (M1-fix: avoids 23502)', async () => {
     createCourseWork.mockResolvedValueOnce({ id: 'cw-quiz' });
     createCourseWorkMaterial.mockResolvedValueOnce({ id: 'mat-quiz' });
     const admin = fakeAdmin({ existingPub: null, existingLink: null });
@@ -175,13 +184,18 @@ describe('publishToClassroom — quiz', () => {
     };
     const result = await publishToClassroom(admin as never, quizArgs);
 
+    // The function MUST succeed — if max_points were present with null the fakeAdmin upsert
+    // returns a 23502 error, publishToClassroom throws, and the test fails. That is the pin.
     expect(result.alreadyPublished).toBe(false);
     expect(result.google_coursework_id).toBe('cw-quiz');
 
     const upserted = admin.upserts[0] as Record<string, unknown>;
     expect(upserted.grade_passback_enabled).toBe(false);
+    // max_points key must be ABSENT from the row (not null — absent); the DB default (100)
+    // applies. Regression pin: this fails if the bug is reintroduced.
+    expect('max_points' in upserted).toBe(false);
 
-    // createCourseWork receives null maxPoints for quizzes
+    // createCourseWork still receives null maxPoints for quizzes (GC API, not DB).
     const [, , cwArgs] = createCourseWork.mock.calls[0];
     expect(cwArgs.maxPoints).toBeNull();
   });

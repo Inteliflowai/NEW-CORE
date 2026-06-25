@@ -385,6 +385,48 @@ describe('GradebookGrid — Send grades to Classroom', () => {
     const link = await screen.findByRole('link', { name: /reconnect google/i });
     expect(link).toHaveAttribute('href', '/settings/google');
   });
+
+  // M4-fix: {connected:false} at HTTP 200 → must show Reconnect CTA, not generic error
+  it('renders a "Reconnect Google" link when {connected:false} is returned (M4-fix)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ connected: false }),
+    }));
+
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /send grades to classroom/i }));
+
+    const link = await screen.findByRole('link', { name: /reconnect google/i });
+    expect(link).toHaveAttribute('href', '/settings/google');
+    // Must NOT show the generic error text
+    expect(screen.queryByText(/something went wrong/i)).toBeNull();
+  });
+
+  // plain failure: non-ok with no reconnect/connected fields → generic error text, NOT Reconnect
+  it('renders generic error text on a plain non-ok failure with no reconnect fields', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'internal server error' }),
+    }));
+
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /send grades to classroom/i }));
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /reconnect google/i })).toBeNull();
+  });
 });
 
 describe('GradebookGrid — cell tooltip a11y', () => {

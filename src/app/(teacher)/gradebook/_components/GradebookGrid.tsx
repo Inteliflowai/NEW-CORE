@@ -204,6 +204,9 @@ export function GradebookGrid({ data, googleCourseId, publishedLessonIds }: Grad
             not_posted_in_classroom: body.not_posted_in_classroom ?? false,
           },
         }));
+      } else if (body.connected === false) {
+        // gcErrorResponse({connected:false}) arrives at HTTP 200 — treat as needsReconnect (M4-fix).
+        setPassbackState((s) => ({ ...s, [key]: { status: 'needsReconnect' } }));
       } else {
         setPassbackState((s) => ({ ...s, [key]: { status: 'error' } }));
       }

@@ -97,13 +97,15 @@ export function QuizLibrary({ data, classId, questions, classes = [], now, googl
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ classId, resourceType: 'quiz', resourceId: quizId }),
       });
-      const json = await res.json() as { needsReconnect?: boolean };
-      if (!res.ok && json.needsReconnect) {
+      const json = await res.json() as { ok?: boolean; needsReconnect?: boolean; connected?: boolean };
+      // gcErrorResponse returns HTTP 200 for typed GC errors (connected:false / needsReconnect:true).
+      // Checking res.ok first would miss those — branch on the body fields (M3-fix).
+      if (json.needsReconnect === true || json.connected === false) {
         setGcState((s) => ({ ...s, [quizId]: 'needsReconnect' }));
-      } else if (!res.ok) {
-        setGcState((s) => ({ ...s, [quizId]: 'idle' }));
-      } else {
+      } else if (res.ok && json.ok) {
         setGcState((s) => ({ ...s, [quizId]: 'done' }));
+      } else {
+        setGcState((s) => ({ ...s, [quizId]: 'idle' }));
       }
     } catch {
       setGcState((s) => ({ ...s, [quizId]: 'idle' }));

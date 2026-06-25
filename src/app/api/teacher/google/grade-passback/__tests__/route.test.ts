@@ -204,8 +204,8 @@ describe('POST /api/teacher/google/grade-passback', () => {
       }),
     );
 
-    // No errors → last_sync_error update NOT called
-    expect(updatePub).not.toHaveBeenCalled();
+    // Clean run (errors=0) → update IS called to clear any stale last_sync_error (minor-fix).
+    expect(updatePub).toHaveBeenCalledWith('id', 'pub1');
   });
 
   // last_sync_error written when errors > 0

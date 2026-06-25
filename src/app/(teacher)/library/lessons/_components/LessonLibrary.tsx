@@ -162,13 +162,15 @@ export function LessonLibrary({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ classId: data.class_id, resourceType: 'assignment', resourceId: lessonId }),
       });
-      const json = await res.json() as { needsReconnect?: boolean };
-      if (!res.ok && json.needsReconnect) {
+      const json = await res.json() as { ok?: boolean; needsReconnect?: boolean; connected?: boolean };
+      // gcErrorResponse returns HTTP 200 for typed GC errors (connected:false / needsReconnect:true).
+      // Checking res.ok first would miss those — branch on the body fields (M3-fix).
+      if (json.needsReconnect === true || json.connected === false) {
         setGcState((s) => ({ ...s, [lessonId]: 'needsReconnect' }));
-      } else if (!res.ok) {
-        setGcState((s) => ({ ...s, [lessonId]: 'idle' }));
-      } else {
+      } else if (res.ok && json.ok) {
         setGcState((s) => ({ ...s, [lessonId]: 'done' }));
+      } else {
+        setGcState((s) => ({ ...s, [lessonId]: 'idle' }));
       }
     } catch {
       setGcState((s) => ({ ...s, [lessonId]: 'idle' }));

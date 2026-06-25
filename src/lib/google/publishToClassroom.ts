@@ -62,21 +62,28 @@ export async function publishToClassroom(admin: SupabaseClient, args: PublishArg
     courseworkId = cw.id;
 
     // 3. Upsert into google_publications.
-    await admin.from('google_publications').upsert(
-      {
-        school_id: args.schoolId,
-        class_id: args.classId,
-        resource_type: args.resourceType,
-        resource_id: args.resourceId,
-        google_course_id: args.googleCourseId,
-        google_coursework_id: courseworkId,
-        grade_passback_enabled: args.resourceType === 'assignment',
-        max_points: args.resourceType === 'assignment' ? (args.maxPoints ?? 100) : null,
-        created_by: args.createdBy, // M4
-        updated_at: new Date().toISOString(),
-      },
+    // max_points is NOT NULL DEFAULT 100 in the DB; passing an explicit JS null bypasses the
+    // column default and causes a 23502 NOT NULL violation for quizzes. Build the row without
+    // max_points and add it ONLY for assignments so quizzes rely on the column default (M1-fix).
+    const row: Record<string, unknown> = {
+      school_id: args.schoolId,
+      class_id: args.classId,
+      resource_type: args.resourceType,
+      resource_id: args.resourceId,
+      google_course_id: args.googleCourseId,
+      google_coursework_id: courseworkId,
+      grade_passback_enabled: args.resourceType === 'assignment',
+      created_by: args.createdBy, // M4
+      updated_at: new Date().toISOString(),
+    };
+    if (args.resourceType === 'assignment') row.max_points = args.maxPoints ?? 100;
+    const { error: upsertError } = await admin.from('google_publications').upsert(
+      row,
       { onConflict: 'resource_type,resource_id,google_course_id' },
     );
+    if (upsertError) {
+      throw new Error(`[gc] publications upsert failed: ${(upsertError as { message?: string }).message ?? 'unknown'}`);
+    }
   }
 
   // 4. Pin the "Open in CORE" courseWorkMaterials link once per course.

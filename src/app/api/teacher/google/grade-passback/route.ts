@@ -82,12 +82,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       maxPoints: publication.max_points,
     });
 
-    if (result.errors > 0) {
-      await admin
-        .from('google_publications')
-        .update({ last_sync_error: `${result.errors} grade(s) failed`, updated_at: new Date().toISOString() })
-        .eq('id', publication.id);
-    }
+    // Always update so a stale last_sync_error is cleared on a clean run (minor-fix).
+    await admin
+      .from('google_publications')
+      .update({
+        last_sync_error: result.errors > 0 ? `${result.errors} grade(s) failed` : null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', publication.id);
 
     await logAudit(admin, {
       actorId: user.id,

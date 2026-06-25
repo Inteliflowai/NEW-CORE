@@ -59,8 +59,9 @@ beforeEach(() => {
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
   single.mockResolvedValue({ data: { role: 'teacher', school_id: 's1' }, error: null });
   classRow.mockResolvedValue({ data: { id: 'cl1', teacher_id: 't1', school_id: 's1', google_course_id: 'gc1' }, error: null });
-  quizRow.mockResolvedValue({ data: { id: 'qz1', title: 'Chapter 3 Quiz' }, error: null });
-  lessonRow.mockResolvedValue({ data: { id: 'ls1', title: 'Intro to Fractions' }, error: null });
+  // Include class_id in quiz/lesson rows so the IDOR scope check (M2) passes by default.
+  quizRow.mockResolvedValue({ data: { id: 'qz1', title: 'Chapter 3 Quiz', class_id: 'cl1' }, error: null });
+  lessonRow.mockResolvedValue({ data: { id: 'ls1', title: 'Intro to Fractions', class_id: 'cl1' }, error: null });
   guard.mockResolvedValue(null); // allow by default
   getToken.mockResolvedValue('tok-abc');
   publishFn.mockResolvedValue({ google_coursework_id: 'cw1', alreadyPublished: false, courseLinkPinned: true });
@@ -203,6 +204,23 @@ describe('POST /api/teacher/google/publish', () => {
     expect(res.status).toBe(200); // gcErrorResponse returns HTTP 200 for typed GC errors
     const body = await res.json();
     expect(body).toEqual({ connected: false });
+    expect(publishFn).not.toHaveBeenCalled();
+  });
+
+  // M2: IDOR — resourceId whose class_id ≠ body classId must 404 and NOT call publishToClassroom
+  it('404 when quiz class_id does not match body classId (IDOR scope guard, M2)', async () => {
+    quizRow.mockResolvedValueOnce({ data: { id: 'qz-other', title: 'Other Quiz', class_id: 'different-class' }, error: null });
+    const { POST } = await import('@/app/api/teacher/google/publish/route');
+    const res = await POST(req({ classId: 'cl1', resourceType: 'quiz', resourceId: 'qz-other' }));
+    expect(res.status).toBe(404);
+    expect(publishFn).not.toHaveBeenCalled();
+  });
+
+  it('404 when lesson class_id does not match body classId (IDOR scope guard, M2)', async () => {
+    lessonRow.mockResolvedValueOnce({ data: { id: 'ls-other', title: 'Other Lesson', class_id: 'different-class' }, error: null });
+    const { POST } = await import('@/app/api/teacher/google/publish/route');
+    const res = await POST(req({ classId: 'cl1', resourceType: 'assignment', resourceId: 'ls-other' }));
+    expect(res.status).toBe(404);
     expect(publishFn).not.toHaveBeenCalled();
   });
 });

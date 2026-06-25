@@ -50,17 +50,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!cls) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!cls.google_course_id) return NextResponse.json({ error: 'Not a Google-mirrored class' }, { status: 400 });
 
-  // ── Resolve unit title ─────────────────────────────────────────────────────
-  // quiz → quizzes.title; assignment → lessons.title (resourceId = lessons.id, C1)
+  // ── Resolve unit title (with IDOR scope check, M2) ────────────────────────
+  // quiz → quizzes; assignment → lessons (resourceId = lessons.id, C1).
+  // Select class_id alongside title so we can reject resources that don't belong to the
+  // gated class — guardClassAccess gates the class but not the child resource.
   let title: string;
   if (resourceType === 'quiz') {
-    const { data: quiz } = await admin.from('quizzes').select('title').eq('id', resourceId).maybeSingle();
-    if (!quiz) return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
-    title = quiz.title as string;
+    const { data: quiz } = await admin.from('quizzes').select('title, class_id').eq('id', resourceId).maybeSingle();
+    if (!quiz || (quiz as { class_id: string }).class_id !== classId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    title = (quiz as { title: string }).title;
   } else {
-    const { data: lesson } = await admin.from('lessons').select('title').eq('id', resourceId).maybeSingle();
-    if (!lesson) return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
-    title = lesson.title as string;
+    const { data: lesson } = await admin.from('lessons').select('title, class_id').eq('id', resourceId).maybeSingle();
+    if (!lesson || (lesson as { class_id: string }).class_id !== classId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+    title = (lesson as { title: string }).title;
   }
 
   // ── Build CORE deep-links (C5) ─────────────────────────────────────────────

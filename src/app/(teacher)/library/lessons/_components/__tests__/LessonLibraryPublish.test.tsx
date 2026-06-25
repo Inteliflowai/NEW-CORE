@@ -153,4 +153,63 @@ describe('LessonLibrary — Publish to Classroom (gated on googleCourseId)', () 
       screen.getByRole('link', { name: /reconnect google/i }),
     ).toHaveAttribute('href', '/settings/google');
   });
+
+  // M3-fix: gcErrorResponse returns HTTP 200 {connected:false} — must show Reconnect, NOT "Sent to Classroom"
+  it('shows a "Reconnect Google" link when {connected:false} is returned at HTTP 200 (M3-fix)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true, // HTTP 200 — the old branch on !res.ok would have missed this
+        json: async () => ({ connected: false }),
+      }),
+    );
+
+    render(
+      <LessonLibrary
+        data={data()}
+        now={NOW}
+        googleCourseId="gc-course-123"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /reconnect google/i })).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/sent to classroom/i)).toBeNull();
+  });
+
+  // plain failure: non-ok with no reconnect fields → button stays (idle), NOT "Sent to Classroom"
+  it('stays idle (button visible) on a plain non-ok failure with no reconnect fields', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({ error: 'something went wrong' }),
+      }),
+    );
+
+    render(
+      <LessonLibrary
+        data={data()}
+        now={NOW}
+        googleCourseId="gc-course-123"
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/sent to classroom/i)).toBeNull();
+    expect(screen.queryByRole('link', { name: /reconnect google/i })).toBeNull();
+  });
 });
