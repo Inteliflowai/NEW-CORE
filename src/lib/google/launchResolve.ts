@@ -24,7 +24,9 @@ export async function deriveResourceSchool(
 
 /** Resolve the student's OWN deep-link destination for a launched resource.
  *  assignment → the student's assignments row for that lesson → /student/assignments/<rowId>
- *    (the lookup IS an ownership proof; none → the list). quiz → /student/quiz (param-less page).
+ *    (the lookup IS an ownership proof; none → the list). quiz → /student/quiz?quizId=<id>
+ *    (the EXACT published quiz; the student-quiz route re-gates published + active-enrollment, so
+ *    the public link id can never surface a draft or a quiz outside the student's enrolled classes).
  *  LIMITATION (m8): a lesson can fan out to multiple per-student assignment rows (multi-day, or an
  *  A.2 Reinforce easier-work row mastery_band='reteach'); GC publish is lesson-keyed so the link
  *  can't distinguish them — this resolves to the MOST-RECENT row for the lesson, else the list.
@@ -46,5 +48,5 @@ export async function resolveGcDeepLink(
     const rowId = (data as { id?: string } | null)?.id;
     return rowId ? `/student/assignments/${rowId}` : '/student/assignments';
   }
-  return '/student/quiz';
+  return `/student/quiz?quizId=${encodeURIComponent(args.id)}`;
 }

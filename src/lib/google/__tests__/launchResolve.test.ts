@@ -40,8 +40,8 @@ describe('resolveGcDeepLink', () => {
     const admin = adminWith([null]);
     expect(await resolveGcDeepLink(admin, { studentId: 'stu1', gc: 'assignment', id: 'L1' })).toBe('/student/assignments');
   });
-  it('quiz → /student/quiz', async () => {
+  it('quiz → /student/quiz?quizId=<id> (the exact quiz)', async () => {
     const admin = adminWith([]); // no DB read for quiz
-    expect(await resolveGcDeepLink(admin, { studentId: 'stu1', gc: 'quiz', id: 'Q1' })).toBe('/student/quiz');
+    expect(await resolveGcDeepLink(admin, { studentId: 'stu1', gc: 'quiz', id: 'Q1' })).toBe('/student/quiz?quizId=Q1');
   });
 });

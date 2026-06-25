@@ -11,7 +11,14 @@ import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { gradeTextToTier } from '@/lib/quiz/gradeTextToTier';
 import { QuizRunner } from './_components/QuizRunner';
 
-export default async function StudentQuizPage(): Promise<React.JSX.Element> {
+export default async function StudentQuizPage({
+  searchParams,
+}: {
+  // ?quizId= arrives from the Google Classroom silent-SSO deep-link (Seg 4) so the student lands on
+  // the EXACT published quiz. The student-quiz route re-gates published + active-enrollment.
+  searchParams: Promise<{ quizId?: string }>;
+}): Promise<React.JSX.Element> {
+  const { quizId } = await searchParams;
   // requireRole already returns schoolId + fullName from public.users.
   const { userId, schoolId, fullName } = await requireRole(['student']);
   const firstName = (fullName ?? '').trim().split(/\s+/)[0] || null;
@@ -33,6 +40,7 @@ export default async function StudentQuizPage(): Promise<React.JSX.Element> {
       schoolId={schoolId}
       tier={tier}
       firstName={firstName}
+      quizId={quizId ?? null}
     />
   );
 }

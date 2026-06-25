@@ -45,6 +45,9 @@ export interface QuizRunnerProps {
   schoolId: string | null;
   tier: 'elementary' | 'middle' | 'high';
   firstName: string | null;
+  // Optional exact-quiz deep-link target (Google Classroom silent-SSO launch, Seg 4). When set,
+  // the loader fetches that specific quiz (?quizId=); the route re-gates published + enrollment.
+  quizId?: string | null;
 }
 
 // ── Types matching Phase-2 API route responses (post-Task-2 shapes) ─────────
@@ -129,6 +132,7 @@ export function QuizRunner({
   schoolId: _schoolId,
   tier: _tier,
   firstName: _firstName,
+  quizId = null,
 }: QuizRunnerProps) {
   // ── Runner state ─────────────────────────────────────────────────────────
   const [runnerState, setRunnerState] = useState<RunnerState>('loading');
@@ -352,7 +356,7 @@ export function QuizRunner({
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch('/api/attempts/student-quiz');
+        const res = await fetch('/api/attempts/student-quiz' + (quizId ? `?quizId=${encodeURIComponent(quizId)}` : ''));
         if (!res.ok) { if (!cancelled) setRunnerState('no-quiz'); return; }
         const data: StudentQuizResponse = await res.json() as StudentQuizResponse;
         if (cancelled) return;
@@ -406,7 +410,7 @@ export function QuizRunner({
     }
     void load();
     return () => { cancelled = true; };
-  }, []);
+  }, [quizId]);
 
   // ── Start / resume quiz ────────────────────────────────────────────────
   const handleStart = useCallback(async () => {
