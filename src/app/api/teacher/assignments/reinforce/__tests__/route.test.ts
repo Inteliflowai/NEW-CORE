@@ -9,6 +9,10 @@
 //   - 404 assignment not found
 //   - Happy path: returns 202 immediately; after() callback calls generateAssignment with
 //     band='reteach' and inserts an assignments row with status='draft' + mastery_band='reteach'
+//   - SPARK: when getSparkLink returns a link, after() calls notifyAssignmentCreated with
+//     band='reteach' + new assignment id + writes spark_status
+//   - SPARK: when getSparkLink returns null, no notify happens but the assignment is still inserted
+//   - SPARK: a thrown SPARK error is swallowed; assignment insert already happened
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -38,10 +42,16 @@ const FAKE_ASSIGNMENT = {
   lessons: {
     parsed_content: { summary: 'Fractions basics', key_concepts: ['numerator'] },
     title: 'Fractions',
+    subject: 'Math',
+    grade_level: '5',
   },
 };
 
-const FAKE_STUDENT = { full_name: 'Sam Student' };
+const FAKE_STUDENT = {
+  full_name: 'Sam Student',
+  school_id: 'sch-1',
+  grade_level: '5',
+};
 
 const FAKE_GENERATED = {
   title: 'Reinforce: Fractions',
@@ -61,6 +71,13 @@ const FAKE_GENERATED = {
   support_note: 'Take your time.',
   atl_summary: ['Thinking'],
   ib_attributes: ['Thinkers'],
+};
+
+const FAKE_SPARK_RESULT = {
+  success: true,
+  sparkAssignmentId: 'spark-asg-1',
+  sparkAttemptId: 'spark-att-1',
+  syntheticExperimentId: 'spark-exp-1',
 };
 
 // ─── Supabase chain helpers ───────────────────────────────────────────────────
@@ -84,11 +101,11 @@ function makeChain(data: unknown, error: unknown = null) {
  *   1. users.select('role').eq('id', user.id)              → roleRow
  *   2. homework_attempts.select(...).eq('id', attempt_id)  → attempt
  *   3. assignments.select(...).eq('id', assignment_id)     → asgRow (with lessons join)
- *   4. users.select('full_name').eq('id', student_id)      → studentRow
- *   5. [in after()] assignments.insert(...)                → inserted row
+ *   4. users.select('full_name, school_id, grade_level').eq('id', student_id) → studentRow
+ *   5. [in after()] assignments.insert(...).select('id').single() → inserted row
+ *   6. [in after()] assignments.update({spark_*}).eq('id', new_id) → spark fields update
  *
- * Returns `{ mock, insertSpy }` so tests can inspect what was passed to assignments.insert
- * without re-calling from() (which would hand a fresh chain instance).
+ * Returns `{ mock, insertSpy, updateSpy }` so tests can inspect what was passed.
  */
 function makeAdminMock(opts: {
   roleRow?: unknown;
@@ -96,6 +113,7 @@ function makeAdminMock(opts: {
   asgRow?: unknown;
   studentRow?: unknown;
   insertError?: unknown;
+  insertedId?: string;
 } = {}) {
   const {
     roleRow = { role: 'teacher' },
@@ -103,14 +121,20 @@ function makeAdminMock(opts: {
     asgRow = FAKE_ASSIGNMENT,
     studentRow = FAKE_STUDENT,
     insertError = null,
+    insertedId = 'new-asg-1',
   } = opts;
 
   // Shared insert spy — accessible by the caller to assert what data was inserted.
   const insertSpy = vi.fn();
-  const insertChain = makeChain({ id: 'new-asg-1' }, insertError);
+  const insertChain = makeChain({ id: insertedId }, insertError);
   insertSpy.mockReturnValue(insertChain);
 
-  // We need two separate users chain responses: one for role, one for student name.
+  // Shared update spy — accessible to assert spark_* fields were written.
+  const updateSpy = vi.fn();
+  const updateChain = makeChain(null, null);
+  updateSpy.mockReturnValue(updateChain);
+
+  // We need two separate users chain responses: one for role, one for student.
   // Track call count on the users table to serve them in order.
   let userCallCount = 0;
 
@@ -119,20 +143,22 @@ function makeAdminMock(opts: {
       if (table === 'users') {
         userCallCount++;
         if (userCallCount === 1) return makeChain(roleRow); // role lookup
-        return makeChain(studentRow);                        // student name lookup
+        return makeChain(studentRow);                        // student lookup
       }
       if (table === 'homework_attempts') return makeChain(attempt);
       if (table === 'assignments') {
-        // Return asgRow for the SELECT read; the shared insertSpy for the INSERT
+        // Return asgRow for the SELECT read; the shared insertSpy for INSERT; updateSpy for UPDATE
         const readChain = makeChain(asgRow);
         readChain['insert'] = insertSpy;
+        readChain['update'] = updateSpy;
         return readChain;
       }
+      if (table === 'platform_links') return makeChain(null);
       return makeChain(null);
     }),
   };
 
-  return { mock, insertSpy };
+  return { mock, insertSpy, updateSpy };
 }
 
 // ─── Capture after() callback ────────────────────────────────────────────────
@@ -171,6 +197,16 @@ vi.mock('@/lib/engine/assignmentGen', () => ({
   generateAssignment: (...a: unknown[]) => mockGenerateAssignment(...a),
 }));
 
+const mockGetSparkLink = vi.fn();
+vi.mock('@/lib/spark/sparkLink', () => ({
+  getSparkLink: (...a: unknown[]) => mockGetSparkLink(...a),
+}));
+
+const mockNotifyAssignmentCreated = vi.fn();
+vi.mock('@/lib/spark/notifyAssignmentCreated', () => ({
+  notifyAssignmentCreated: (...a: unknown[]) => mockNotifyAssignmentCreated(...a),
+}));
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('POST /api/teacher/assignments/reinforce', () => {
@@ -178,6 +214,8 @@ describe('POST /api/teacher/assignments/reinforce', () => {
     capturedAfterCallback = null;
     mockGuardClassAccess.mockReset();
     mockGenerateAssignment.mockReset();
+    mockGetSparkLink.mockReset();
+    mockNotifyAssignmentCreated.mockReset();
     vi.resetModules();
   });
 
@@ -274,6 +312,7 @@ describe('POST /api/teacher/assignments/reinforce', () => {
     vi.mocked(createAdminSupabaseClient).mockReturnValue(mock as never);
     mockGuardClassAccess.mockResolvedValue(null);
     mockGenerateAssignment.mockResolvedValue(FAKE_GENERATED);
+    mockGetSparkLink.mockResolvedValue(null); // no SPARK for this test
 
     const { POST } = await import('@/app/api/teacher/assignments/reinforce/route');
     const res = await POST(makeRequest({ attempt_id: 'ha-1' }));
@@ -327,5 +366,91 @@ describe('POST /api/teacher/assignments/reinforce', () => {
 
     // Invoking the callback must NOT throw
     await expect(capturedAfterCallback!()).resolves.toBeUndefined();
+  });
+
+  // ── SPARK: link exists → notifyAssignmentCreated called with band='reteach' ──
+  it('after(): when SPARK link exists, calls notifyAssignmentCreated with band=reteach + new id and writes spark_status', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u-1' } }, error: null }) },
+    } as never);
+    const { mock, insertSpy, updateSpy } = makeAdminMock({ insertedId: 'new-asg-42' });
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(mock as never);
+    mockGuardClassAccess.mockResolvedValue(null);
+    mockGenerateAssignment.mockResolvedValue(FAKE_GENERATED);
+    mockGetSparkLink.mockResolvedValue({ api_key: 'k', core_base_url: 'https://spark.test', enabled: true });
+    mockNotifyAssignmentCreated.mockResolvedValue(FAKE_SPARK_RESULT);
+
+    const { POST } = await import('@/app/api/teacher/assignments/reinforce/route');
+    await POST(makeRequest({ attempt_id: 'ha-1' }));
+    await capturedAfterCallback!();
+
+    // insert was called
+    expect(insertSpy).toHaveBeenCalledOnce();
+
+    // getSparkLink was called with the school_id from the student row
+    expect(mockGetSparkLink).toHaveBeenCalledOnce();
+    expect(mockGetSparkLink.mock.calls[0][1]).toBe('sch-1');
+
+    // notifyAssignmentCreated was called with the right shape
+    expect(mockNotifyAssignmentCreated).toHaveBeenCalledOnce();
+    const notifyArg = mockNotifyAssignmentCreated.mock.calls[0][0] as Record<string, unknown>;
+    expect(notifyArg.coreHomeworkId).toBe('new-asg-42');
+    expect(notifyArg.studentId).toBe('stu-1');
+    expect(notifyArg.schoolId).toBe('sch-1');
+    expect(notifyArg.coreClassId).toBe('cls-1');
+    expect(notifyArg.band).toBe('reteach');
+
+    // update was called to write spark fields
+    expect(updateSpy).toHaveBeenCalledOnce();
+    const updateData = updateSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(updateData.spark_assignment_id).toBe('spark-asg-1');
+    expect(updateData.spark_status).toBe('created');
+  });
+
+  // ── SPARK: no link → notify NOT called, assignment still inserted ─────────────
+  it('after(): when getSparkLink returns null, notifyAssignmentCreated is not called and the assignment is still inserted', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u-1' } }, error: null }) },
+    } as never);
+    const { mock, insertSpy } = makeAdminMock();
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(mock as never);
+    mockGuardClassAccess.mockResolvedValue(null);
+    mockGenerateAssignment.mockResolvedValue(FAKE_GENERATED);
+    mockGetSparkLink.mockResolvedValue(null); // no SPARK school
+
+    const { POST } = await import('@/app/api/teacher/assignments/reinforce/route');
+    await POST(makeRequest({ attempt_id: 'ha-1' }));
+    await capturedAfterCallback!();
+
+    // insert still happened
+    expect(insertSpy).toHaveBeenCalledOnce();
+
+    // notify was NOT called
+    expect(mockNotifyAssignmentCreated).not.toHaveBeenCalled();
+  });
+
+  // ── SPARK: thrown SPARK error is swallowed, assignment insert already done ───
+  it('after(): a thrown SPARK error is swallowed and does not undo the assignment insert', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u-1' } }, error: null }) },
+    } as never);
+    const { mock, insertSpy } = makeAdminMock({ insertedId: 'new-asg-99' });
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(mock as never);
+    mockGuardClassAccess.mockResolvedValue(null);
+    mockGenerateAssignment.mockResolvedValue(FAKE_GENERATED);
+    mockGetSparkLink.mockResolvedValue({ api_key: 'k', core_base_url: 'https://spark.test', enabled: true });
+    mockNotifyAssignmentCreated.mockRejectedValue(new Error('SPARK exploded'));
+
+    const { POST } = await import('@/app/api/teacher/assignments/reinforce/route');
+    await POST(makeRequest({ attempt_id: 'ha-1' }));
+
+    // must not throw
+    await expect(capturedAfterCallback!()).resolves.toBeUndefined();
+
+    // insert happened before the SPARK call — it is done
+    expect(insertSpy).toHaveBeenCalledOnce();
   });
 });
