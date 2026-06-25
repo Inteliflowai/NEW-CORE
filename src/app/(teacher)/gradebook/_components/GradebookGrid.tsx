@@ -148,15 +148,69 @@ interface Selection {
   cell: DrillInCell;
 }
 
+/** Per-column passback state — null = not sent yet; holds the last result or an error tag. */
+type PassbackState =
+  | { status: 'sending' }
+  | { status: 'ok'; pushed: number; skipped_not_linked: number; not_posted_in_classroom: boolean }
+  | { status: 'needsReconnect' }
+  | { status: 'error' };
+
 export interface GradebookGridProps {
   data: Gradebook;
+  /** Set when the class is connected to Google Classroom. */
+  googleCourseId?: string | null;
+  /** lesson_ids that have been published to Classroom (from google_publications). */
+  publishedLessonIds?: string[];
 }
 
-export function GradebookGrid({ data }: GradebookGridProps) {
+export function GradebookGrid({ data, googleCourseId, publishedLessonIds }: GradebookGridProps) {
   const router = useRouter();
   const [selected, setSelected] = useState<Selection | null>(null);
+  // Map of assignment_key → passback state for the per-column Send grades action.
+  const [passbackState, setPassbackState] = useState<Record<string, PassbackState>>({});
 
   const { students, assignments, cells, column_averages, class_average, missing_count } = data;
+
+  const publishedSet = new Set(publishedLessonIds ?? []);
+
+  async function sendGrades(col: GradebookAssignmentCol) {
+    if (!col.lesson_id) return;
+    const key = col.assignment_key;
+    setPassbackState((s) => ({ ...s, [key]: { status: 'sending' } }));
+    try {
+      const res = await fetch('/api/teacher/google/grade-passback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId: data.class_id, lessonId: col.lesson_id }),
+      });
+      const body: {
+        ok?: boolean;
+        pushed?: number;
+        skipped_not_linked?: number;
+        not_posted_in_classroom?: boolean;
+        errors?: number;
+        connected?: boolean;
+        needsReconnect?: boolean;
+      } = await res.json();
+      if (body.needsReconnect) {
+        setPassbackState((s) => ({ ...s, [key]: { status: 'needsReconnect' } }));
+      } else if (body.ok) {
+        setPassbackState((s) => ({
+          ...s,
+          [key]: {
+            status: 'ok',
+            pushed: body.pushed ?? 0,
+            skipped_not_linked: body.skipped_not_linked ?? 0,
+            not_posted_in_classroom: body.not_posted_in_classroom ?? false,
+          },
+        }));
+      } else {
+        setPassbackState((s) => ({ ...s, [key]: { status: 'error' } }));
+      }
+    } catch {
+      setPassbackState((s) => ({ ...s, [key]: { status: 'error' } }));
+    }
+  }
 
   const [showAll, setShowAll] = useState(false);
   const hasEarlier = assignments.length > DEFAULT_VISIBLE_COLS;
@@ -201,21 +255,59 @@ export function GradebookGrid({ data }: GradebookGridProps) {
               <th className="sticky left-0 top-0 z-30 bg-surface border-b-2 border-sidebar-edge p-2 text-left align-bottom">
                 <span className="sr-only">Student</span>
               </th>
-              {visibleCols.map((col) => (
-                <th
-                  key={col.assignment_key}
-                  className="sticky top-0 z-20 bg-surface border-b-2 border-l-2 border-sidebar-edge p-2 text-center align-bottom"
-                >
-                  <div className="flex flex-col items-center gap-1">
-                    <SectionLabel tone="brand">{col.title}</SectionLabel>
-                    <span className="text-[10px] text-fg-muted whitespace-nowrap">
-                      {col.assigned_at ? `Assigned ${shortDate(col.assigned_at)}` : ''}
-                      {col.assigned_at && col.due_at ? ' · ' : ''}
-                      {col.due_at ? `Due ${shortDate(col.due_at)}` : ''}
-                    </span>
-                  </div>
-                </th>
-              ))}
+              {visibleCols.map((col) => {
+                const canSendGrades = !!googleCourseId && !!col.lesson_id && publishedSet.has(col.lesson_id);
+                const pbState = passbackState[col.assignment_key] ?? null;
+                return (
+                  <th
+                    key={col.assignment_key}
+                    className="sticky top-0 z-20 bg-surface border-b-2 border-l-2 border-sidebar-edge p-2 text-center align-bottom"
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      <SectionLabel tone="brand">{col.title}</SectionLabel>
+                      <span className="text-[10px] text-fg-muted whitespace-nowrap">
+                        {col.assigned_at ? `Assigned ${shortDate(col.assigned_at)}` : ''}
+                        {col.assigned_at && col.due_at ? ' · ' : ''}
+                        {col.due_at ? `Due ${shortDate(col.due_at)}` : ''}
+                      </span>
+                      {canSendGrades && (
+                        <div className="flex flex-col items-center gap-1 mt-1">
+                          <button
+                            type="button"
+                            aria-label="Send grades to Classroom"
+                            disabled={pbState?.status === 'sending'}
+                            onClick={() => sendGrades(col)}
+                            className="rounded border-2 border-sidebar-edge bg-surface px-2 py-0.5 text-[10px] font-semibold text-fg shadow-sticker hover:shadow-sticker-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
+                          >
+                            {pbState?.status === 'sending' ? 'Sending…' : 'Send grades to Classroom'}
+                          </button>
+                          {pbState?.status === 'ok' && !pbState.not_posted_in_classroom && (
+                            <span className="text-[10px] text-fg-muted">
+                              {pbState.pushed} sent · {pbState.skipped_not_linked} not linked to Classroom
+                            </span>
+                          )}
+                          {pbState?.status === 'ok' && pbState.not_posted_in_classroom && (
+                            <span className="text-[10px] text-fg">
+                              Post this assignment in Classroom first, then send grades.
+                            </span>
+                          )}
+                          {pbState?.status === 'needsReconnect' && (
+                            <a
+                              href="/settings/google"
+                              className="text-[10px] text-brand underline"
+                            >
+                              Reconnect Google
+                            </a>
+                          )}
+                          {pbState?.status === 'error' && (
+                            <span className="text-[10px] text-fg">Something went wrong. Try again.</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
 

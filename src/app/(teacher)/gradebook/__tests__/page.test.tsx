@@ -7,7 +7,20 @@ vi.mock('next/navigation', () => ({ redirect }));
 vi.mock('@/lib/auth/requireRole', () => ({ requireRole }));
 vi.mock('@/lib/teacher/firstClassIdForTeacher', () => ({ firstClassIdForTeacher }));
 vi.mock('@/lib/auth/guards', () => ({ guardClassAccess }));
-vi.mock('@/lib/supabase/server', () => ({ createAdminSupabaseClient: () => ({}) }));
+// Minimal admin mock: supports the chained query pattern used for both loadGradebook
+// (passed as a client to the lib) AND the two gating reads added for GC (classes + google_publications).
+const makeAdminMock = () => {
+  const nullChain = (): unknown => {
+    const q: Record<string, unknown> = {};
+    const c = () => q;
+    for (const m of ['select', 'eq', 'in', 'order', 'maybeSingle']) q[m] = c;
+    (q as { then: unknown }).then = (resolve: (v: { data: null; error: null }) => void) =>
+      resolve({ data: null, error: null });
+    return q;
+  };
+  return { from: () => nullChain() };
+};
+vi.mock('@/lib/supabase/server', () => ({ createAdminSupabaseClient: () => makeAdminMock() }));
 vi.mock('@/lib/gradebook/loadGradebook', () => ({ loadGradebook }));
 
 async function load() { vi.resetModules(); return (await import('@/app/(teacher)/gradebook/page')).default; }
