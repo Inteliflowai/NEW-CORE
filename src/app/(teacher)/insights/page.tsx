@@ -10,7 +10,9 @@ import { EmptyState } from '@/components/core/EmptyState';
 import { PageHeader } from '../_components/PageHeader';
 import { SummaryCallout } from '../_components/SummaryCallout';
 import { BandMix } from './_components/BandMix';
-import { SkillsToFocus } from './_components/SkillsToFocus';
+import { ComprehensionBySkill } from './_components/ComprehensionBySkill';
+import { ClassComprehensionTrend } from './_components/ClassComprehensionTrend';
+import { HowClassLearns } from './_components/HowClassLearns';
 
 const NO_CLASSES = (
   <EmptyState variant="just-getting-started" titleOverride="No classes yet"
@@ -53,7 +55,9 @@ export default async function InsightsPage({
       <PageHeader title="Insights" kicker="Trends on your class right now" accent="brand" />
       {data.observation && <SummaryCallout>{data.observation}</SummaryCallout>}
       <BandMix mix={data.band_mix} />
-      <SkillsToFocus gaps={data.concept_gaps} />
+      <ComprehensionBySkill skills={data.comprehension.skills} classId={classId} />
+      <ClassComprehensionTrend trend={data.comprehension.trend} />
+      <HowClassLearns learningStyle={data.learning_style} />
     </div>
   );
 }
