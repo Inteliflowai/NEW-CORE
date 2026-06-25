@@ -33,7 +33,10 @@ DROP POLICY IF EXISTS "audit_platform_read" ON public.audit_logs;
 CREATE POLICY "audit_platform_read" ON public.audit_logs
   FOR SELECT TO authenticated USING (public.is_platform_admin());
 
-GRANT SELECT ON public.audit_logs TO authenticated, anon;
+-- No anon grant (matches the 0022/0023 deny-by-default house pattern): anon never reads the
+-- trail and has no SELECT policy. authenticated gets table-level SELECT but is still gated to
+-- platform_admin by the policy above; service_role is the only writer.
+GRANT SELECT ON public.audit_logs TO authenticated;
 GRANT ALL    ON public.audit_logs TO service_role;
 
 -- ── Widen the seat-cap trigger to cover trialing (pilot) schools ──
