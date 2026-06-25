@@ -9,6 +9,7 @@ import { guardClassAccess } from '@/lib/auth/guards';
 import { STAFF_ROLES } from '@/lib/auth/roles';
 import { parseStudentSheet } from '@/lib/roster/parseWorkbook';
 import { importStudentsToClass } from '@/lib/roster/importStudentsToClass';
+import { logAudit } from '@/lib/audit/logAudit';
 
 export const runtime = 'nodejs';
 
@@ -87,6 +88,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const { students } = parseStudentSheet(await file.arrayBuffer());
     const summary = await importStudentsToClass(admin, { schoolId, classId, students });
     console.info('[roster-import-lean] actor=%s class=%s summary=%o', user.id, classId, summary);
+    // Log audit on successful commit (best-effort, never-fatal)
+    await logAudit(admin, {
+      actorId:      user.id,
+      schoolId,
+      action:       'roster.import',
+      resourceType: 'class',
+      resourceId:   classId,
+      metadata: {
+        studentsCreated: summary.studentsCreated,
+        enrolled:        summary.enrolled,
+        errors:          summary.errors,
+      },
+    });
     return NextResponse.json({ summary });
   } catch {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
