@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { SkillLearningState } from '@/lib/skills/clVerbs';
 import { clBucketOf, classComprehensionIndex, classTrendDirection } from '@/lib/insights/classComprehension';
+import { hasBannedWord } from '@/lib/copy/leakGuard';
 
 export interface StudentRef { student_id: string; full_name: string; }
 
@@ -91,6 +92,7 @@ export async function loadClassComprehension(
   for (const raw of (slsRows ?? []) as SlsRow[]) {
     const sk = Array.isArray(raw.skill) ? raw.skill[0] : raw.skill;
     if (!sk?.id || !classSkillIdSet.has(sk.id)) continue; // scope: never let another class's skill in
+    if (hasBannedWord(sk.name)) continue; // posture: never surface a banned-word skill name in the tally
     let entry = bySkill.get(sk.id);
     if (!entry) { entry = { name: sk.name, rows: [] }; bySkill.set(sk.id, entry); }
     entry.rows.push({ student_id: raw.student_id, state: raw.state as SkillLearningState });

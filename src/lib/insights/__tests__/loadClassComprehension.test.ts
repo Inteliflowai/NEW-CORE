@@ -28,6 +28,41 @@ function makeAdmin(fixtures: Record<string, unknown[]>) {
   return { from: (t: string) => builder(fixtures[t] ?? []) } as never;
 }
 
+// Extended mock that also records .in(col, vals) calls per table so DB-level scoping can be
+// independently verified (FIX 2).
+type InCall = { col: string; vals: string[] };
+function makeAdminRecording(fixtures: Record<string, unknown[]>): {
+  admin: ReturnType<typeof makeAdmin>;
+  inCalls: Record<string, InCall[]>;
+} {
+  const inCalls: Record<string, InCall[]> = {};
+  const builder = (table: string, rows: unknown[]) => {
+    const b: Record<string, unknown> = {};
+    let skillFilter: string[] | null = null;
+    b.select = () => b;
+    b.eq = () => b;
+    b.order = () => b;
+    b.in = (col: string, vals: string[]) => {
+      (inCalls[table] ??= []).push({ col, vals });
+      if (col === 'skill_id') skillFilter = vals;
+      return b;
+    };
+    (b as { then: unknown }).then = (resolve: (v: { data: unknown[] }) => void) => {
+      const out = skillFilter
+        ? rows.filter((r) => {
+            const sid =
+              (r as { skill?: { id?: string } }).skill?.id ?? (r as { skill_id?: string }).skill_id;
+            return sid == null || skillFilter!.includes(sid);
+          })
+        : rows;
+      return resolve({ data: out });
+    };
+    return b;
+  };
+  const admin = { from: (t: string) => builder(t, fixtures[t] ?? []) } as never;
+  return { admin, inCalls };
+}
+
 const ENR = [
   { student_id: 's1', users: { id: 's1', full_name: 'Ava Ng' } },
   { student_id: 's2', users: { id: 's2', full_name: 'Ben Ortiz' } },
@@ -114,4 +149,53 @@ it('returns empty (no throw) when the class has no students', async () => {
   const admin = makeAdmin({ enrollments: [] });
   const out = await loadClassComprehension(admin, 'c1');
   expect(out).toEqual({ skills: [], trend: { points: [], direction: null } });
+});
+
+// FIX 1: banned-word skill names must be excluded from the live tally.
+// "divergence" is on the BANNED_WORDS list in leakGuard.ts.
+// "Fractions" is NOT banned (existing tests stay green).
+it('excludes a skill whose name contains a banned word from the live tally', async () => {
+  const admin = makeAdmin({
+    enrollments: ENR,
+    quizzes: [{ id: 'qz1' }],
+    quiz_questions: [{ skill_id: 'sk1' }, { skill_id: 'sk2' }],
+    skill_learning_state: [
+      // sk1 has a banned word in its name — must be excluded from out.skills
+      { student_id: 's1', state: 'needs_more_time', skill: { id: 'sk1', name: 'Divergence drill' } },
+      { student_id: 's2', state: 'needs_more_time', skill: { id: 'sk1', name: 'Divergence drill' } },
+      // sk2 is fine — "Fractions" is not a banned word
+      { student_id: 's1', state: 'needs_more_time', skill: { id: 'sk2', name: 'Fractions' } },
+    ],
+    skill_state_snapshots: [],
+  });
+  const out = await loadClassComprehension(admin, 'c1');
+  // "Divergence drill" must not appear despite having reinforce > 0
+  expect(out.skills.find((s) => s.skill_name === 'Divergence drill')).toBeUndefined();
+  // "Fractions" passes through normally
+  expect(out.skills.find((s) => s.skill_name === 'Fractions')).toBeDefined();
+});
+
+// FIX 2: verify that .in('skill_id', classSkillIds) is called at the DB level on BOTH
+// skill_learning_state AND skill_state_snapshots (independently of the JS guard).
+it('calls .in("skill_id", classSkillIds) at the DB level on skill_learning_state and skill_state_snapshots', async () => {
+  const { admin, inCalls } = makeAdminRecording({
+    enrollments: ENR,
+    quizzes: [{ id: 'qz1' }],
+    quiz_questions: [{ skill_id: 'sk1' }],
+    skill_learning_state: [
+      { student_id: 's1', state: 'on_track', skill: { id: 'sk1', name: 'Fractions' } },
+    ],
+    skill_state_snapshots: [
+      { snapshot_date: '2026-05-04', skill_id: 'sk1', state: 'on_track' },
+    ],
+  });
+  await loadClassComprehension(admin, 'c1');
+
+  const slsCalls = (inCalls['skill_learning_state'] ?? []).filter((c) => c.col === 'skill_id');
+  expect(slsCalls.length).toBeGreaterThanOrEqual(1);
+  expect(slsCalls[0].vals).toEqual(['sk1']);
+
+  const snapCalls = (inCalls['skill_state_snapshots'] ?? []).filter((c) => c.col === 'skill_id');
+  expect(snapCalls.length).toBeGreaterThanOrEqual(1);
+  expect(snapCalls[0].vals).toEqual(['sk1']);
 });
