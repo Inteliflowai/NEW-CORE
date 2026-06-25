@@ -222,7 +222,7 @@ describe('QuizLibrary', () => {
       />,
     );
     // q2 and q3 are not published — they should each have the publish button.
-    const publishBtns = screen.getAllByRole('button', { name: /Publish to Classroom/i });
+    const publishBtns = screen.getAllByRole('button', { name: /Publish to Google Classroom/i });
     expect(publishBtns.length).toBeGreaterThanOrEqual(1);
     // "✓ In Google Classroom" appears exactly once (only for q1).
     expect(screen.getAllByText('✓ In Google Classroom')).toHaveLength(1);
@@ -244,7 +244,7 @@ describe('QuizLibrary', () => {
       />,
     );
     // Click the "Publish to Classroom" button for q2 (Cells — Check row)
-    const publishBtns = screen.getAllByRole('button', { name: /Publish to Classroom/i });
+    const publishBtns = screen.getAllByRole('button', { name: /Publish to Google Classroom/i });
     fireEvent.click(publishBtns[0]);
     // After the fetch resolves, the row should show the indicator.
     await vi.waitFor(() => expect(screen.getByText('✓ In Google Classroom')).toBeInTheDocument());

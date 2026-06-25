@@ -120,10 +120,10 @@ function LessonRow({
                 type="button"
                 onClick={onPublishToClassroom}
                 disabled={rowGcState === 'busy'}
-                aria-label={`Publish to Classroom — ${lesson.title}`}
+                aria-label={`Publish to Google Classroom — ${lesson.title}`}
                 className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1.5 font-display text-sm font-bold text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
               >
-                {rowGcState === 'busy' ? 'Publishing…' : 'Publish to Classroom'}
+                {rowGcState === 'busy' ? 'Publishing…' : 'Publish to Google Classroom'}
               </button>
             )}
           </>

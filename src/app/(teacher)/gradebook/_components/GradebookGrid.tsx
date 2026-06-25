@@ -277,21 +277,21 @@ export function GradebookGrid({ data, googleCourseId, publishedLessonIds }: Grad
                         <div className="flex flex-col items-center gap-1 mt-1">
                           <button
                             type="button"
-                            aria-label="Send grades to Classroom"
+                            aria-label="Send grades to Google Classroom"
                             disabled={pbState?.status === 'sending'}
                             onClick={() => sendGrades(col)}
                             className="rounded border-2 border-sidebar-edge bg-surface px-2 py-0.5 text-[10px] font-semibold text-fg shadow-sticker hover:shadow-sticker-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
                           >
-                            {pbState?.status === 'sending' ? 'Sending…' : 'Send grades to Classroom'}
+                            {pbState?.status === 'sending' ? 'Sending…' : 'Send grades to Google Classroom'}
                           </button>
                           {pbState?.status === 'ok' && !pbState.not_posted_in_classroom && (
                             <span className="text-[10px] text-fg-muted">
-                              {pbState.pushed} sent · {pbState.skipped_not_linked} not linked to Classroom
+                              {pbState.pushed} sent · {pbState.skipped_not_linked} not linked to Google Classroom
                             </span>
                           )}
                           {pbState?.status === 'ok' && pbState.not_posted_in_classroom && (
                             <span className="text-[10px] text-fg">
-                              Post this assignment in Classroom first, then send grades.
+                              Post this assignment in Google Classroom first, then send grades.
                             </span>
                           )}
                           {pbState?.status === 'needsReconnect' && (

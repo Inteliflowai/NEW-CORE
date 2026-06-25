@@ -56,21 +56,21 @@ describe('LessonLibrary — Publish to Classroom (gated on googleCourseId)', () 
       />,
     );
     expect(
-      screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+      screen.getByRole('button', { name: /publish to google classroom — Photosynthesis/i }),
     ).toBeInTheDocument();
   });
 
   it('does NOT show "Publish to Classroom" when googleCourseId is null', () => {
     render(<LessonLibrary data={data()} now={NOW} googleCourseId={null} />);
     expect(
-      screen.queryByRole('button', { name: /publish to classroom/i }),
+      screen.queryByRole('button', { name: /publish to google classroom/i }),
     ).toBeNull();
   });
 
   it('does NOT show "Publish to Classroom" when googleCourseId is omitted', () => {
     render(<LessonLibrary data={data()} now={NOW} />);
     expect(
-      screen.queryByRole('button', { name: /publish to classroom/i }),
+      screen.queryByRole('button', { name: /publish to google classroom/i }),
     ).toBeNull();
   });
 
@@ -89,7 +89,7 @@ describe('LessonLibrary — Publish to Classroom (gated on googleCourseId)', () 
     );
 
     fireEvent.click(
-      screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+      screen.getByRole('button', { name: /publish to google classroom — Photosynthesis/i }),
     );
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
@@ -119,7 +119,7 @@ describe('LessonLibrary — Publish to Classroom (gated on googleCourseId)', () 
     );
 
     fireEvent.click(
-      screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+      screen.getByRole('button', { name: /publish to google classroom — Photosynthesis/i }),
     );
 
     await waitFor(() => expect(screen.getByText('✓ In Google Classroom')).toBeInTheDocument());
@@ -143,7 +143,7 @@ describe('LessonLibrary — Publish to Classroom (gated on googleCourseId)', () 
     );
 
     fireEvent.click(
-      screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+      screen.getByRole('button', { name: /publish to google classroom — Photosynthesis/i }),
     );
 
     await waitFor(() =>
@@ -173,7 +173,7 @@ describe('LessonLibrary — Publish to Classroom (gated on googleCourseId)', () 
     );
 
     fireEvent.click(
-      screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+      screen.getByRole('button', { name: /publish to google classroom — Photosynthesis/i }),
     );
 
     await waitFor(() =>
@@ -201,12 +201,12 @@ describe('LessonLibrary — Publish to Classroom (gated on googleCourseId)', () 
     );
 
     fireEvent.click(
-      screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+      screen.getByRole('button', { name: /publish to google classroom — Photosynthesis/i }),
     );
 
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: /publish to classroom — Photosynthesis/i }),
+        screen.getByRole('button', { name: /publish to google classroom — Photosynthesis/i }),
       ).toBeInTheDocument(),
     );
     expect(screen.queryByText('✓ In Google Classroom')).toBeNull();

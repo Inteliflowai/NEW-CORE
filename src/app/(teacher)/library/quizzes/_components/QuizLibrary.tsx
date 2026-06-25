@@ -233,7 +233,7 @@ export function QuizLibrary({ data, classId, questions, classes = [], now, googl
                               disabled={gcRowState === 'busy'}
                               className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
                             >
-                              {gcRowState === 'busy' ? 'Publishing…' : 'Publish to Classroom'}
+                              {gcRowState === 'busy' ? 'Publishing…' : 'Publish to Google Classroom'}
                             </button>
                           )}
                         </div>

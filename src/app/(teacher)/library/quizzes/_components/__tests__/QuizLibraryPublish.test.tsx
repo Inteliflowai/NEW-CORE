@@ -49,7 +49,7 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
       />,
     );
     // The button should appear on the quiz row (not inside the edit panel)
-    expect(screen.getByRole('button', { name: /publish to classroom/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /publish to google classroom/i })).toBeInTheDocument();
   });
 
   it('does NOT show "Publish to Classroom" when googleCourseId is null', () => {
@@ -62,14 +62,14 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
       />,
     );
     expect(
-      screen.queryByRole('button', { name: /publish to classroom/i }),
+      screen.queryByRole('button', { name: /publish to google classroom/i }),
     ).toBeNull();
   });
 
   it('does NOT show "Publish to Classroom" when googleCourseId is omitted', () => {
     render(<QuizLibrary data={data()} classId="c1" now={FIXED_NOW} />);
     expect(
-      screen.queryByRole('button', { name: /publish to classroom/i }),
+      screen.queryByRole('button', { name: /publish to google classroom/i }),
     ).toBeNull();
   });
 
@@ -88,7 +88,7 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /publish to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /publish to google classroom/i }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 
@@ -117,7 +117,7 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /publish to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /publish to google classroom/i }));
 
     await waitFor(() => expect(screen.getByText('✓ In Google Classroom')).toBeInTheDocument());
   });
@@ -140,7 +140,7 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /publish to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /publish to google classroom/i }));
 
     await waitFor(() =>
       expect(screen.getByRole('link', { name: /reconnect google/i })).toBeInTheDocument(),
@@ -169,7 +169,7 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /publish to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /publish to google classroom/i }));
 
     await waitFor(() =>
       expect(screen.getByRole('link', { name: /reconnect google/i })).toBeInTheDocument(),
@@ -196,10 +196,10 @@ describe('QuizLibrary — Publish to Classroom (gated on googleCourseId)', () =>
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /publish to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /publish to google classroom/i }));
 
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: /publish to classroom/i })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: /publish to google classroom/i })).toBeInTheDocument(),
     );
     expect(screen.queryByText('✓ In Google Classroom')).toBeNull();
     expect(screen.queryByRole('link', { name: /reconnect google/i })).toBeNull();

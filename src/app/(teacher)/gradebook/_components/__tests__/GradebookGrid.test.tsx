@@ -228,7 +228,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['L99']}
       />,
     );
-    expect(screen.getByRole('button', { name: /send grades to classroom/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send grades to google classroom/i })).toBeInTheDocument();
   });
 
   it('does NOT show the button when googleCourseId is null (class not connected to GC)', () => {
@@ -239,7 +239,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['L99']}
       />,
     );
-    expect(screen.queryByRole('button', { name: /send grades to classroom/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /send grades to google classroom/i })).toBeNull();
   });
 
   it('does NOT show the button when the column lesson_id is not in publishedLessonIds', () => {
@@ -250,7 +250,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={[]}
       />,
     );
-    expect(screen.queryByRole('button', { name: /send grades to classroom/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /send grades to google classroom/i })).toBeNull();
   });
 
   it('does NOT show the button on a column with lesson_id null (due:/id: fallback key)', () => {
@@ -275,7 +275,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['some-other-lesson']}
       />,
     );
-    expect(screen.queryByRole('button', { name: /send grades to classroom/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /send grades to google classroom/i })).toBeNull();
   });
 
   // ── Published-flag derives from the prop (C3 prop-threading test) ──────────
@@ -288,7 +288,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={[]}
       />,
     );
-    expect(screen.queryByRole('button', { name: /send grades to classroom/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /send grades to google classroom/i })).toBeNull();
     rerender(
       <GradebookGrid
         data={publishedData()}
@@ -296,7 +296,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['L99']}
       />,
     );
-    expect(screen.getByRole('button', { name: /send grades to classroom/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send grades to google classroom/i })).toBeInTheDocument();
   });
 
   // ── Click → POST → summary ────────────────────────────────────────────────
@@ -315,7 +315,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['L99']}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /send grades to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
 
     await screen.findByText(/sent/i);
 
@@ -341,7 +341,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['L99']}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /send grades to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
 
     expect(await screen.findByText(/2 sent/i)).toBeInTheDocument();
     expect(screen.getByText(/0 not linked/i)).toBeInTheDocument();
@@ -360,10 +360,10 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['L99']}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /send grades to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
 
     expect(
-      await screen.findByText(/post this assignment in classroom first/i),
+      await screen.findByText(/post this assignment in google classroom first/i),
     ).toBeInTheDocument();
   });
 
@@ -380,7 +380,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['L99']}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /send grades to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
 
     const link = await screen.findByRole('link', { name: /reconnect google/i });
     expect(link).toHaveAttribute('href', '/settings/google');
@@ -400,7 +400,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['L99']}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /send grades to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
 
     const link = await screen.findByRole('link', { name: /reconnect google/i });
     expect(link).toHaveAttribute('href', '/settings/google');
@@ -422,7 +422,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
         publishedLessonIds={['L99']}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: /send grades to classroom/i }));
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
 
     expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /reconnect google/i })).toBeNull();
