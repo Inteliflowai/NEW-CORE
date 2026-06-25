@@ -15,6 +15,7 @@ vi.mock('@/lib/google/reconcileCourseRoster', () => ({ reconcileCourseRoster: (.
 vi.mock('@/lib/google/tokens', async () => { class GoogleNotConnectedError extends Error {} return { GoogleNotConnectedError }; });
 vi.mock('@/lib/google/classroom', async () => { class GoogleScopeError extends Error {} return { GoogleScopeError }; });
 vi.mock('@/lib/auth/roles', () => ({ STAFF_ROLES: ['teacher', 'school_admin', 'school_sysadmin', 'platform_admin'] }));
+vi.mock('@/lib/audit/logAudit', () => ({ logAudit: vi.fn() }));
 
 beforeEach(() => {
   for (const m of [getUser, single, classRow, guard, reconcile]) m.mockReset();

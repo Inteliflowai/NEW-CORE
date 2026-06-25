@@ -9,6 +9,7 @@ import { STAFF_ROLES } from '@/lib/auth/roles';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { reconcileCourseRoster } from '@/lib/google/reconcileCourseRoster';
 import { gcErrorResponse } from '@/lib/google/errorEnvelope';
+import { logAudit } from '@/lib/audit/logAudit';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const supabase = await createServerSupabaseClient();
@@ -37,6 +38,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       teacherId: cls.teacher_id as string, schoolId: cls.school_id as string,
       googleCourseId: cls.google_course_id as string, classId,
     });
+    if (result.softRemoved + result.reactivated + result.enrolled > 0 || result.skippedOther > 0 || result.errors > 0) {
+      await logAudit(admin, {
+        actorId: user.id,
+        schoolId: cls.school_id as string,
+        action: 'roster.sync',
+        resourceType: 'class',
+        resourceId: classId,
+        metadata: { enrolled: result.enrolled, reactivated: result.reactivated, softRemoved: result.softRemoved, skippedOther: result.skippedOther, errors: result.errors, source: 'google' },
+      });
+    }
     return NextResponse.json({ classId, ...result });
   } catch (err) {
     return gcErrorResponse(err);

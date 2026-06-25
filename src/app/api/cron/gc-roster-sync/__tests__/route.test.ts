@@ -20,6 +20,7 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/google/reconcileCourseRoster', () => ({ reconcileCourseRoster: (...a: unknown[]) => reconcile(...a) }));
 vi.mock('@/lib/google/tokens', async () => { class GoogleNotConnectedError extends Error {} return { GoogleNotConnectedError }; });
 vi.mock('@/lib/google/classroom', async () => { class GoogleScopeError extends Error {} return { GoogleScopeError }; });
+vi.mock('@/lib/audit/logAudit', () => ({ logAudit: vi.fn() }));
 
 const RESULT = { created: 0, linked: 1, skippedNoEmail: 0, skippedOther: 0, enrolled: 0, reactivated: 0, softRemoved: 0, errors: 0, removeSkippedSuspectEmpty: false };
 
