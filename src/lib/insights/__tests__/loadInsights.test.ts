@@ -2,6 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { loadInsights } from '@/lib/insights/loadInsights';
 import * as roster from '@/lib/signals/loadRosterSignals';
 
+vi.mock('@/lib/insights/loadClassComprehension', () => ({
+  loadClassComprehension: async () => ({ skills: [], trend: { points: [], direction: null } }),
+}));
+vi.mock('@/lib/insights/loadClassLearningStyle', () => ({
+  loadClassLearningStyle: async () => ({ styles: [], line: null }),
+}));
+
 function fakeRoster(bands: (string | null)[], gaps?: roster.RosterSignals['concept_gaps']) {
   return {
     class_id: 'c1',

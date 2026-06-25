@@ -29,6 +29,7 @@ import {
   DEMO_SCHOOL_NAME,
 } from '../src/lib/demo/demoCast';
 import { provisionSparkLink } from '../src/lib/spark/sparkLink';
+import { backfillSkillStateSnapshots } from './backfillSkillStateSnapshots';
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 
@@ -746,6 +747,18 @@ async function main() {
       }
     }
     console.log('[seed] Skill learning states done');
+  }
+
+  // ── Step 15b: Backfill skill-state snapshot history (soft fail) ──────────
+  if (skillId && classId) {
+    await backfillSkillStateSnapshots(admin, {
+      studentIds: Object.values(studentIds),
+      skillIds: [skillId],
+      weeks: 6,
+      refDate: new Date(),
+      schoolId,
+    });
+    console.log('[seed] Skill state snapshot history backfilled');
   }
 
   // ── Step 16: Misconception observations (soft fail) ───────────────────────

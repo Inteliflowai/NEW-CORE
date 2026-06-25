@@ -1054,3 +1054,19 @@ Strings in `src/app/(teacher)/gradebook/_components/GradebookDrillIn.tsx` (the "
 **Context:** This button appears in the gradebook drill-in for any graded-family attempt (graded / redo / redo-in-progress). It generates a new, easier version of the same assignment in the background (the student sees it in their "My Assignments" list). It is distinct from the "Open this for another try" redo toggle — redo re-opens the same work; Reinforce sends brand-new easier work.
 
 **Coach-posture note (Rule 1 — speaks first):** The button is purely action-oriented; consider whether the done state should be more affirming (e.g. "A new version is on its way to [student name]") — Barb to decide.
+
+---
+
+## Insights — Class Comprehension (the moat) — DRAFT
+
+- Lead sentence: "{N} students need another pass on {skill}." / "One student needs another pass on {skill}."
+- Section label: **Comprehension by skill**
+- Per-skill tally: `{n} Reinforce · {n} On Track · {n} Enrich`
+- Expand affordance: **See who** / **Hide**; bucket labels **Reinforce / On Track / Enrich**
+- Section label: **Over time**
+  - climbing: "Comprehension here has been climbing the last few weeks."
+  - steady: "Comprehension here has been holding steady."
+  - sliding: "Comprehension here has slipped a little lately — worth a look."
+- Section label: **How your class learns**
+  - "Your class spans {styles} learners — assignments differentiate to each."  ("differentiate", never "adapt")
+  - friendly style labels: visual · auditory · reading-and-writing · hands-on · discussion-based
