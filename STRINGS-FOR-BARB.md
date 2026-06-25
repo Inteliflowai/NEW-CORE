@@ -1081,3 +1081,10 @@ Strings in `src/app/(teacher)/gradebook/_components/GradebookDrillIn.tsx` (the "
 - Reconnect path: "Reconnect Google" → /settings/google
 - Open-CORE pinned material title (in the Classroom course): "Open in CORE"
   (NOTE: all GC actions say "Google Classroom" in full to avoid confusion with CORE's own class-publish — Marvin 2026-06-25)
+
+## Google Classroom — Seg 4 (student silent-SSO launch) — DRAFT
+The only student-facing copy is the no-match page (`/launch/unmatched`), shown when a student opens the Classroom Open-CORE link but their Google account can't be matched to a CORE student (file-roster kid, or not yet synced). Coach-posture: plain, reassuring, never reveals whether an account exists.
+- Heading: **"We couldn't match your Google account"**
+- Body: "We couldn't connect this Google account to your CORE account yet. You can sign in with your CORE password, or ask your teacher to add you."
+- CTA (→ /login): **"Sign in with CORE"**
+  (Everything else in this segment is silent/automatic — no student-visible strings. The launch never auto-creates an account; a removed/un-synced student lands here.)
