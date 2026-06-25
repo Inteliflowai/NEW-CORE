@@ -1,15 +1,24 @@
 // src/app/api/teacher/quizzes/generate/route.ts
-// POST — generate a quiz from a parsed lesson (engine call #2).
+// POST — create a quiz header row IMMEDIATELY (non-blocking) then fill questions
+// in the background via Next's after(). The teacher's browser receives { quiz_id }
+// as soon as the row is inserted (~50 ms); the LLM call (15-120 s) runs after().
+//
+// "0 questions" = quiz still building — the Quiz Library shows "Building…" for these.
+// On LlmExhaustedError or any other after() failure the quiz row stays with 0 questions
+// (visible to the teacher as still-building; they can delete/retry via the library).
+//
 // Auth: supabase.auth.getUser() + role check (teacher-tier);
-// guardClassAccess() for class-level IDOR protection (C3);
-// atomic quiz creation (C21): on quiz_questions insert failure, delete the draft quiz row.
-import { NextRequest, NextResponse } from 'next/server';
+// guardClassAccess() for class-level IDOR protection (C3).
+import { NextRequest, NextResponse, after } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { generateQuiz } from '@/lib/engine/quizGen';
 import { OPENAI_GEN_MODEL } from '@/lib/ai/models';
 import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 import { resolveSkillIds } from '@/lib/skills/resolveSkills';
+import { LlmExhaustedError } from '@/lib/ai/errors';
+
+export const runtime = 'nodejs';
 
 const TEACHER_ROLES = new Set(['teacher', 'school_admin', 'school_sysadmin', 'platform_admin']);
 
@@ -56,46 +65,18 @@ export async function POST(req: NextRequest) {
         : null;
     const subject = (lesson.subject as string | null) ?? parsedSubject;
 
-    // ── 6. Engine call #2 — throws on LlmExhaustedError or malformed quiz ────
-    // C1: no degrade path. A malformed quiz (fails GeneratedQuizSchema 3+2 structure)
-    // is a terminal generation failure — route catch maps to respondEngineError → 503.
-    const result = await generateQuiz(JSON.stringify(lesson.parsed_content, null, 2), subject);
-
-    // ── 6b. Resolve concept_tags → skill_ids (fail-soft) ────────────────────
-    // Tags from the generated questions, resolved against the school skill registry.
-    // A registry hiccup NEVER fails quiz generation (fail-soft, C1).
-    let skillIdByTag = new Map<string, string>();
-    try {
-      const conceptTags = result.questions
-        .map((q: { concept_tag?: string | null }) => q.concept_tag)
-        .filter((t): t is string => typeof t === 'string' && t.length > 0);
-      // Skip when the teacher has no school_id — never create skills under school_id='' (orphan rows).
-      if (conceptTags.length > 0 && schoolId) {
-        skillIdByTag = await resolveSkillIds(admin, {
-          schoolId,
-          subject,
-          tags: conceptTags,
-          createdBy: 'ai',
-        });
-      }
-    } catch (skillErr) {
-      console.error('[quizzes/generate] skill resolution failed — proceeding without skill_id', skillErr);
-    }
-
-    const isMath = result.questions.some(q => q.question_type === 'numeric');
-
-    // ── 7. Atomic create (C21) ───────────────────────────────────────────────
-    // 7a. Insert quiz header row
+    // ── 6. Create quiz header row IMMEDIATELY (status='draft', 0 questions) ──
+    // The teacher receives { quiz_id } right away. Questions are filled in after().
+    // "0 questions" == still building — the Quiz Library renders a "Building…" affordance.
     const { data: quiz, error: quizErr } = await admin
       .from('quizzes')
       .insert({
         lesson_id,
         class_id: lesson.class_id,
         teacher_id: lesson.teacher_id,
-        title: result.title || `Quiz: ${lesson.title}`,
+        title: `Quiz: ${lesson.title as string}`,
         status: 'draft',
         generation_model: OPENAI_GEN_MODEL,
-        ...(isMath ? { is_math: true } : {}),
       })
       .select()
       .single();
@@ -104,34 +85,93 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Failed to save quiz' }, { status: 500 });
     }
 
-    // 7b. Insert question rows — check for error; on failure, delete the draft quiz (C21)
-    const rows = result.questions.map(q => ({
-      quiz_id: (quiz as Record<string, unknown>).id,
-      position: q.position,
-      question_type: q.question_type,
-      question_text: q.question_text,
-      choices: q.choices ?? null,
-      correct_answer: q.correct_answer ?? null,
-      rubric: q.rubric ?? null,
-      rubric_version: 'v1',
-      numeric_spec: q.numeric_spec ?? null,
-      concept_tag: q.concept_tag ?? null,
-      skill_id: (q.concept_tag && skillIdByTag.get(q.concept_tag)) || null,
-    }));
+    const quizId = (quiz as Record<string, unknown>).id as string;
 
-    const { error: qErr } = await admin.from('quiz_questions').insert(rows);
+    // ── 7. Background: LLM call + question insert ────────────────────────────
+    // Snapshot all data needed inside after() before the response is sent.
+    const parsedLessonJson = JSON.stringify(lesson.parsed_content, null, 2);
+    const snapshotSchoolId = schoolId;
+    const snapshotSubject = subject;
+    const snapshotTitle = lesson.title as string;
 
-    if (qErr) {
-      // C21: partial write — roll back by deleting the orphaned quiz header.
-      // Suppress rollback error (best-effort); the primary error is reported.
-      await admin.from('quizzes').delete().eq('id', (quiz as Record<string, unknown>).id);
-      return respondEngineError(new Error(`Failed to save quiz questions: ${qErr.message}`));
-    }
+    after(async () => {
+      try {
+        // Engine call #2 — may take 15–120 s
+        const result = await generateQuiz(parsedLessonJson, snapshotSubject);
 
-    return NextResponse.json({
-      quiz_id: (quiz as Record<string, unknown>).id,
-      questions: result.questions,
+        // Resolve concept_tags → skill_ids (fail-soft)
+        let skillIdByTag = new Map<string, string>();
+        try {
+          const conceptTags = result.questions
+            .map((q: { concept_tag?: string | null }) => q.concept_tag)
+            .filter((t): t is string => typeof t === 'string' && t.length > 0);
+          // Skip when the teacher has no school_id — never create skills under school_id='' (orphan rows).
+          if (conceptTags.length > 0 && snapshotSchoolId) {
+            skillIdByTag = await resolveSkillIds(admin, {
+              schoolId: snapshotSchoolId,
+              subject: snapshotSubject,
+              tags: conceptTags,
+              createdBy: 'ai',
+            });
+          }
+        } catch (skillErr) {
+          console.error('[quizzes/generate] skill resolution failed — proceeding without skill_id', skillErr);
+        }
+
+        const isMath = result.questions.some((q: { question_type: string }) => q.question_type === 'numeric');
+
+        // Update quiz title (now known from LLM) and is_math flag
+        await admin
+          .from('quizzes')
+          .update({
+            title: result.title || `Quiz: ${snapshotTitle}`,
+            ...(isMath ? { is_math: true } : {}),
+          })
+          .eq('id', quizId);
+
+        // Insert question rows
+        const rows = result.questions.map((q: {
+          position: number;
+          question_type: string;
+          question_text: string;
+          choices?: unknown;
+          correct_answer?: unknown;
+          rubric?: string | null;
+          numeric_spec?: unknown;
+          concept_tag?: string | null;
+        }) => ({
+          quiz_id: quizId,
+          position: q.position,
+          question_type: q.question_type,
+          question_text: q.question_text,
+          choices: q.choices ?? null,
+          correct_answer: q.correct_answer ?? null,
+          rubric: q.rubric ?? null,
+          rubric_version: 'v1',
+          numeric_spec: q.numeric_spec ?? null,
+          concept_tag: q.concept_tag ?? null,
+          skill_id: (q.concept_tag && skillIdByTag.get(q.concept_tag)) || null,
+        }));
+
+        const { error: qErr } = await admin.from('quiz_questions').insert(rows);
+        if (qErr) {
+          // On question-insert failure the quiz row stays with 0 questions (still-building state).
+          // The teacher can see and delete/retry it in the Quiz Library. Never throw out of after().
+          console.error('[quizzes/generate] quiz_questions insert failed — quiz stays question-less:', qErr.message);
+          return;
+        }
+      } catch (err) {
+        if (err instanceof LlmExhaustedError) {
+          console.error('[quizzes/generate] LLM exhausted — quiz stays question-less; teacher can retry:', (err as Error).message);
+        } else {
+          console.error('[quizzes/generate] unexpected error in after():', err);
+        }
+        // Never throw out of after() — the 200 has already been sent
+      }
     });
+
+    // ── 8. Return immediately — teacher is freed ─────────────────────────────
+    return NextResponse.json({ quiz_id: quizId });
   } catch (err) {
     console.error('[teacher/quizzes/generate] error:', err);
     return respondEngineError(err);

@@ -44,7 +44,7 @@ export const NAV_ENTRIES: NavEntry[] = [
   {
     groupLabel: 'CLASS',
     items: [
-      { label: 'Roster', href: '/roster', icon: 'roster', alsoActiveWhen: ['/students'] },
+      { label: 'Class Roster', href: '/roster', icon: 'roster', alsoActiveWhen: ['/students'] },
       { label: 'Gradebook', href: '/gradebook', icon: 'gradebook' },
       { label: 'Alerts', href: '/alerts', icon: 'alerts', badgeKey: 'alerts' },
       { label: 'High Fives', href: '/high-fives', icon: 'highFive' },

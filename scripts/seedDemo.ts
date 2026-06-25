@@ -23,6 +23,7 @@ import { ensureAuthUser } from '../src/lib/trial/ensureAuthUser';
 import {
   DEMO_STUDENTS,
   DEMO_TEACHER,
+  DEMO_TEACHER2,
   DEMO_PARENT,
   DEMO_ADMIN,
   DEMO_SCHOOL_NAME,
@@ -104,7 +105,9 @@ async function ensureSkill({
 async function main() {
   const now = new Date();
   const DEMO_PASSWORD = 'DemoCore#2026';
-  const CLASS_NAME = 'Demo Period 1';
+  // Two classes — English Lit is the primary (all signals live here); Math is lighter
+  const CLASS1_NAME = 'English Literature';
+  const CLASS2_NAME = 'Math';
 
   // ── Step 1: Ensure demo school (HARD FAIL) ────────────────────────────────
   console.log('[seed] Ensuring demo school…');
@@ -151,8 +154,8 @@ async function main() {
     console.warn('[seed] school_licenses upsert failed (soft):', (e as Error).message);
   }
 
-  // ── Step 2: Ensure teacher (HARD FAIL) ───────────────────────────────────
-  console.log('[seed] Ensuring teacher…');
+  // ── Step 2: Ensure teacher 1 — Dana Whitfield (HARD FAIL) ───────────────
+  console.log('[seed] Ensuring teacher 1 (Dana Whitfield)…');
   const teacherEmail = `${DEMO_TEACHER.key}@demo.coreedtech.com`;
   const teacherId = await ensureAuthUser({
     admin,
@@ -162,7 +165,23 @@ async function main() {
     role: DEMO_TEACHER.role,
     school_id: schoolId,
   });
-  console.log(`[seed] Teacher id: ${teacherId}`);
+  console.log(`[seed] Teacher 1 id: ${teacherId}`);
+
+  // ── Step 2b: Ensure teacher 2 — Marcus Bell (soft fail) ──────────────────
+  let teacher2Id: string | null = null;
+  try {
+    teacher2Id = await ensureAuthUser({
+      admin,
+      email: `${DEMO_TEACHER2.key}@demo.coreedtech.com`,
+      password: DEMO_PASSWORD,
+      full_name: DEMO_TEACHER2.full_name,
+      role: DEMO_TEACHER2.role,
+      school_id: schoolId,
+    });
+    console.log(`[seed] Teacher 2 id: ${teacher2Id}`);
+  } catch (e) {
+    console.warn('[seed] teacher2 creation failed (soft):', (e as Error).message);
+  }
 
   // ── Step 3: Ensure parent + admin (soft fail) ────────────────────────────
   let parentId: string | null = null;
@@ -231,13 +250,14 @@ async function main() {
     }
   }
 
-  // ── Step 6: Ensure class (soft fail) ─────────────────────────────────────
+  // ── Step 6: Ensure two classes (soft fail) ───────────────────────────────
+  // Class 1: English Literature gr7 → Dana Whitfield (primary; all signals here)
   let classId: string | null = null;
   try {
     const { data: existingClass } = await admin
       .from('classes')
       .select('id')
-      .eq('name', CLASS_NAME)
+      .eq('name', CLASS1_NAME)
       .eq('teacher_id', teacherId)
       .maybeSingle();
 
@@ -249,32 +269,68 @@ async function main() {
         id: classId,
         school_id: schoolId,
         teacher_id: teacherId,
-        name: CLASS_NAME,
-        subject: 'General',
-        grade_level: '8',
+        name: CLASS1_NAME,
+        subject: 'English',
+        grade_level: '7',
         is_active: true,
       });
       if (error) throw error;
     }
-    console.log(`[seed] Class id: ${classId}`);
+    console.log(`[seed] Class 1 (English Literature) id: ${classId}`);
   } catch (e) {
-    console.warn('[seed] class creation failed (soft):', (e as Error).message);
+    console.warn('[seed] class 1 creation failed (soft):', (e as Error).message);
   }
 
-  // ── Step 7: Enrollments (soft fail) ──────────────────────────────────────
-  if (classId) {
+  // Class 2: Math gr9 → Marcus Bell (lighter second class; same 8 students)
+  let class2Id: string | null = null;
+  if (teacher2Id) {
+    try {
+      const { data: existingClass2 } = await admin
+        .from('classes')
+        .select('id')
+        .eq('name', CLASS2_NAME)
+        .eq('teacher_id', teacher2Id)
+        .maybeSingle();
+
+      if (existingClass2) {
+        class2Id = existingClass2.id;
+      } else {
+        class2Id = randomUUID();
+        const { error } = await admin.from('classes').insert({
+          id: class2Id,
+          school_id: schoolId,
+          teacher_id: teacher2Id,
+          name: CLASS2_NAME,
+          subject: 'Math',
+          grade_level: '9',
+          is_active: true,
+        });
+        if (error) throw error;
+      }
+      console.log(`[seed] Class 2 (Math) id: ${class2Id}`);
+    } catch (e) {
+      console.warn('[seed] class 2 creation failed (soft):', (e as Error).message);
+    }
+  }
+
+  // ── Step 7: Enrollments — all 8 students in BOTH classes (soft fail) ─────
+  const classIds: Array<{ id: string; label: string }> = [];
+  if (classId) classIds.push({ id: classId, label: 'English Literature' });
+  if (class2Id) classIds.push({ id: class2Id, label: 'Math' });
+
+  for (const { id: cid, label } of classIds) {
     for (const [key, sid] of Object.entries(studentIds)) {
       try {
         await admin.from('enrollments').upsert(
-          { class_id: classId, student_id: sid, is_active: true },
+          { class_id: cid, student_id: sid, is_active: true },
           { onConflict: 'class_id,student_id' }
         );
       } catch (e) {
-        console.warn(`[seed] enrollment ${key} failed (soft):`, (e as Error).message);
+        console.warn(`[seed] enrollment ${key} in ${label} failed (soft):`, (e as Error).message);
       }
     }
-    console.log('[seed] Enrollments done');
   }
+  console.log('[seed] Enrollments done (both classes)');
 
   // ── Step 8: Skills — pre-query insert-if-absent (no ON CONFLICT) ─────────
   let skillId: string | null = null;
@@ -282,22 +338,23 @@ async function main() {
     skillId = await ensureSkill({
       school_id: schoolId,
       slug: 'demo-skill-1',
-      name: 'Core Concept Analysis',
-      subject: null,
+      name: 'Literary Analysis',
+      subject: 'English',
     });
     console.log(`[seed] Skill id: ${skillId}`);
   } catch (e) {
     console.warn('[seed] skill creation failed (soft):', (e as Error).message);
   }
 
-  // ── Step 9: Lesson (soft fail) ────────────────────────────────────────────
+  // ── Step 9: English Literature lesson (soft fail) ────────────────────────
+  const ENG_LIT_LESSON_TITLE = 'Character & Theme in a Short Story';
   let lessonId: string | null = null;
   if (classId) {
     try {
       const { data: existingLesson } = await admin
         .from('lessons')
         .select('id')
-        .eq('title', 'Demo Lesson')
+        .eq('title', ENG_LIT_LESSON_TITLE)
         .eq('teacher_id', teacherId)
         .maybeSingle();
 
@@ -309,19 +366,25 @@ async function main() {
           id: lessonId,
           class_id: classId,
           teacher_id: teacherId,
-          title: 'Demo Lesson',
+          title: ENG_LIT_LESSON_TITLE,
           status: 'published',
-          parsed_content: { summary: 'Demo lesson content for CORE v2 seed.' },
+          parsed_content: {
+            summary: 'Students explore how authors develop character and theme through narrative techniques in short fiction.',
+            objectives: ['Identify character motivations', 'Trace thematic development', 'Analyse authorial choices'],
+            key_ideas: ['Character foils reveal theme', 'Setting shapes character', 'Conflict drives meaning'],
+          },
         });
         if (error) throw error;
       }
-      console.log(`[seed] Lesson id: ${lessonId}`);
+      console.log(`[seed] English Lit lesson id: ${lessonId}`);
     } catch (e) {
-      console.warn('[seed] lesson creation failed (soft):', (e as Error).message);
+      console.warn('[seed] English Lit lesson creation failed (soft):', (e as Error).message);
     }
   }
 
-  // ── Step 10: Quiz + quiz questions (soft fail) ───────────────────────────
+  // ── Step 10: English Literature quiz + quiz questions (soft fail) ────────
+  // NOTE: question_type CHECK constraint allows only 'mcq' | 'open' — no 'numeric'.
+  const ENG_LIT_QUIZ_TITLE = 'Character & Theme — Check for Understanding';
   let quizId: string | null = null;
   const questionIds: string[] = [];
 
@@ -343,21 +406,21 @@ async function main() {
           lesson_id: lessonId,
           class_id: classId,
           teacher_id: teacherId,
-          title: 'Demo Quiz',
+          title: ENG_LIT_QUIZ_TITLE,
           status: 'published',
           published_at: now.toISOString(),
         });
         if (error) throw error;
       }
-      console.log(`[seed] Quiz id: ${quizId}`);
+      console.log(`[seed] English Lit quiz id: ${quizId}`);
 
-      // 5 quiz questions (question_type ∈ {mcq,open,numeric})
+      // 5 quiz questions — 3 MCQ + 2 open (question_type ∈ {mcq,open} only per schema CHECK)
       const QUESTION_DEFS = [
-        { position: 1, question_type: 'mcq',     question_text: 'Which best describes the main concept?' },
-        { position: 2, question_type: 'open',    question_text: 'Explain the concept in your own words.' },
-        { position: 3, question_type: 'numeric', question_text: 'Calculate the result given the values.' },
-        { position: 4, question_type: 'mcq',     question_text: 'Which example demonstrates the concept?' },
-        { position: 5, question_type: 'open',    question_text: 'Describe a real-world application.' },
+        { position: 1, question_type: 'mcq',  question_text: 'Which best describes the protagonist\'s motivation in the story?' },
+        { position: 2, question_type: 'open', question_text: 'Explain how the author develops the central theme through the main character.' },
+        { position: 3, question_type: 'mcq',  question_text: 'Which literary device does the author use to contrast the two characters?' },
+        { position: 4, question_type: 'mcq',  question_text: 'What does the story\'s setting reveal about its theme?' },
+        { position: 5, question_type: 'open', question_text: 'Describe how the conflict in the story connects to its central theme.' },
       ];
 
       // Check if questions already exist
@@ -389,6 +452,99 @@ async function main() {
       console.log(`[seed] Quiz questions: ${questionIds.length}`);
     } catch (e) {
       console.warn('[seed] quiz creation failed (soft):', (e as Error).message);
+    }
+  }
+
+  // ── Step 10b: Math class — lesson + quiz (lighter second class; no signals) ──
+  if (class2Id && teacher2Id) {
+    try {
+      const MATH_LESSON_TITLE = 'Solving Linear Equations';
+      let mathLessonId: string | null = null;
+
+      const { data: existingMathLesson } = await admin
+        .from('lessons')
+        .select('id')
+        .eq('title', MATH_LESSON_TITLE)
+        .eq('teacher_id', teacher2Id)
+        .maybeSingle();
+
+      if (existingMathLesson) {
+        mathLessonId = existingMathLesson.id;
+      } else {
+        mathLessonId = randomUUID();
+        const { error } = await admin.from('lessons').insert({
+          id: mathLessonId,
+          class_id: class2Id,
+          teacher_id: teacher2Id,
+          title: MATH_LESSON_TITLE,
+          status: 'published',
+          parsed_content: {
+            summary: 'Students learn to solve one- and two-step linear equations using inverse operations.',
+            objectives: ['Apply inverse operations', 'Verify solutions by substitution', 'Model real situations as equations'],
+            key_ideas: ['Isolate the variable', 'Balance both sides', 'Check your answer'],
+          },
+        });
+        if (error) throw error;
+      }
+      console.log(`[seed] Math lesson id: ${mathLessonId}`);
+
+      if (mathLessonId) {
+        const { data: existingMathQuiz } = await admin
+          .from('quizzes')
+          .select('id')
+          .eq('lesson_id', mathLessonId)
+          .eq('status', 'published')
+          .maybeSingle();
+
+        let mathQuizId: string | null = null;
+        if (existingMathQuiz) {
+          mathQuizId = existingMathQuiz.id;
+        } else {
+          mathQuizId = randomUUID();
+          const { error } = await admin.from('quizzes').insert({
+            id: mathQuizId,
+            lesson_id: mathLessonId,
+            class_id: class2Id,
+            teacher_id: teacher2Id,
+            title: 'Solving Linear Equations — Check for Understanding',
+            status: 'published',
+            published_at: now.toISOString(),
+          });
+          if (error) throw error;
+        }
+        console.log(`[seed] Math quiz id: ${mathQuizId}`);
+
+        if (mathQuizId) {
+          const { data: existingMathQs } = await admin
+            .from('quiz_questions')
+            .select('id')
+            .eq('quiz_id', mathQuizId);
+
+          if (!existingMathQs || existingMathQs.length === 0) {
+            const MATH_QUESTION_DEFS = [
+              { position: 1, question_type: 'mcq',  question_text: 'What is the first step to solve 2x + 4 = 12?' },
+              { position: 2, question_type: 'open', question_text: 'Explain in your own words what it means to "isolate the variable".' },
+              { position: 3, question_type: 'mcq',  question_text: 'Which equation is equivalent to x + 7 = 15?' },
+              { position: 4, question_type: 'mcq',  question_text: 'If 3x = 21, what is x?' },
+              { position: 5, question_type: 'open', question_text: 'Write and solve a linear equation for the following: "A number increased by 5 equals 18."' },
+            ];
+            for (const qDef of MATH_QUESTION_DEFS) {
+              const qid = randomUUID();
+              const { error: qErr } = await admin.from('quiz_questions').insert({
+                id: qid,
+                quiz_id: mathQuizId,
+                position: qDef.position,
+                question_type: qDef.question_type,
+                question_text: qDef.question_text,
+              });
+              if (qErr) console.warn(`[seed] Math quiz question ${qDef.position} failed (soft):`, qErr.message);
+            }
+          }
+          console.log('[seed] Math quiz questions done');
+        }
+      }
+    } catch (e) {
+      console.warn('[seed] Math class lesson/quiz creation failed (soft):', (e as Error).message);
     }
   }
 
@@ -672,8 +828,10 @@ async function main() {
 
   console.log('[seed] Demo seed complete.');
   console.log(`[seed] School: ${schoolId}`);
-  console.log(`[seed] Teacher: ${teacherId}`);
-  console.log(`[seed] Students seeded: ${Object.keys(studentIds).length}`);
+  console.log(`[seed] Teacher 1 (Dana Whitfield / English Literature): ${teacherId}`);
+  console.log(`[seed] Teacher 2 (Marcus Bell / Math): ${teacher2Id ?? 'not seeded'}`);
+  console.log(`[seed] Classes: English Literature (gr7) + Math (gr9)`);
+  console.log(`[seed] Students seeded: ${Object.keys(studentIds).length} enrolled in both classes`);
 }
 
 main().catch(err => {

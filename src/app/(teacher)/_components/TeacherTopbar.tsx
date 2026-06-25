@@ -5,7 +5,7 @@ import { IconMenu } from '@/components/core/icons';
 
 const TITLE_MAP: Array<[string, string]> = [
   ['/today', 'Today'],
-  ['/roster', 'Roster'],
+  ['/roster', 'Class Roster'],
   ['/students', 'Student'],
   ['/gradebook', 'Gradebook'],
   ['/alerts', 'Alerts'],

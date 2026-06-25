@@ -137,4 +137,58 @@ describe('QuizLibrary', () => {
     rerender(<QuizLibrary data={data()} classId="c1" now={FIXED_NOW} classes={[{ id: 'c1', label: 'Bio' }, { id: 'c2', label: 'Chem' }]} />);
     expect(screen.getByLabelText('Class')).toBeInTheDocument();
   });
+
+  // ── Building… affordance for 0-question quizzes ──────────────────────────────
+  it('a quiz with 0 questions shows "Building…" pill and informational message instead of question count', () => {
+    const building: QuizLibraryData = {
+      class_id: 'c1',
+      quizzes: [
+        { id: 'qb', title: 'History — Check', lesson_title: 'WWI', subject: 'History', grade_level: '9', status: 'draft', question_count: 0, published_at: null, created_at: '2026-06-24T00:00:00Z' },
+      ],
+    };
+    render(<QuizLibrary data={building} classId="c1" now={FIXED_NOW} />);
+    expect(screen.getByText('Building…')).toBeInTheDocument();
+    expect(screen.getByText(/Questions on their way/i)).toBeInTheDocument();
+    // Should NOT show "0 questions"
+    expect(screen.queryByText(/0 questions/i)).toBeNull();
+    // No banned coach-posture words
+    expect(hasBannedWord(document.body.textContent || '')).toBe(false);
+  });
+
+  it('a 0-question quiz row has aria-label "Building" (not the status word)', () => {
+    const building: QuizLibraryData = {
+      class_id: 'c1',
+      quizzes: [
+        { id: 'qb', title: 'History — Check', lesson_title: null, subject: null, grade_level: null, status: 'draft', question_count: 0, published_at: null, created_at: '2026-06-24T00:00:00Z' },
+      ],
+    };
+    render(<QuizLibrary data={building} classId="c1" now={FIXED_NOW} />);
+    const btn = screen.getByRole('button', { name: /History — Check/i });
+    expect(btn.getAttribute('aria-label')).toMatch(/Building/);
+  });
+
+  it('Publish is disabled when the quiz has 0 questions (still building)', () => {
+    const building: QuizLibraryData = {
+      class_id: 'c1',
+      quizzes: [
+        { id: 'qb', title: 'History — Check', lesson_title: null, subject: null, grade_level: null, status: 'draft', question_count: 0, published_at: null, created_at: '2026-06-24T00:00:00Z' },
+      ],
+    };
+    render(<QuizLibrary data={building} classId="c1" now={FIXED_NOW} />);
+    fireEvent.click(screen.getByRole('button', { name: /History — Check/i }));
+    const dialog = within(screen.getByRole('dialog'));
+    // "Questions are being built" notice is shown
+    expect(dialog.getByText(/Questions are being built/i)).toBeInTheDocument();
+    // Publish button is present but disabled
+    const publishBtn = dialog.getByRole('button', { name: /Publish for students/i });
+    expect(publishBtn).toBeDisabled();
+  });
+
+  it('Publish is enabled when the quiz has questions (non-zero count)', () => {
+    render(<QuizLibrary data={data()} classId="c1" now={FIXED_NOW} />);
+    fireEvent.click(screen.getByRole('button', { name: /Cells — Check/i }));
+    const dialog = within(screen.getByRole('dialog'));
+    const publishBtn = dialog.getByRole('button', { name: /Publish for students/i });
+    expect(publishBtn).not.toBeDisabled();
+  });
 });

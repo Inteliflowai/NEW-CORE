@@ -1,7 +1,15 @@
 // src/app/api/teacher/quizzes/generate/__tests__/route.test.ts
-// TDD tests for POST /api/teacher/quizzes/generate
-// Covers: auth+role guard, guardClassAccess, atomic create (C21),
-//         malformed quiz → no persist, partial question insert → quiz deleted + error.
+// TDD tests for POST /api/teacher/quizzes/generate (non-blocking / after() background pattern).
+//
+// The route NOW:
+//   1. Creates the quiz header row synchronously, returns { quiz_id } immediately (200).
+//   2. Runs generateQuiz + quiz_questions insert INSIDE after() — the background callback.
+//
+// Test strategy:
+//   - after() is mocked to run synchronously (mirrors the gradebook/override test pattern).
+//   - Asserts: route returns 200 + { quiz_id } WITHOUT waiting for generateQuiz.
+//   - Running the captured after-callback inserts questions.
+//   - LlmExhaustedError inside the callback is swallowed; the quiz row stays (not deleted).
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -24,6 +32,7 @@ function makeChain(data: unknown, error: unknown = null) {
   chain['maybeSingle'] = vi.fn().mockResolvedValue({ data, error });
   chain['insert'] = vi.fn().mockReturnValue(chain);
   chain['delete'] = vi.fn().mockReturnValue(chain);
+  chain['update'] = vi.fn().mockReturnValue(chain);
   chain['then'] = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data, error }).then(resolve);
   return chain;
@@ -44,32 +53,29 @@ function makeAdminMock({
   quizInsert = null,
   quizInsertError = null,
   questionsInsertError = null,
-  deleteError = null,
 }: {
   lesson?: unknown;
   lessonError?: unknown;
   quizInsert?: unknown;
   quizInsertError?: unknown;
   questionsInsertError?: unknown;
-  deleteError?: unknown;
 } = {}) {
   // quiz_questions insert chain
   const questionsInsertChain: Record<string, unknown> = {};
   questionsInsertChain['then'] = (resolve: (v: unknown) => unknown) =>
     Promise.resolve({ data: null, error: questionsInsertError }).then(resolve);
 
-  // quiz delete chain
-  const deleteChain: Record<string, unknown> = {};
-  deleteChain['eq'] = vi.fn().mockReturnValue(deleteChain);
-  deleteChain['then'] = (resolve: (v: unknown) => unknown) =>
-    Promise.resolve({ data: null, error: deleteError }).then(resolve);
+  // quiz table chain — insert returns quiz; update / eq chains for the title-update in after()
+  const quizUpdateChain: Record<string, unknown> = {};
+  quizUpdateChain['eq'] = vi.fn().mockReturnValue(quizUpdateChain);
+  quizUpdateChain['then'] = (resolve: (v: unknown) => unknown) =>
+    Promise.resolve({ data: null, error: null }).then(resolve);
 
-  // quiz insert chain — returns the quiz with .select().single()
   const quizChain: Record<string, unknown> = {};
   quizChain['select'] = vi.fn().mockReturnValue(quizChain);
   quizChain['single'] = vi.fn().mockResolvedValue({ data: quizInsert, error: quizInsertError });
   quizChain['insert'] = vi.fn().mockReturnValue(quizChain);
-  quizChain['delete'] = vi.fn().mockReturnValue(deleteChain);
+  quizChain['update'] = vi.fn().mockReturnValue(quizUpdateChain);
   quizChain['eq'] = vi.fn().mockReturnValue(quizChain);
 
   // quiz_questions table
@@ -111,6 +117,12 @@ vi.mock('@/lib/supabase/server', () => ({
 
 vi.mock('next/headers', () => ({
   cookies: async () => ({ getAll: () => [], set: () => {} }),
+}));
+
+// after() runs the callback synchronously in tests (mirrors gradebook/override pattern).
+vi.mock('next/server', async (orig) => ({
+  ...(await orig<typeof import('next/server')>()),
+  after: (cb: () => void) => { void Promise.resolve().then(cb); },
 }));
 
 const mockGenerateQuiz = vi.fn();
@@ -180,56 +192,13 @@ describe('POST /api/teacher/quizzes/generate', () => {
     expect(res.status).toBe(403);
   });
 
-  // ── 4. Malformed quiz → no persist (C1 terminal failure) ──────────────────
-  it('returns 503 when generateQuiz throws LlmExhaustedError and nothing is persisted', async () => {
-    const { LlmExhaustedError } = await import('@/lib/ai/errors');
-    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
-    vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
-
-    const adminMock = makeAdminMock({
-      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
-    });
-    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
-
-    mockGenerateQuiz.mockRejectedValueOnce(new LlmExhaustedError('openai'));
-
-    const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
-    const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
-
-    expect(res.status).toBe(503);
-    const body = await res.json();
-    expect(body.error.retryable).toBe(true);
-    expect(body.error.code).toBe('llm_exhausted');
-    // The quizzes insert must NOT have been called
-    expect(adminMock.from('quizzes').insert).not.toHaveBeenCalled();
-  });
-
-  // ── 5. Atomic create (C21): partial question insert → quiz deleted + error ─
-  it('deletes quiz draft and returns error when quiz_questions insert fails (C21 atomic create)', async () => {
-    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
-    vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
-
-    const adminMock = makeAdminMock({
-      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
-      quizInsert: { id: 'quiz-1', lesson_id: 'lesson-1' },
-      questionsInsertError: { message: 'constraint violation', code: '23000' },
-    });
-    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
-
-    mockGenerateQuiz.mockResolvedValueOnce(makeQuizResult());
-
-    const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
-    const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
-
-    // Must not return 200 success
-    expect(res.status).not.toBe(200);
-    // Must have attempted to delete the draft quiz (C21 rollback)
-    const quizChain = adminMock.from('quizzes');
-    expect(quizChain.delete).toHaveBeenCalled();
-  });
-
-  // ── 6. Happy path: teacher → 200, quiz + questions persisted ──────────────
-  it('returns 200 with quiz_id and 5 questions on success', async () => {
+  // ── 4. Non-blocking: returns { quiz_id } immediately without waiting for generateQuiz ──
+  // The response is returned BEFORE generateQuiz is invoked.
+  it('returns 200 with { quiz_id } immediately — generateQuiz is invoked only in the background callback', async () => {
+    // generateQuiz is a long-running mock that resolves after a "delay" — but the route
+    // must not await it before sending the response. Because after() runs synchronously
+    // in the test mock, we verify: (a) response = 200 + { quiz_id }, (b) generateQuiz
+    // was eventually called (from inside the after callback), (c) response has no `questions`.
     const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
     vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
     vi.mocked(createAdminSupabaseClient).mockReturnValue(makeAdminMock({
@@ -242,13 +211,169 @@ describe('POST /api/teacher/quizzes/generate', () => {
     const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
     const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
 
+    // Route returns 200 immediately with only quiz_id (not questions)
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.quiz_id).toBe('quiz-1');
-    expect(body.questions).toHaveLength(5);
+    expect(body.questions).toBeUndefined();
   });
 
-  // ── 7. skill_id populated: resolveSkillIds succeeds → skill_id on rows ────
+  // ── 5. After-callback: running the callback inserts quiz_questions ─────────
+  it('after() callback invokes generateQuiz and inserts quiz_questions', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
+
+    const qqInsertSpy = vi.fn().mockReturnValue({
+      then: (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: null, error: null }).then(resolve),
+    });
+
+    const adminMock = makeAdminMock({
+      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
+      quizInsert: { id: 'quiz-1', lesson_id: 'lesson-1' },
+    });
+
+    // Patch quiz_questions chain to capture insert calls
+    const origFrom = adminMock.from.bind(adminMock);
+    adminMock.from = vi.fn((table: string) => {
+      if (table === 'quiz_questions') return { insert: qqInsertSpy };
+      return origFrom(table);
+    });
+
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+    mockGenerateQuiz.mockResolvedValueOnce(makeQuizResult());
+
+    const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
+    const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
+
+    // Flush the microtask queue fully: the after() mock does Promise.resolve().then(cb),
+    // then inside cb there's an async generateQuiz + resolveSkillIds chain.
+    // Multiple flushes needed to drain nested promises.
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(res.status).toBe(200);
+    // generateQuiz was called (from inside after())
+    expect(mockGenerateQuiz).toHaveBeenCalledOnce();
+    // quiz_questions were inserted
+    expect(qqInsertSpy).toHaveBeenCalledOnce();
+    const insertedRows = qqInsertSpy.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(insertedRows).toHaveLength(5);
+    expect(insertedRows[0].quiz_id).toBe('quiz-1');
+  });
+
+  // ── 6. LlmExhaustedError in after() is swallowed; quiz row NOT deleted ─────
+  it('LlmExhaustedError inside the after-callback is swallowed — quiz row stays, no throw', async () => {
+    const { LlmExhaustedError } = await import('@/lib/ai/errors');
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
+
+    // Track delete calls with a dedicated spy
+    const quizDeleteSpy = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
+    const adminMock = makeAdminMock({
+      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
+      quizInsert: { id: 'quiz-1', lesson_id: 'lesson-1' },
+    });
+
+    // Patch quizzes chain to capture delete calls
+    const origFrom = adminMock.from.bind(adminMock);
+    adminMock.from = vi.fn((table: string) => {
+      if (table === 'quizzes') {
+        const chain = origFrom(table) as Record<string, unknown>;
+        chain['delete'] = quizDeleteSpy;
+        return chain;
+      }
+      return origFrom(table);
+    });
+
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockGenerateQuiz.mockRejectedValueOnce(new LlmExhaustedError('openai'));
+
+    const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
+    const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
+
+    // Flush the microtask/timer queue
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Response is still 200 (quiz row was created synchronously before the error)
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.quiz_id).toBe('quiz-1');
+
+    // Error logged, not rethrown
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[quizzes/generate] LLM exhausted'),
+      expect.any(String),
+    );
+
+    // quiz row is NOT deleted — the 0-question quiz stays for the teacher to see/retry
+    expect(quizDeleteSpy).not.toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
+  });
+
+  // ── 7. questions-insert failure in after(): quiz row stays, error logged ───
+  it('quiz_questions insert failure inside after-callback is logged without deleting the quiz row', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue(makeServerMock({ id: 'teacher-1' }, { role: 'teacher' }) as never);
+
+    // qqInsertSpy returns an error
+    const qqInsertSpy = vi.fn().mockReturnValue({
+      then: (resolve: (v: unknown) => unknown) =>
+        Promise.resolve({ data: null, error: { message: 'constraint violation', code: '23000' } }).then(resolve),
+    });
+
+    const quizDeleteSpy = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
+    const adminMock = makeAdminMock({
+      lesson: { id: 'lesson-1', class_id: 'class-1', teacher_id: 'teacher-1', title: 'Test', subject: 'History', school_id: 'school-1', parsed_content: { subject: 'History' } },
+      quizInsert: { id: 'quiz-1', lesson_id: 'lesson-1' },
+    });
+
+    const origFrom = adminMock.from.bind(adminMock);
+    adminMock.from = vi.fn((table: string) => {
+      if (table === 'quiz_questions') return { insert: qqInsertSpy };
+      if (table === 'quizzes') {
+        const chain = origFrom(table) as Record<string, unknown>;
+        chain['delete'] = quizDeleteSpy;
+        return chain;
+      }
+      return origFrom(table);
+    });
+
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockGenerateQuiz.mockResolvedValueOnce(makeQuizResult());
+
+    const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
+    const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
+
+    // Flush the microtask/timer queue
+    await new Promise((r) => setTimeout(r, 0));
+
+    // Route still returned 200 (quiz row created before the callback ran)
+    expect(res.status).toBe(200);
+
+    // Error was logged
+    expect(consoleSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[quizzes/generate] quiz_questions insert failed'),
+      expect.stringContaining('constraint violation'),
+    );
+
+    // Quiz row NOT deleted — stays with 0 questions for the teacher to see/retry
+    expect(quizDeleteSpy).not.toHaveBeenCalled();
+
+    consoleSpy.mockRestore();
+  });
+
+  // ── 8. skill_id populated: resolveSkillIds succeeds → skill_id on rows ────
   it('populates skill_id on inserted quiz_question rows when resolveSkillIds succeeds', async () => {
     const quizResult = {
       title: 'Fractions Quiz',
@@ -291,6 +416,9 @@ describe('POST /api/teacher/quizzes/generate', () => {
     const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
     const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
 
+    // Flush the microtask/timer queue
+    await new Promise((r) => setTimeout(r, 0));
+
     expect(res.status).toBe(200);
     expect(qqInsertSpy).toHaveBeenCalledOnce();
     const insertedRows = qqInsertSpy.mock.calls[0][0] as Array<Record<string, unknown>>;
@@ -298,7 +426,7 @@ describe('POST /api/teacher/quizzes/generate', () => {
     expect(insertedRows[1].skill_id).toBe('skill-id-adding');
   });
 
-  // ── 8. Fail-soft: resolveSkillIds throws → quiz still 200, questions inserted without skill_id ──
+  // ── 9. Fail-soft: resolveSkillIds throws → quiz still 200, questions inserted without skill_id ──
   it('fail-soft: resolveSkillIds throws → quiz generation succeeds (200) and questions inserted', async () => {
     mockGenerateQuiz.mockResolvedValue(makeQuizResult());
     mockResolveSkillIds.mockRejectedValue(new Error('registry DB down'));
@@ -329,6 +457,9 @@ describe('POST /api/teacher/quizzes/generate', () => {
 
     const { POST } = await import('@/app/api/teacher/quizzes/generate/route');
     const res = await POST(makeRequest({ lesson_id: 'lesson-1' }));
+
+    // Flush the microtask/timer queue
+    await new Promise((r) => setTimeout(r, 0));
 
     // Quiz generation must succeed despite the registry failure
     expect(res.status).toBe(200);

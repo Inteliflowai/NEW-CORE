@@ -1036,3 +1036,21 @@ The preview surface renders counts from the `data.counts` object (not per-sheet 
 | Cold-start CTA button | Create a lesson |
 
 > Note: when `LessonLibrary` is rendered standalone (no `onCreate` prop), the cold-start CTA remains a `/upload` link ("Upload a lesson") to preserve existing standalone-page behaviour.
+
+---
+
+## Reinforce Assignment
+
+Strings in `src/app/(teacher)/gradebook/_components/GradebookDrillIn.tsx` (the "Reinforce Assignment" button section). All DRAFTS → Barb.
+
+| Key | Current draft |
+|---|---|
+| Button label (idle / default) | Reinforce Assignment |
+| Button label (in-flight) | Creating… |
+| Done state (after 202) | On its way — it'll appear in the student's work. |
+| Error state | Couldn't start — try again in a moment. |
+| Button aria-label | Reinforce Assignment — send a new, easier version of this work |
+
+**Context:** This button appears in the gradebook drill-in for any graded-family attempt (graded / redo / redo-in-progress). It generates a new, easier version of the same assignment in the background (the student sees it in their "My Assignments" list). It is distinct from the "Open this for another try" redo toggle — redo re-opens the same work; Reinforce sends brand-new easier work.
+
+**Coach-posture note (Rule 1 — speaks first):** The button is purely action-oriented; consider whether the done state should be more affirming (e.g. "A new version is on its way to [student name]") — Barb to decide.

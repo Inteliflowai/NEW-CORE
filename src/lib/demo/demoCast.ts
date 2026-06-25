@@ -41,9 +41,10 @@ export interface DemoStudent {
 
 export const DEMO_SCHOOL_NAME = 'CORE Demo School';
 
-export const DEMO_TEACHER = { key: 'teacher', full_name: 'Dana Whitfield', role: 'teacher' as const };
-export const DEMO_PARENT  = { key: 'parent',  full_name: 'Rosa Rivera',    role: 'parent'  as const };
-export const DEMO_ADMIN   = { key: 'admin',   full_name: 'Priya Anand',    role: 'school_admin' as const };
+export const DEMO_TEACHER  = { key: 'teacher',  full_name: 'Dana Whitfield', role: 'teacher' as const };
+export const DEMO_TEACHER2 = { key: 'teacher2', full_name: 'Marcus Bell',    role: 'teacher' as const };
+export const DEMO_PARENT   = { key: 'parent',   full_name: 'Rosa Rivera',    role: 'parent'  as const };
+export const DEMO_ADMIN    = { key: 'admin',     full_name: 'Priya Anand',   role: 'school_admin' as const };
 
 // Engineered cast. Targets chosen so the REAL signal fns emit each case (see test).
 export const DEMO_STUDENTS: DemoStudent[] = [

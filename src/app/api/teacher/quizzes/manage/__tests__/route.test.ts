@@ -7,6 +7,8 @@ const questionUpdates: Array<{ id: string; patch: Record<string, unknown> }> = [
 let QUIZ: unknown; let ROLE: string;
 let QUIZ_WRITE_ERROR: unknown; // when set, the quizzes UPDATE resolves with this .error
 let QUESTION_WRITE_ERROR: unknown; // when set, a quiz_questions UPDATE resolves with this .error
+let QUESTION_COUNT: number; // count of quiz_questions (publish guard: 0 => still-building => 409)
+let QUESTION_COUNT_ERROR: unknown; // when set, the quiz_questions count resolves with this .error
 const FIXED_NOW = '2026-06-23T12:00:00.000Z';
 
 // Mirror the canonical STAFF_ROLES (src/lib/auth/roles.ts) EXACTLY — array of the real
@@ -26,6 +28,8 @@ vi.mock('@/lib/supabase/server', () => ({
       // so .eq() must be chainable; we capture the LAST eq value as the question id and resolve as
       // a thenable on await.
       return {
+        // publish guard counts questions: .select('id',{count,head}).eq('quiz_id', quizId)
+        select: () => ({ eq: async () => ({ count: QUESTION_COUNT, error: QUESTION_COUNT_ERROR }) }),
         update: (p: Record<string, unknown>) => {
           const builder: Record<string, unknown> = {};
           let lastId = '';
@@ -49,6 +53,7 @@ beforeEach(() => {
   quizUpdates.length = 0; questionUpdates.length = 0;
   ROLE = 'teacher'; QUIZ = { id: 'qz1', class_id: 'c1', status: 'draft', published_at: null };
   QUIZ_WRITE_ERROR = null; QUESTION_WRITE_ERROR = null;
+  QUESTION_COUNT = 5; QUESTION_COUNT_ERROR = null; // default: quiz has questions
   getUser.mockResolvedValue({ data: { user: { id: 'u1' } } });
   guardClassAccess.mockResolvedValue(null); // access granted
   vi.useFakeTimers();
@@ -85,6 +90,13 @@ describe('POST /api/teacher/quizzes/manage', () => {
     const p = quizUpdates[0];
     expect(p.status).toBe('published');
     expect(p.published_at).toBe(FIXED_NOW);
+  });
+
+  it('publish is BLOCKED (409) when the quiz has 0 questions (still building / empty)', async () => {
+    QUESTION_COUNT = 0;
+    const res = await (await load())(req({ quiz_id: 'qz1', action: 'publish' }));
+    expect(res.status).toBe(409);
+    expect(quizUpdates).toHaveLength(0); // never written to published
   });
 
   it('unpublish clears status back to draft and clears published_at', async () => {

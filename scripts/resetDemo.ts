@@ -18,6 +18,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   DEMO_STUDENTS,
   DEMO_TEACHER,
+  DEMO_TEACHER2,
   DEMO_PARENT,
   DEMO_ADMIN,
   DEMO_SCHOOL_NAME,
@@ -90,6 +91,7 @@ async function main() {
   // ── Step 2: Delete demo auth users ────────────────────────────────────────
   const demoEmails = [
     `${DEMO_TEACHER.key}@demo.coreedtech.com`,
+    `${DEMO_TEACHER2.key}@demo.coreedtech.com`,
     `${DEMO_PARENT.key}@demo.coreedtech.com`,
     `${DEMO_ADMIN.key}@demo.coreedtech.com`,
     ...DEMO_STUDENTS.map(s => `${s.key}@demo.coreedtech.com`),

@@ -144,6 +144,25 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Reinforce Assignment — generates a new easier assignment for this student in the background.
+  type ReinforceState = 'idle' | 'sending' | 'done' | 'error';
+  const [reinforceState, setReinforceState] = useState<ReinforceState>('idle');
+
+  async function onReinforce() {
+    if (!cell.attempt_id || reinforceState === 'sending') return;
+    setReinforceState('sending');
+    try {
+      const res = await fetch('/api/teacher/assignments/reinforce', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attempt_id: cell.attempt_id }),
+      });
+      setReinforceState(res.ok ? 'done' : 'error');
+    } catch {
+      setReinforceState('error');
+    }
+  }
+
   const effortPhrase = cell.effort_label ? effortLabelPhrase(cell.effort_label) : null;
 
   // Keyboard a11y: trap focus inside the panel, restore focus to the originating cell button on
@@ -450,7 +469,7 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
               )}
             </div>
 
-            {/* Reteach toggle */}
+            {/* Reteach toggle — re-opens the SAME work */}
             {canReteach && (
               <label className="flex items-center gap-2 text-sm text-fg">
                 <input
@@ -462,6 +481,32 @@ export function GradebookDrillIn({ selected, onClose, onWrite }: GradebookDrillI
                 />
                 Open this for another try.
               </label>
+            )}
+
+            {/* Reinforce Assignment — generates a NEW EASIER assignment in the background.
+                Different from allow_redo (redo = same work again; reinforce = new easier work). */}
+            {canReteach && (
+              <div className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={onReinforce}
+                  disabled={reinforceState === 'sending' || reinforceState === 'done'}
+                  aria-label="Reinforce Assignment — send a new, easier version of this work"
+                  className="self-start rounded-md border-2 border-sidebar-edge bg-surface px-4 py-2 text-sm text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
+                >
+                  {reinforceState === 'sending' ? 'Creating…' : 'Reinforce Assignment'}
+                </button>
+                {reinforceState === 'done' && (
+                  <p role="status" className="text-sm text-fg">
+                    On its way — it&apos;ll appear in the student&apos;s work.
+                  </p>
+                )}
+                {reinforceState === 'error' && (
+                  <p role="status" className="text-sm text-fg">
+                    Couldn&apos;t start — try again in a moment.
+                  </p>
+                )}
+              </div>
             )}
 
             {error && (

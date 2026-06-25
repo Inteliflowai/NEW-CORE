@@ -116,7 +116,8 @@ export function LessonReviewEditor({ days, chapterTitle, framework, classId }: L
           }),
         });
         if (!editRes.ok) throw new Error('save');
-        setProgress(multi ? `Building quiz ${i + 1} of ${drafts.length}…` : 'Building a quiz…');
+        // Quiz generation is now non-blocking: the route creates the quiz row immediately
+        // and fills questions in the background. We only wait for the fast row-create here.
         const genRes = await fetch('/api/teacher/quizzes/generate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lesson_id: draft.lesson_id }),
@@ -133,11 +134,13 @@ export function LessonReviewEditor({ days, chapterTitle, framework, classId }: L
   if (phase === 'done') {
     return (
       <div data-testid="generate-done" className="flex flex-col gap-3 rounded-lg border-2 border-sidebar-edge bg-ok-surface p-5 shadow-sticker">
-        <SectionLabel tone="ok">{multi ? 'Unit ready' : 'Quiz ready'}</SectionLabel>
+        <SectionLabel tone="ok">{multi ? 'Quizzes on their way' : 'Quiz on its way'}</SectionLabel>
         <p className="font-display text-base font-bold text-fg">
-          {multi ? `${drafts.length} lessons saved, each with a quiz drafted.` : 'Lesson saved and a quiz is drafted.'}
+          {multi
+            ? `${drafts.length} lessons saved. Your quizzes are being built — find them in the Quiz Library in a moment.`
+            : 'Lesson saved. Your quiz is being built — find it in the Quiz Library in a moment.'}
         </p>
-        <p className="text-fg text-sm">Review and publish each quiz when it&apos;s ready for students.</p>
+        <p className="text-fg text-sm">Once questions appear, review and publish when ready for students.</p>
         <div className="flex flex-wrap gap-2">
           <Link href={quizzesHref} className="rounded-md border-2 border-sidebar-edge bg-brand px-4 py-2 font-display text-sm font-bold text-fg-on-brand shadow-sticker">
             Open the Quiz Library
