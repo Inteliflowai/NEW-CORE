@@ -49,6 +49,64 @@ export async function listCourses(accessToken: string): Promise<GcCourse[]> {
   return out;
 }
 
+// ── Write seam (POST/PATCH) — same Bearer + 403-scope + status-only-error contract as gcGet ──
+async function gcWrite(accessToken: string, method: 'POST' | 'PATCH', url: string, body: unknown, label: string): Promise<Record<string, unknown>> {
+  const res = await fetch(url, {
+    method,
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    if (res.status === 403 && /insufficient.*scope|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(text)) throw new GoogleScopeError();
+    throw new Error(`${label} failed: ${res.status}`); // status only — never leak the body
+  }
+  // PATCH/empty responses may have no JSON body
+  return (await res.json().catch(() => ({}))) as Record<string, unknown>;
+}
+
+export interface CreateCourseWorkArgs { title: string; description?: string; linkUrl: string; maxPoints?: number | null }
+export async function createCourseWork(accessToken: string, courseId: string, args: CreateCourseWorkArgs): Promise<{ id: string }> {
+  const body: Record<string, unknown> = {
+    title: args.title, workType: 'ASSIGNMENT', state: 'DRAFT',
+    materials: [{ link: { url: args.linkUrl } }],
+  };
+  if (args.description) body.description = args.description;
+  if (args.maxPoints != null) body.maxPoints = args.maxPoints;
+  const data = await gcWrite(accessToken, 'POST', `${BASE}/courses/${courseId}/courseWork`, body, 'google courseWork create');
+  if (!data.id) throw new Error('google courseWork create: no id returned'); // I3 — never String(undefined)
+  return { id: String(data.id) };
+}
+
+export async function createCourseWorkMaterial(accessToken: string, courseId: string, args: { title: string; linkUrl: string }): Promise<{ id: string }> {
+  const body = { title: args.title, state: 'PUBLISHED', materials: [{ link: { url: args.linkUrl } }] };
+  const data = await gcWrite(accessToken, 'POST', `${BASE}/courses/${courseId}/courseWorkMaterials`, body, 'google courseWorkMaterial create');
+  if (!data.id) throw new Error('google courseWorkMaterial create: no id returned'); // I3
+  return { id: String(data.id) };
+}
+
+export interface GcSubmission { id: string; userId: string }
+export async function listStudentSubmissions(accessToken: string, courseId: string, courseWorkId: string): Promise<GcSubmission[]> {
+  const out: GcSubmission[] = [];
+  let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({ pageSize: '100' });
+    if (pageToken) params.set('pageToken', pageToken);
+    const data = await gcGet(accessToken, `${BASE}/courses/${courseId}/courseWork/${courseWorkId}/studentSubmissions?${params.toString()}`, 'google submissions list');
+    for (const s of (data.studentSubmissions as Array<Record<string, unknown>> | undefined) ?? []) {
+      out.push({ id: String(s.id), userId: String(s.userId ?? '') });
+    }
+    pageToken = data.nextPageToken as string | undefined;
+  } while (pageToken);
+  return out;
+}
+
+export async function patchStudentSubmissionDraftGrade(accessToken: string, courseId: string, courseWorkId: string, submissionId: string, draftGrade: number): Promise<void> {
+  await gcWrite(accessToken, 'PATCH',
+    `${BASE}/courses/${courseId}/courseWork/${courseWorkId}/studentSubmissions/${submissionId}?updateMask=draftGrade`,
+    { draftGrade }, 'google draftGrade patch');
+}
+
 export async function listCourseStudents(accessToken: string, courseId: string): Promise<GcRoster> {
   const out: GcStudent[] = [];
   let pageToken: string | undefined;
