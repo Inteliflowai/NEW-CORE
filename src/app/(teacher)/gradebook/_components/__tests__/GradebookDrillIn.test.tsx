@@ -11,7 +11,7 @@ const selected = {
   studentName: 'Ana Diaz',
   studentId: 's1',
   classId: 'c1',
-  col: { assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z' },
+  col: { assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z', lesson_id: null },
   cell: { attempt_id: 'h1', status: 'graded' as const, displayed_grade: 90, effort_label: null, teacher_notes: null, submitted_at: '2026-06-09T00:00:00Z', is_override: true, submitted_on_time: true, allow_redo: false, score_pct: 70 },
 };
 
@@ -164,7 +164,7 @@ describe('GradebookDrillIn', () => {
 describe('GradebookDrillIn — grade trend', () => {
   const trendSelected = {
     studentName: 'Ana Diaz', studentId: 's1', classId: 'c1',
-    col: { assignment_key: 'k', title: 'Fractions', due_at: null, assigned_at: null },
+    col: { assignment_key: 'k', title: 'Fractions', due_at: null, assigned_at: null, lesson_id: null },
     cell: {
       attempt_id: 'h1', status: 'graded' as const, displayed_grade: 88, score_pct: 88,
       effort_label: null, teacher_notes: null, submitted_at: '2026-06-09T00:00:00Z',
@@ -206,7 +206,7 @@ describe('GradebookDrillIn — student work review', () => {
     studentName: 'Ana Diaz',
     studentId: 's1',
     classId: 'c1',
-    col: { assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z' },
+    col: { assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z', lesson_id: null },
     cell: {
       attempt_id: 'A1',
       status: 'graded' as const,

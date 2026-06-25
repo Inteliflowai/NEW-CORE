@@ -18,6 +18,7 @@ const graded = {
     title: 'Due Jun 10',
     due_at: '2026-06-10T00:00:00Z',
     assigned_at: '2026-06-08T00:00:00Z',
+    lesson_id: null,
   },
   cell: {
     attempt_id: 'h1',

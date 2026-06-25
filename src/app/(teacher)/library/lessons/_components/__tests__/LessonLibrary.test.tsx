@@ -153,4 +153,59 @@ describe('LessonLibrary', () => {
     const { container } = render(<LessonLibrary data={data} now={NOW} />);
     expect(hasBannedWord(container.textContent ?? '')).toBe(false);
   });
+
+  // ── Google Classroom publish state ───────────────────────────────────────────
+  it('a lesson in publishedLessonIds (with googleCourseId) shows "✓ In Google Classroom" — not a button', () => {
+    render(
+      <LessonLibrary
+        data={data}
+        now={NOW}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L1']}
+      />,
+    );
+    // The already-published row shows the indicator text.
+    expect(screen.getByText('✓ In Google Classroom')).toBeInTheDocument();
+    // The indicator is NOT a button.
+    const indicator = screen.getByText('✓ In Google Classroom');
+    expect(indicator.tagName.toLowerCase()).not.toBe('button');
+    expect(indicator).not.toHaveAttribute('onclick');
+  });
+
+  it('a lesson NOT in publishedLessonIds (with googleCourseId) shows the "Publish to Classroom" button', () => {
+    render(
+      <LessonLibrary
+        data={data}
+        now={NOW}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L1']}
+      />,
+    );
+    // L2 and L3 are not published — they should each have the publish button.
+    const publishBtns = screen.getAllByRole('button', { name: /Publish to Google Classroom/i });
+    expect(publishBtns.length).toBeGreaterThanOrEqual(1);
+    // "✓ In Google Classroom" appears exactly once (only for L1).
+    expect(screen.getAllByText('✓ In Google Classroom')).toHaveLength(1);
+  });
+
+  it('after clicking Publish and the fetch resolves {ok:true} the row shows "✓ In Google Classroom"', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <LessonLibrary
+        data={data}
+        now={NOW}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={[]}
+      />,
+    );
+    // Click the first "Publish to Classroom" button
+    const publishBtns = screen.getAllByRole('button', { name: /Publish to Google Classroom/i });
+    fireEvent.click(publishBtns[0]);
+    // After the fetch resolves, the row should show the indicator.
+    await vi.waitFor(() => expect(screen.getByText('✓ In Google Classroom')).toBeInTheDocument());
+  });
 });

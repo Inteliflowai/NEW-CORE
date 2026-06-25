@@ -50,10 +50,22 @@ export default async function QuizLibraryPage({
   // 3. Load via admin client (RLS-bypassed; the guard above is the backstop).
   //    teacherClassOptions is scoped to userId, so it only surfaces this teacher's own classes.
   const admin = createAdminSupabaseClient();
-  const [data, classes] = await Promise.all([
+  const [data, classes, clsRow, pubsRow] = await Promise.all([
     loadQuizLibrary(admin, { classId }),
     teacherClassOptions(admin, userId),
+    admin.from('classes').select('google_course_id').eq('id', classId).maybeSingle(),
+    admin.from('google_publications')
+      .select('resource_id')
+      .eq('class_id', classId)
+      .eq('resource_type', 'quiz'),
   ]);
+  const googleCourseId: string | null =
+    ((clsRow.data as { google_course_id?: string | null } | null)?.google_course_id) ?? null;
+  // Quiz ids already published to Classroom for this class — used to show "✓ In Google Classroom"
+  // instead of the "Publish to Classroom" button on rows that have already been published.
+  const publishedQuizIds: string[] = ((pubsRow.data ?? []) as Array<{ resource_id: string | null }>)
+    .map((p) => p.resource_id)
+    .filter((id): id is string => id != null);
 
   // 3b. Fetch the questions for the (non-archived) quizzes so the edit panel can edit them
   // without a second round-trip. Scoped to the class's quizzes only.
@@ -79,7 +91,7 @@ export default async function QuizLibraryPage({
   return (
     <div className="p-5 flex flex-col gap-5">
       <PageHeader title="Quiz Library" kicker="Your checks" accent="brand" />
-      <QuizLibrary data={data} classId={classId} questions={questions} classes={classes} />
+      <QuizLibrary data={data} classId={classId} questions={questions} classes={classes} googleCourseId={googleCourseId} publishedQuizIds={publishedQuizIds} />
     </div>
   );
 }

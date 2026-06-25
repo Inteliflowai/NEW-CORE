@@ -11,7 +11,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 const data: Gradebook = {
   class_id: 'c1',
   students: [{ student_id: 's1', name: 'Ana Diaz' }, { student_id: 's2', name: 'Ben Cole' }],
-  assignments: [{ assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z' }],
+  assignments: [{ assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z', lesson_id: null }],
   cells: {
     s1: { 'due:d1': { attempt_id: 'h1', status: 'graded', displayed_grade: 88, score_pct: 88, effort_label: null, teacher_notes: null, submitted_at: '2026-06-09T00:00:00Z', is_override: false, submitted_on_time: true, allow_redo: false } },
     s2: { 'due:d1': { attempt_id: null, status: 'missing', displayed_grade: null, score_pct: null, effort_label: null, teacher_notes: null, submitted_at: null, is_override: false, submitted_on_time: null, allow_redo: false } },
@@ -25,7 +25,7 @@ function oneCell(cell: GradebookCell): Gradebook {
   return {
     class_id: 'c1',
     students: [{ student_id: 's1', name: 'Ana Diaz' }],
-    assignments: [{ assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z' }],
+    assignments: [{ assignment_key: 'due:d1', title: 'Due Jun 10', due_at: '2026-06-10T00:00:00Z', assigned_at: '2026-06-08T00:00:00Z', lesson_id: null }],
     cells: { s1: { 'due:d1': cell } },
     class_average: cell.displayed_grade, column_averages: { 'due:d1': cell.displayed_grade }, missing_count: 0,
     quizzes: [], quiz_cells: { s1: {} },
@@ -46,6 +46,7 @@ function makeData(nCols: number): Gradebook {
     title: `Lesson ${i}`,
     due_at: `2026-06-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
     assigned_at: `2026-06-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+    lesson_id: `L${String(i).padStart(2, '0')}`,
   }));
   const cells: Gradebook['cells'] = { s1: {} };
   for (const a of assignments) cells.s1[a.assignment_key] = gradedCell(80);
@@ -148,7 +149,7 @@ describe('GradebookGrid', () => {
 describe('cellTooltipLines', () => {
   it('shows assignment name + submitted date + due, banned-word-free', () => {
     const lines = cellTooltipLines(
-      { assignment_key: 'k', title: 'Fractions', due_at: '2026-06-16T00:00:00Z', assigned_at: null },
+      { assignment_key: 'k', title: 'Fractions', due_at: '2026-06-16T00:00:00Z', assigned_at: null, lesson_id: null },
       gradedCell(88, { submitted_on_time: false }),
     );
     expect(lines[0]).toBe('Fractions');
@@ -159,14 +160,14 @@ describe('cellTooltipLines', () => {
   });
   it('says not turned in yet when there is no submission', () => {
     const lines = cellTooltipLines(
-      { assignment_key: 'k', title: 'Fractions', due_at: null, assigned_at: null },
+      { assignment_key: 'k', title: 'Fractions', due_at: null, assigned_at: null, lesson_id: null },
       { ...gradedCell(0), status: 'missing', submitted_at: null, displayed_grade: null },
     );
     expect(lines.join(' ')).toMatch(/not turned in yet/i);
   });
   it('shows all three dates (Assigned · Due · Turned in) when present', () => {
     const lines = cellTooltipLines(
-      { assignment_key: 'k', title: 'Fractions', due_at: '2026-06-16T00:00:00Z', assigned_at: '2026-06-14T00:00:00Z' },
+      { assignment_key: 'k', title: 'Fractions', due_at: '2026-06-16T00:00:00Z', assigned_at: '2026-06-14T00:00:00Z', lesson_id: null },
       gradedCell(88),
     );
     expect(lines.join(' ')).toMatch(/Assigned Jun 14/);
@@ -193,6 +194,238 @@ describe('GradebookGrid — windowing', () => {
   it('renders the assigned/due dates in the column header', () => {
     render(<GradebookGrid data={makeData(2)} />);
     expect(screen.getAllByText(/Assigned Jun|Due Jun/).length).toBeGreaterThan(0);
+  });
+});
+
+// ─── Task 8: Send-grades-to-Classroom batch action ───────────────────────────
+
+/** A published-lesson column (lesson_id set, in publishedLessonIds, googleCourseId provided). */
+function publishedData(overrides: { googleCourseId?: string | null; publishedLessonIds?: string[] } = {}): Gradebook {
+  return {
+    class_id: 'c1',
+    students: [{ student_id: 's1', name: 'Ana Diaz' }],
+    assignments: [{
+      assignment_key: 'lesson:L99:2026-06-10',
+      title: 'Poetry Unit',
+      due_at: '2026-06-10T00:00:00Z',
+      assigned_at: '2026-06-08T00:00:00Z',
+      lesson_id: 'L99',
+    }],
+    cells: { s1: { 'lesson:L99:2026-06-10': gradedCell(85) } },
+    class_average: 85, column_averages: { 'lesson:L99:2026-06-10': 85 }, missing_count: 0,
+    quizzes: [], quiz_cells: { s1: {} },
+  };
+}
+
+describe('GradebookGrid — Send grades to Classroom', () => {
+  // ── Button presence ───────────────────────────────────────────────────────
+
+  it('shows "Send grades to Classroom" on a published column (lesson_id ∈ publishedLessonIds, googleCourseId set)', () => {
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /send grades to google classroom/i })).toBeInTheDocument();
+  });
+
+  it('does NOT show the button when googleCourseId is null (class not connected to GC)', () => {
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId={null}
+        publishedLessonIds={['L99']}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /send grades to google classroom/i })).toBeNull();
+  });
+
+  it('does NOT show the button when the column lesson_id is not in publishedLessonIds', () => {
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={[]}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /send grades to google classroom/i })).toBeNull();
+  });
+
+  it('does NOT show the button on a column with lesson_id null (due:/id: fallback key)', () => {
+    const d: Gradebook = {
+      class_id: 'c1',
+      students: [{ student_id: 's1', name: 'Ana Diaz' }],
+      assignments: [{
+        assignment_key: 'due:2026-06-10T00:00:00Z',
+        title: 'Due Jun 10',
+        due_at: '2026-06-10T00:00:00Z',
+        assigned_at: null,
+        lesson_id: null,
+      }],
+      cells: { s1: { 'due:2026-06-10T00:00:00Z': gradedCell(80) } },
+      class_average: 80, column_averages: {}, missing_count: 0,
+      quizzes: [], quiz_cells: { s1: {} },
+    };
+    render(
+      <GradebookGrid
+        data={d}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['some-other-lesson']}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /send grades to google classroom/i })).toBeNull();
+  });
+
+  // ── Published-flag derives from the prop (C3 prop-threading test) ──────────
+
+  it('button appears/disappears as publishedLessonIds prop changes (toggle test)', () => {
+    const { rerender } = render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={[]}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /send grades to google classroom/i })).toBeNull();
+    rerender(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /send grades to google classroom/i })).toBeInTheDocument();
+  });
+
+  // ── Click → POST → summary ────────────────────────────────────────────────
+
+  it('clicking the button POSTs /api/teacher/google/grade-passback with {classId, lessonId}', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, pushed: 2, skipped_not_linked: 0, not_posted_in_classroom: false, errors: 0 }),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
+
+    await screen.findByText(/sent/i);
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/teacher/google/grade-passback',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ classId: 'c1', lessonId: 'L99' }),
+      }),
+    );
+  });
+
+  it('renders quiet summary "2 sent · 0 not linked" after a successful passback', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, pushed: 2, skipped_not_linked: 0, not_posted_in_classroom: false, errors: 0 }),
+    }));
+
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
+
+    expect(await screen.findByText(/2 sent/i)).toBeInTheDocument();
+    expect(screen.getByText(/0 not linked/i)).toBeInTheDocument();
+  });
+
+  it('renders the not_posted_in_classroom message when the courseWork has not been posted', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, pushed: 0, skipped_not_linked: 0, not_posted_in_classroom: true, errors: 0 }),
+    }));
+
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
+
+    expect(
+      await screen.findByText(/post this assignment in google classroom first/i),
+    ).toBeInTheDocument();
+  });
+
+  it('renders a "Reconnect Google" link when needsReconnect is returned', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ connected: true, needsReconnect: true }),
+    }));
+
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
+
+    const link = await screen.findByRole('link', { name: /reconnect google/i });
+    expect(link).toHaveAttribute('href', '/settings/google');
+  });
+
+  // M4-fix: {connected:false} at HTTP 200 → must show Reconnect CTA, not generic error
+  it('renders a "Reconnect Google" link when {connected:false} is returned (M4-fix)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ connected: false }),
+    }));
+
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
+
+    const link = await screen.findByRole('link', { name: /reconnect google/i });
+    expect(link).toHaveAttribute('href', '/settings/google');
+    // Must NOT show the generic error text
+    expect(screen.queryByText(/something went wrong/i)).toBeNull();
+  });
+
+  // plain failure: non-ok with no reconnect/connected fields → generic error text, NOT Reconnect
+  it('renders generic error text on a plain non-ok failure with no reconnect fields', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'internal server error' }),
+    }));
+
+    render(
+      <GradebookGrid
+        data={publishedData()}
+        googleCourseId="gc-course-1"
+        publishedLessonIds={['L99']}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /send grades to google classroom/i }));
+
+    expect(await screen.findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /reconnect google/i })).toBeNull();
   });
 });
 

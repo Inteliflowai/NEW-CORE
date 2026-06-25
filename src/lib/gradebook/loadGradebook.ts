@@ -5,7 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { computeEffortLabel, type EffortLabel } from '@/lib/signals/computeEffortLabel';
 
 export interface GradebookStudent { student_id: string; name: string; }
-export interface GradebookAssignmentCol { assignment_key: string; title: string; due_at: string | null; assigned_at: string | null; }
+export interface GradebookAssignmentCol { assignment_key: string; title: string; due_at: string | null; assigned_at: string | null; lesson_id: string | null; }
 export type CellStatus = 'graded' | 'submitted' | 'not_due' | 'missing' | 'redo' | 'redo_in_progress' | 'none';
 export interface GradebookCell {
   attempt_id: string | null; status: CellStatus; displayed_grade: number | null;
@@ -134,6 +134,7 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
     title: (c.lesson_id && lessonTitle.get(c.lesson_id)) || dueLabel(c.due_at, i + 1),
     due_at: c.due_at,
     assigned_at: c.assigned_at,
+    lesson_id: c.lesson_id,
   }));
   // assignment_id → column key (for cell mapping).
   const idToKey = new Map<string, string>();
