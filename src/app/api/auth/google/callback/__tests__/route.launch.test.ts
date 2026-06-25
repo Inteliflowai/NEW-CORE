@@ -135,10 +135,14 @@ describe('GET /api/auth/google/callback — student launch branch', () => {
     const res = await GET(launchReq(validState(), 'N1'));
     expect(res.headers.get('location')).toContain('/login?error=session');
   });
-  it('clears the nonce cookie on exit', async () => {
+  it('clears the nonce cookie on exit with matching attributes (whole-branch review)', async () => {
     const { GET } = await import('@/app/api/auth/google/callback/route');
     const res = await GET(launchReq(validState(), 'N1'));
-    // a delete writes an expired Set-Cookie for the nonce
-    expect(res.cookies.get('g_launch_nonce')?.value ?? '').toBe('');
+    // an attribute-matched expiring set (not a bare delete) clears the nonce so __Host- prefix
+    // cookies are correctly expired by the browser in production
+    const c = res.cookies.get('g_launch_nonce');
+    expect(c?.value ?? '').toBe('');
+    expect(c?.path).toBe('/');
+    expect(c?.maxAge).toBe(0);
   });
 });

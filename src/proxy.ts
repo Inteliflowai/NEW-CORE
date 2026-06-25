@@ -72,6 +72,7 @@ export async function proxy(request: NextRequest) {
     // teacher path.
     if (
       pathname === '/api/auth/google/callback' &&
+      // 'launch:' must stay in sync with LAUNCH_STATE_PREFIX (launchState.ts); proxy can't import it (node:crypto). Covered by proxy.test.ts.
       request.nextUrl.searchParams.get('state')?.startsWith('launch:')
     ) {
       return supabaseResponse;

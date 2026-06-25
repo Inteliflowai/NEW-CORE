@@ -24,7 +24,16 @@ function back(origin: string, qs: string): NextResponse {
 // via next/headers, as proven by the live /auth/callback route).
 function launchExit(origin: string, path: string): NextResponse {
   const res = NextResponse.redirect(`${origin}${path}`);
-  res.cookies.delete(NONCE_COOKIE_NAME);
+  // Clear the one-time nonce with the SAME attributes the initiator set — a bare delete() omits
+  // Secure/Path, and a __Host--prefixed deletion without Secure+Path=/ is rejected by the browser
+  // (the cookie would otherwise survive its full maxAge). (whole-branch review)
+  res.cookies.set(NONCE_COOKIE_NAME, '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: 0,
+  });
   return res;
 }
 

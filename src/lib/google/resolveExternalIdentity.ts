@@ -27,18 +27,19 @@ export async function resolveExternalIdentity(admin: SupabaseClient, args: Resol
   // 2. Unambiguous lowercased-email match within (school, provider). Exact .eq() on the
   //    lowercased value (rows are written lowercased per Task 4) — NOT .ilike, which would treat
   //    %/_ as LIKE metacharacters on an identity key (IMP-5) and would not use the plain index.
+  //    Email is trusted ONLY for UNLINKED rows (first-login by email); a row already linked to a
+  //    different Google account is never overridden by email (account-takeover guard — whole-branch
+  //    review). Also select external_id for the filter below.
   if (args.email) {
     const { data } = await admin
       .from('external_identities')
-      .select('core_student_id')
+      .select('core_student_id, external_id')
       .eq('school_id', args.schoolId)
       .eq('provider', args.provider)
       .eq('email', args.email.toLowerCase());
-    const ids = new Set(
-      ((data as Array<{ core_student_id: string | null }> | null) ?? [])
-        .map((r) => r.core_student_id)
-        .filter((v): v is string => !!v),
-    );
+    const rows = ((data as Array<{ core_student_id: string | null; external_id: string | null }> | null) ?? [])
+      .filter((r) => r.external_id == null || r.external_id === args.externalId);
+    const ids = new Set(rows.map((r) => r.core_student_id).filter((v): v is string => !!v));
     if (ids.size === 1) return [...ids][0];
   }
   return null;

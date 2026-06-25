@@ -18,6 +18,7 @@ vi.mock('@supabase/ssr', () => ({
 
 import { NextRequest } from 'next/server';
 import { proxy } from '../proxy';
+import { LAUNCH_STATE_PREFIX } from '@/lib/google/launchState';
 
 function req(path: string): NextRequest {
   return new NextRequest(new URL(`https://app.test${path}`));
@@ -94,7 +95,9 @@ describe('proxy (auth gate + session refresh)', () => {
   });
   it('lets the launch callback through when it carries a launch: state', async () => {
     getUser.mockResolvedValue({ data: { user: null } });
-    const res = await proxy(req('/api/auth/google/callback?state=launch:abc&code=x'));
+    // Use LAUNCH_STATE_PREFIX so a future rename fails this test (the proxy hardcodes the literal
+    // and can't import node:crypto — proxy.test.ts is the coupling point). (whole-branch review)
+    const res = await proxy(req(`/api/auth/google/callback?state=${LAUNCH_STATE_PREFIX}abc&code=x`));
     expect(res.headers.get('location')).toBeNull();
   });
   it('still gates the callback (no launch state) to /login?expired=true', async () => {

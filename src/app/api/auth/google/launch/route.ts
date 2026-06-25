@@ -5,7 +5,7 @@
 // session yet — see PUBLIC_PREFIXES). Identity is established only by Google in the callback.
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { signLaunchState, NONCE_COOKIE_NAME, type LaunchGc } from '@/lib/google/launchState';
+import { signLaunchState, NONCE_COOKIE_NAME, LAUNCH_TTL_SECONDS, type LaunchGc } from '@/lib/google/launchState';
 import { buildLaunchAuthUrl } from '@/lib/google/oauthUrls';
 
 export const runtime = 'nodejs';
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 600,
+    maxAge: LAUNCH_TTL_SECONDS,
   });
   return res;
 }
