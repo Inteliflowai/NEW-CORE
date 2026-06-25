@@ -4,11 +4,16 @@ import { loadRosterSignals } from '@/lib/signals/loadRosterSignals';
 import { insightsObservation, type BandMix } from '@/lib/copy/insightsObservation';
 import { pctIncorrectToWords } from '@/lib/copy/pctIncorrectToWords';
 import { hasBannedWord } from '@/lib/copy/leakGuard';
+import { loadClassComprehension, type ClassComprehension } from '@/lib/insights/loadClassComprehension';
+import { loadClassLearningStyle, type ClassLearningStyle } from '@/lib/insights/loadClassLearningStyle';
+import { comprehensionObservation } from '@/lib/copy/comprehensionObservation';
 
 export interface ClassInsights {
   band_mix: BandMix;
   observation: string | null;
   concept_gaps: { skill_name: string; phrase: string }[];
+  comprehension: ClassComprehension;
+  learning_style: ClassLearningStyle;
 }
 
 export async function loadInsights(
@@ -33,5 +38,12 @@ export async function loadInsights(
       skill_name: g.skill_name,
       phrase: pctIncorrectToWords(g.pct_incorrect),
     }));
-  return { band_mix, observation: insightsObservation(band_mix), concept_gaps };
+  const [comprehension, learning_style] = await Promise.all([
+    loadClassComprehension(admin, opts.classId),
+    loadClassLearningStyle(admin, opts.classId),
+  ]);
+  // Lead with comprehension (names the top reinforce skill); fall back to the band observation;
+  // null when the class is balanced/cold-start (quiet on good days).
+  const observation = comprehensionObservation(comprehension.skills) ?? insightsObservation(band_mix);
+  return { band_mix, observation, concept_gaps, comprehension, learning_style };
 }
