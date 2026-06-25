@@ -129,6 +129,12 @@ describe('GET /api/auth/google/callback — student launch branch', () => {
     expect(res.headers.get('location')).toContain('/login?error=session');
     expect(verifyOtp).not.toHaveBeenCalled();
   });
+  it('verifyOtp error → /login?error=session', async () => {
+    verifyOtp.mockResolvedValue({ error: { message: 'otp invalid' } });
+    const { GET } = await import('@/app/api/auth/google/callback/route');
+    const res = await GET(launchReq(validState(), 'N1'));
+    expect(res.headers.get('location')).toContain('/login?error=session');
+  });
   it('clears the nonce cookie on exit', async () => {
     const { GET } = await import('@/app/api/auth/google/callback/route');
     const res = await GET(launchReq(validState(), 'N1'));
