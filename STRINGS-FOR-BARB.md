@@ -1070,3 +1070,14 @@ Strings in `src/app/(teacher)/gradebook/_components/GradebookDrillIn.tsx` (the "
 - Section label: **How your class learns**
   - "Your class spans {styles} learners — assignments differentiate to each."  ("differentiate", never "adapt")
   - friendly style labels: visual · auditory · reading-and-writing · hands-on · discussion-based
+
+## Google Classroom — Seg 3 (publish + grade passback) — DRAFT
+- Quiz/Lesson library button: **"Publish to Google Classroom"** (shown only when the class is Google-connected; CORE's own "Publish" is separate and always available)
+- Already-published indicator (replaces the button): **"✓ In Google Classroom"**
+- In-flight: "Publishing…"
+- Gradebook batch button (per published assignment column): **"Send grades to Google Classroom"**
+- Passback result summary: "{N} sent · {M} not linked to Google Classroom"
+- Not-yet-posted state: "Post this assignment in Google Classroom first, then send grades."
+- Reconnect path: "Reconnect Google" → /settings/google
+- Open-CORE pinned material title (in the Classroom course): "Open in CORE"
+  (NOTE: all GC actions say "Google Classroom" in full to avoid confusion with CORE's own class-publish — Marvin 2026-06-25)
