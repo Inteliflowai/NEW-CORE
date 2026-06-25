@@ -41,7 +41,22 @@ function statusPill(status: string): { label: string; tone: 'brand' | 'ok' | 'wa
   }
 }
 
-function LessonRow({ lesson, classId, onView }: { lesson: LessonLibRow; classId: string; onView: () => void }): React.JSX.Element {
+/** Per-lesson GC publish state: idle | busy | done | needsReconnect. */
+type GcPublishState = 'idle' | 'busy' | 'done' | 'needsReconnect';
+
+function LessonRow({
+  lesson,
+  classId,
+  onView,
+  gcState,
+  onPublishToClassroom,
+}: {
+  lesson: LessonLibRow;
+  classId: string;
+  onView: () => void;
+  gcState?: GcPublishState;
+  onPublishToClassroom?: () => void;
+}): React.JSX.Element {
   const pill = statusPill(lesson.status);
   const meta = [lesson.subject, lesson.grade_level ? `Grade ${lesson.grade_level}` : null]
     .filter(Boolean)
@@ -52,6 +67,7 @@ function LessonRow({ lesson, classId, onView }: { lesson: LessonLibRow; classId:
     : null;
   const hasQuiz = lesson.quiz_count > 0;
   const quizHref = `/library/quizzes?class=${encodeURIComponent(classId)}`;
+  const rowGcState = gcState ?? 'idle';
   return (
     <div className="flex items-center justify-between gap-4 rounded-lg border-2 border-sidebar-edge bg-surface p-4 shadow-sticker">
       <div className="flex min-w-0 flex-col gap-1">
@@ -65,7 +81,7 @@ function LessonRow({ lesson, classId, onView }: { lesson: LessonLibRow; classId:
           {hasQuiz ? (lesson.quiz_count === 1 ? '1 quiz ready' : `${lesson.quiz_count} quizzes ready`) : 'No quiz yet'}
         </p>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onView}
@@ -81,6 +97,31 @@ function LessonRow({ lesson, classId, onView }: { lesson: LessonLibRow; classId:
         >
           {hasQuiz ? 'Open quiz' : 'Make a quiz'}
         </Link>
+        {/* GC publish — gated on presence of onPublishToClassroom (passed only when googleCourseId is set) */}
+        {onPublishToClassroom && (
+          <>
+            {rowGcState === 'done' ? (
+              <span className="text-sm text-fg-muted">Sent to Classroom</span>
+            ) : rowGcState === 'needsReconnect' ? (
+              <a
+                href="/settings/google"
+                className="text-sm font-bold text-brand underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+              >
+                Reconnect Google
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={onPublishToClassroom}
+                disabled={rowGcState === 'busy'}
+                aria-label={`Publish to Classroom — ${lesson.title}`}
+                className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1.5 font-display text-sm font-bold text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
+              >
+                {rowGcState === 'busy' ? 'Publishing…' : 'Publish to Classroom'}
+              </button>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -91,6 +132,7 @@ export function LessonLibrary({
   classes = [],
   now,
   onCreate,
+  googleCourseId,
 }: {
   data: LessonLibraryData;
   classes?: LibraryClassOption[];
@@ -98,6 +140,9 @@ export function LessonLibrary({
   /** Optional callback to switch the parent into a create/upload view. When present, the cold-start
    * CTA becomes a button instead of a /upload link to avoid a redirect loop. */
   onCreate?: () => void;
+  /** When set, shows "Publish to Classroom" on each row (fetched server-side via admin client).
+   *  Absent/null → the action is hidden (class is not GC-mirrored). */
+  googleCourseId?: string | null;
 }): React.JSX.Element {
   const clock = now ?? new Date();
   const [query, setQuery] = useState('');
@@ -105,6 +150,30 @@ export function LessonLibrary({
   const [subject, setSubject] = useState('all');
   const [grade, setGrade] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Per-lesson GC publish state (keyed by lesson id).
+  const [gcState, setGcState] = useState<Record<string, GcPublishState>>({});
+
+  async function publishLessonToClassroom(lessonId: string) {
+    if (gcState[lessonId] === 'busy') return;
+    setGcState((s) => ({ ...s, [lessonId]: 'busy' }));
+    try {
+      const res = await fetch('/api/teacher/google/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId: data.class_id, resourceType: 'assignment', resourceId: lessonId }),
+      });
+      const json = await res.json() as { needsReconnect?: boolean };
+      if (!res.ok && json.needsReconnect) {
+        setGcState((s) => ({ ...s, [lessonId]: 'needsReconnect' }));
+      } else if (!res.ok) {
+        setGcState((s) => ({ ...s, [lessonId]: 'idle' }));
+      } else {
+        setGcState((s) => ({ ...s, [lessonId]: 'done' }));
+      }
+    } catch {
+      setGcState((s) => ({ ...s, [lessonId]: 'idle' }));
+    }
+  }
 
   const subjectOptions = useMemo(() => distinctValues(data.lessons, (l) => l.subject), [data.lessons]);
   const gradeOptions = useMemo(() => distinctValues(data.lessons, (l) => l.grade_level), [data.lessons]);
@@ -203,7 +272,14 @@ export function LessonLibrary({
                 {group.label}
               </h2>
               {group.items.map((l) => (
-                <LessonRow key={l.id} lesson={l} classId={data.class_id} onView={() => setSelectedId(l.id)} />
+                <LessonRow
+                  key={l.id}
+                  lesson={l}
+                  classId={data.class_id}
+                  onView={() => setSelectedId(l.id)}
+                  gcState={gcState[l.id]}
+                  onPublishToClassroom={googleCourseId ? () => void publishLessonToClassroom(l.id) : undefined}
+                />
               ))}
             </section>
           ))}

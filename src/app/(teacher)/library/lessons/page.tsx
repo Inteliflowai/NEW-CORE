@@ -74,8 +74,12 @@ export default async function LessonLibraryPage({
   });
 
   // 5. School state (for the Generate tab's standards suggestions). Null when unset.
+  //    Also fetch google_course_id for the "Publish to Classroom" gating prop (admin-client only;
+  //    RLS denies authenticated reads of google_publications/classes.google_course_id).
   let schoolState: string | null = null;
-  const { data: classRow } = await admin.from('classes').select('school_id').eq('id', classId).maybeSingle();
+  const { data: classRow } = await admin.from('classes').select('school_id, google_course_id').eq('id', classId).maybeSingle();
+  const googleCourseId: string | null =
+    ((classRow as { google_course_id?: string | null } | null)?.google_course_id) ?? null;
   const schoolId = (classRow as { school_id?: string | null } | null)?.school_id ?? null;
   if (schoolId) {
     const { data: school } = await admin.from('schools').select('state').eq('id', schoolId).maybeSingle();
@@ -91,6 +95,7 @@ export default async function LessonLibraryPage({
         classId={classId}
         existingLessons={existingLessons}
         schoolState={schoolState}
+        googleCourseId={googleCourseId}
       />
     </div>
   );

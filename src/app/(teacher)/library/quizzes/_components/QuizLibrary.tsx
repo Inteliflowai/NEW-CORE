@@ -50,6 +50,9 @@ export interface QuizLibraryProps {
   classes?: LibraryClassOption[];
   /** Injectable clock (tests pass a fixed date); defaults to real now. */
   now?: Date;
+  /** When set, shows "Publish to Classroom" on each row (fetched server-side via admin client).
+   *  Absent/null → the action is hidden (class is not GC-mirrored). */
+  googleCourseId?: string | null;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -71,7 +74,10 @@ function isBuilding(row: QuizLibRow): boolean {
   return row.question_count === 0 && row.status !== 'archived';
 }
 
-export function QuizLibrary({ data, classId, questions, classes = [], now }: QuizLibraryProps) {
+/** Per-quiz GC publish state: idle | busy | done | needsReconnect. */
+type GcPublishState = 'idle' | 'busy' | 'done' | 'needsReconnect';
+
+export function QuizLibrary({ data, classId, questions, classes = [], now, googleCourseId }: QuizLibraryProps) {
   const clock = now ?? new Date();
   const [search, setSearch] = useState('');
   // Calendar buckets (shared with the Lesson Library) so "Today"/"This week" mean the same on both.
@@ -79,6 +85,30 @@ export function QuizLibrary({ data, classId, questions, classes = [], now }: Qui
   const [subject, setSubject] = useState('all');
   const [grade, setGrade] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Per-quiz GC publish state (keyed by quiz id).
+  const [gcState, setGcState] = useState<Record<string, GcPublishState>>({});
+
+  async function publishToClassroom(quizId: string) {
+    if (gcState[quizId] === 'busy') return;
+    setGcState((s) => ({ ...s, [quizId]: 'busy' }));
+    try {
+      const res = await fetch('/api/teacher/google/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classId, resourceType: 'quiz', resourceId: quizId }),
+      });
+      const json = await res.json() as { needsReconnect?: boolean };
+      if (!res.ok && json.needsReconnect) {
+        setGcState((s) => ({ ...s, [quizId]: 'needsReconnect' }));
+      } else if (!res.ok) {
+        setGcState((s) => ({ ...s, [quizId]: 'idle' }));
+      } else {
+        setGcState((s) => ({ ...s, [quizId]: 'done' }));
+      }
+    } catch {
+      setGcState((s) => ({ ...s, [quizId]: 'idle' }));
+    }
+  }
 
   const subjectOptions = useMemo(() => distinctValues(data.quizzes, (q) => q.subject), [data.quizzes]);
   const gradeOptions = useMemo(() => distinctValues(data.quizzes, (q) => q.grade_level), [data.quizzes]);
@@ -142,8 +172,9 @@ export function QuizLibrary({ data, classId, questions, classes = [], now }: Qui
               <ul className="flex flex-col gap-3">
                 {group.items.map((row) => {
                   const building = isBuilding(row);
+                  const gcRowState = gcState[row.id] ?? 'idle';
                   return (
-                    <li key={row.id}>
+                    <li key={row.id} className="flex flex-col gap-2">
                       <button
                         type="button"
                         onClick={() => setSelectedId(row.id)}
@@ -174,6 +205,30 @@ export function QuizLibrary({ data, classId, questions, classes = [], now }: Qui
                           )}
                         </span>
                       </button>
+                      {/* GC publish — gated on googleCourseId (threaded from server page) */}
+                      {googleCourseId && (
+                        <div className="flex items-center gap-2 px-1">
+                          {gcRowState === 'done' ? (
+                            <span className="text-sm text-fg-muted">Sent to Classroom</span>
+                          ) : gcRowState === 'needsReconnect' ? (
+                            <a
+                              href="/settings/google"
+                              className="text-sm font-bold text-brand underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                            >
+                              Reconnect Google
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => void publishToClassroom(row.id)}
+                              disabled={gcRowState === 'busy'}
+                              className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1 text-sm font-bold text-fg shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-50"
+                            >
+                              {gcRowState === 'busy' ? 'Publishing…' : 'Publish to Classroom'}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </li>
                   );
                 })}

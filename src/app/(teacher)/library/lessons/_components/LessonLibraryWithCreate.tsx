@@ -24,6 +24,9 @@ export interface LessonLibraryWithCreateProps {
   classId: string;
   existingLessons: UploadLessonLite[];
   schoolState: string | null;
+  /** When set, each library row shows "Publish to Classroom". Threaded from the server page
+   *  via the admin client. Absent/null → button is hidden (class is not GC-mirrored). */
+  googleCourseId?: string | null;
 }
 
 export function LessonLibraryWithCreate({
@@ -32,6 +35,7 @@ export function LessonLibraryWithCreate({
   classId,
   existingLessons,
   schoolState,
+  googleCourseId,
 }: LessonLibraryWithCreateProps): React.JSX.Element {
   const [view, setView] = useState<View>('browse');
 
@@ -75,7 +79,7 @@ export function LessonLibraryWithCreate({
       </div>
 
       {/* Existing library */}
-      <LessonLibrary data={data} classes={classes} onCreate={() => setView('create')} />
+      <LessonLibrary data={data} classes={classes} onCreate={() => setView('create')} googleCourseId={googleCourseId} />
     </div>
   );
 }
