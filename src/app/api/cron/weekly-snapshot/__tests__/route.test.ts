@@ -209,6 +209,10 @@ function makeMockAdmin(opts: MockAdminOpts) {
       };
     }
 
+    if (table === 'skill_state_snapshots') {
+      return { upsert: async () => ({ data: null, error: null }) };
+    }
+
     return { data: [], error: null };
   });
 

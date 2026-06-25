@@ -30,23 +30,8 @@ import { computeConsistency } from '@/lib/signals/consistency';
 import { computeHwQuizDivergence } from '@/lib/signals/computeHwQuizDivergence';
 import { computeRosterRiskIndex } from '@/lib/signals/computeRosterRiskIndex';
 import { currentMasteryBand } from '@/lib/utils/scoring';
-
-// ── isoWeekMonday ─────────────────────────────────────────────────────────────
-
-/**
- * Returns the ISO-week Monday (UTC) for the given reference date as YYYY-MM-DD.
- * Deterministic: no bare Date.now() — callers pass ref explicitly.
- *
- * ISO week: Monday = 1 … Sunday = 0.
- * Offset formula: dow === 0 (Sunday) → -6 days; else 1 − dow.
- */
-export function isoWeekMonday(ref: Date): string {
-  const d = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth(), ref.getUTCDate()));
-  const dow = d.getUTCDay(); // 0=Sun … 6=Sat
-  const diff = dow === 0 ? -6 : 1 - dow;
-  d.setUTCDate(d.getUTCDate() + diff);
-  return d.toISOString().slice(0, 10); // YYYY-MM-DD
-}
+import { isoWeekMonday } from '@/lib/dates/isoWeekMonday';
+export { isoWeekMonday } from '@/lib/dates/isoWeekMonday';
 
 // ── Row shapes ────────────────────────────────────────────────────────────────
 
@@ -135,7 +120,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // MUST run AFTER step 1 so the states are fresh.
       const { data: skillStates } = await admin
         .from('skill_learning_state')
-        .select('skill:skill_id(name), state')
+        .select('skill_id, skill:skill_id(name), state, confidence')
         .eq('student_id', student_id);
 
       const strength_topics: string[] = [];
@@ -329,6 +314,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         console.error(`[weekly-snapshot] upsert failed for student ${student_id}:`, upsertErr);
         failed++;
         continue;
+      }
+
+      // ── Per-skill CL snapshot (moat trend history; idempotent per week) ──
+      // AFTER the primary upsert so a failure here can never suppress student_model_snapshots.
+      const clSnapshotRows = ((skillStates ?? []) as unknown as {
+        skill_id: string; state: string; confidence: number | null;
+      }[]).map((r) => ({
+        student_id,
+        school_id: school_id || null,
+        skill_id: r.skill_id,
+        snapshot_date: snapshotDate,
+        state: r.state,
+        confidence: r.confidence ?? 0,
+      }));
+      if (clSnapshotRows.length > 0) {
+        const { error: clErr } = await admin
+          .from('skill_state_snapshots')
+          .upsert(clSnapshotRows, { onConflict: 'student_id,skill_id,snapshot_date' });
+        if (clErr) {
+          console.error(`[weekly-snapshot] skill_state_snapshots upsert failed for ${student_id}:`, clErr);
+        }
       }
 
       processed++;
