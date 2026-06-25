@@ -8,6 +8,7 @@ vi.mock('@/lib/auth/roles', () => ({ STAFF_ROLES: ['teacher','school_admin','sch
 vi.mock('@/lib/auth/guards', () => ({ guardClassAccess: async () => null }));
 vi.mock('@/lib/skills/recomputeSkillStates', () => ({ recomputeSkillStatesForStudent: async () => {} }));
 const getUser = vi.fn();
+const attemptsUpdate = vi.fn();
 vi.mock('@/lib/supabase/server', () => ({
   createServerSupabaseClient: async () => ({ auth: { getUser } }),
   createAdminSupabaseClient: () => ({
@@ -15,7 +16,7 @@ vi.mock('@/lib/supabase/server', () => ({
       if (t === 'users') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { role: 'teacher' } }) }) }) };
       if (t === 'homework_attempts') return {
         select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'a1', assignment_id: 'asg1', student_id: 'stu1', status: 'graded', score_pct: 70, teacher_score: null } }) }) }),
-        update: () => ({ eq: async () => ({ error: null }) }),
+        update: (patch: unknown) => { attemptsUpdate(patch); return { eq: async () => ({ error: null }) }; },
       };
       // assignments has class_id ONLY (no school_id column — verified 0004); school_id is on classes.
       if (t === 'assignments') return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { class_id: 'c1' } }) }) }) };
@@ -26,7 +27,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const req = (b: unknown) => new Request('http://x', { method: 'POST', body: JSON.stringify(b) });
-beforeEach(() => { logAudit.mockReset(); getUser.mockResolvedValue({ data: { user: { id: 'u1' } } }); });
+beforeEach(() => { logAudit.mockReset(); attemptsUpdate.mockReset(); getUser.mockResolvedValue({ data: { user: { id: 'u1' } } }); });
 
 describe('grade override audit', () => {
   it('logs grade.override with before/after on a successful override', async () => {
@@ -45,5 +46,9 @@ describe('grade override audit', () => {
     const { POST } = await import('@/app/api/teacher/gradebook/override/route');
     const res = await POST(req({ attempt_id: 'a1', teacher_score: 88 }));
     expect(res.status).toBe(200); // a logging failure must never break the override
+    // Grade write must have happened even though audit failed
+    expect(attemptsUpdate).toHaveBeenCalledWith(expect.objectContaining({ teacher_score: 88 }));
+    const body = await res.json() as { ok: boolean; attempt_id: string; displayed_grade: number };
+    expect(body.displayed_grade).toBe(88);
   });
 });

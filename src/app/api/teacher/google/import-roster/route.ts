@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { reconcileCourseRoster } from '@/lib/google/reconcileCourseRoster';
 import { gcErrorResponse } from '@/lib/google/errorEnvelope';
+import { logAudit } from '@/lib/audit/logAudit';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const supabase = await createServerSupabaseClient();
@@ -64,6 +65,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const result = await reconcileCourseRoster(admin, { teacherId: user.id, schoolId, googleCourseId: courseId, classId });
+    if (result.softRemoved + result.reactivated + result.enrolled > 0 || result.skippedOther > 0 || result.errors > 0) {
+      await logAudit(admin, {
+        actorId: user.id,
+        schoolId,
+        action: 'roster.sync',
+        resourceType: 'class',
+        resourceId: classId,
+        metadata: { enrolled: result.enrolled, reactivated: result.reactivated, softRemoved: result.softRemoved, skippedOther: result.skippedOther, errors: result.errors, source: 'google', via: 'import' },
+      });
+    }
     return NextResponse.json({ classId, ...result });
   } catch (err) {
     return gcErrorResponse(err);
