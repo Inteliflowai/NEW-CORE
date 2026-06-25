@@ -34,3 +34,7 @@ export const GC_REQUIRED_SCOPES: string[] = [
   `${GC}/classroom.coursework.students`,
   `${GC}/classroom.courseworkmaterials`,
 ];
+
+// Silent-SSO launch (Seg 4) requests IDENTITY scopes only — students never grant classroom
+// scopes, and requesting them would force a consent wall on the silent launch.
+export const LAUNCH_SCOPES: string[] = ['openid', 'email', 'profile'];
