@@ -114,6 +114,8 @@ function makeAdminMock(opts: {
   // SPARK gate — defaults to null (off) so all pre-existing tests are unaffected
   sparkLink?: unknown;
   userRow?: unknown;
+  /** Task F: optional callback invoked with the assignments.insert payload */
+  onAssignmentsInsert?: (payload: unknown) => void;
 } = {}) {
   const {
     attempt = FAKE_ATTEMPT_GRADED,
@@ -124,6 +126,7 @@ function makeAdminMock(opts: {
     insertError = null,
     sparkLink = null,
     userRow = { school_id: 'sch-1', grade_level: '7' },
+    onAssignmentsInsert,
   } = opts;
 
   const attemptChain = makeChain(attempt, attemptError);
@@ -136,7 +139,10 @@ function makeAdminMock(opts: {
       if (table === 'quiz_responses') return responsesChain;
       if (table === 'assignments') {
         const chain = { ...insertChain };
-        chain['insert'] = vi.fn().mockReturnValue(insertChain);
+        chain['insert'] = vi.fn().mockImplementation((payload: unknown) => {
+          onAssignmentsInsert?.(payload);
+          return insertChain;
+        });
         return chain;
       }
       // SPARK gate: platform_links returns the configured sparkLink (null = off by default)
@@ -183,6 +189,16 @@ vi.mock('@/lib/spark/notifyAssignmentCreated', () => ({
   notifyAssignmentCreated: (...a: unknown[]) => mockNotify(...a),
 }));
 
+// Task F: Mock resolveLessonSkills + loadSkillTargets (must be hoisted before route import)
+const mockResolveLessonSkills = vi.fn();
+vi.mock('@/lib/lessons/resolveLessonSkills', () => ({
+  resolveLessonSkills: (...a: unknown[]) => mockResolveLessonSkills(...a),
+}));
+const mockLoadSkillTargets = vi.fn();
+vi.mock('@/lib/skills/loadSkillTargets', () => ({
+  loadSkillTargets: (...a: unknown[]) => mockLoadSkillTargets(...a),
+}));
+
 // ─── tests ────────────────────────────────────────────────────────────────────
 
 describe('POST /api/teacher/assignments/generate', () => {
@@ -192,6 +208,11 @@ describe('POST /api/teacher/assignments/generate', () => {
     mockInferLearningStyle.mockReset();
     mockGetSparkLink.mockReset();
     mockNotify.mockReset();
+    // Task F: safe defaults so existing tests are unaffected (empty skills → single-band fallback)
+    mockResolveLessonSkills.mockReset();
+    mockResolveLessonSkills.mockResolvedValue([]);
+    mockLoadSkillTargets.mockReset();
+    mockLoadSkillTargets.mockResolvedValue([]);
     vi.resetModules();
   });
 
@@ -404,5 +425,67 @@ describe('POST /api/teacher/assignments/generate', () => {
       coreHomeworkId: expect.any(String),
       studentId: expect.any(String),
     }));
+  });
+
+  // ── Task F: skill-targeted generation ─────────────────────────────────────
+
+  it('resolves lesson skills, threads skillTargets, and persists skill_ids', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'teacher-1' } }, error: null }) },
+    } as never);
+
+    let insertPayload: Record<string, unknown> = {};
+    const adminMock = makeAdminMock({
+      onAssignmentsInsert: (payload) => { insertPayload = payload as Record<string, unknown>; },
+    });
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+    mockGuardStudentAccess.mockResolvedValue(null);
+
+    // Lesson tagged with two skills
+    mockResolveLessonSkills.mockResolvedValue([
+      { skill_id: 'frac', skill_name: 'Fractions' },
+      { skill_id: 'dec', skill_name: 'Decimals' },
+    ]);
+    mockLoadSkillTargets.mockResolvedValue([
+      { skill_id: 'frac', skill_name: 'Fractions', level: 'scaffolded', verb: 'Reinforce', confident: true },
+      { skill_id: 'dec', skill_name: 'Decimals', level: 'standard', verb: 'On Track', confident: true },
+    ]);
+    mockGenerateAssignment.mockResolvedValue(FAKE_ASSIGNMENT);
+
+    const { POST } = await import('@/app/api/teacher/assignments/generate/route');
+    const res = await POST(makeRequest({ quiz_attempt_id: 'attempt-1', learning_style: 'visual' }));
+    expect(res.status).toBe(200);
+
+    const genArg = mockGenerateAssignment.mock.calls[0][0];
+    expect(Array.isArray(genArg.skillTargets)).toBe(true);
+    expect(genArg.skillTargets.length).toBeGreaterThanOrEqual(1);
+    expect(insertPayload.skill_ids).toEqual(['frac', 'dec']);
+  });
+
+  it('falls back to single-band (no skillTargets, skill_ids=[]) for an untagged lesson', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'teacher-1' } }, error: null }) },
+    } as never);
+
+    let insertPayload: Record<string, unknown> = {};
+    const adminMock = makeAdminMock({
+      onAssignmentsInsert: (payload) => { insertPayload = payload as Record<string, unknown>; },
+    });
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+    mockGuardStudentAccess.mockResolvedValue(null);
+
+    // Untagged lesson → no skills (default mock already returns [])
+    mockResolveLessonSkills.mockResolvedValue([]);
+    mockGenerateAssignment.mockResolvedValue(FAKE_ASSIGNMENT);
+
+    const { POST } = await import('@/app/api/teacher/assignments/generate/route');
+    const res = await POST(makeRequest({ quiz_attempt_id: 'attempt-1', learning_style: 'visual' }));
+    expect(res.status).toBe(200);
+
+    const genArg = mockGenerateAssignment.mock.calls[0][0];
+    expect(genArg.skillTargets ?? []).toEqual([]);   // single-band path
+    expect(insertPayload.skill_ids).toEqual([]);      // backward compat
   });
 });

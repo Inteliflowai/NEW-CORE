@@ -17,6 +17,8 @@ import { respondEngineError } from '@/app/api/_lib/errorEnvelope';
 import { computeBehavioralSummary, formatSignalsForPrompt } from '@/lib/utils/scoring';
 import { getSparkLink } from '@/lib/spark/sparkLink';
 import { notifyAssignmentCreated } from '@/lib/spark/notifyAssignmentCreated';
+import { resolveLessonSkills } from '@/lib/lessons/resolveLessonSkills';
+import { loadSkillTargets } from '@/lib/skills/loadSkillTargets';
 
 // Shape of the widened quiz_attempts row (with quizzes/lessons + users joins).
 // Supabase's typed-query inference can't resolve a join this deep and returns
@@ -148,12 +150,21 @@ export async function POST(req: NextRequest) {
       style = inferred.learning_style;
     }
 
+    // ── CL → generation: resolve this lesson's skills + the student's per-skill CL ──
+    const lessonSkills = lessonId ? await resolveLessonSkills(admin, lessonId) : [];
+    const skillTargets = await loadSkillTargets(admin, {
+      studentId: attempt.student_id as string,
+      skills: lessonSkills,
+      fallbackBand: band,
+    });
+
     // â”€â”€ Engine call #5: generate assignment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const assignment = await generateAssignment({
       lessonSummary,
       band,
       style,         // 6-value prompt vocabulary (read_write/tactile pass through)
       studentName,
+      skillTargets,
     });
 
     // â”€â”€ Persist (C6: normalizeLearningStyle ONLY at the write boundary) â”€â”€â”€â”€â”€â”€
@@ -166,6 +177,7 @@ export async function POST(req: NextRequest) {
         lesson_id: lessonId,        // C15: from quizzes join
         mastery_band: band,
         learning_style: normalizeLearningStyle(style), // C6: normalize at boundary
+        skill_ids: lessonSkills.map((s) => s.skill_id),
         content: assignment,
         status: 'draft',
         assigned_at: new Date().toISOString(), // gradebook v1.1: the day this was assigned (never changes)
