@@ -54,6 +54,7 @@ export async function generateAssignment(input: AssignmentInput): Promise<Assign
     atl_skills: s.atl_skills,
     ib_learner_profile: s.ib_learner_profile,
     bloom_level: s.bloom_level,
+    power_skill: s.critical_thinking_skill,
   }));
 
   const userPrompt = assignmentPrompt(
