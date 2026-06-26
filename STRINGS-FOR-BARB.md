@@ -1088,3 +1088,15 @@ The only student-facing copy is the no-match page (`/launch/unmatched`), shown w
 - Body: "We couldn't connect this Google account to your CORE account yet. You can sign in with your CORE password, or ask your teacher to add you."
 - CTA (→ /login): **"Sign in with CORE"**
   (Everything else in this segment is silent/automatic — no student-visible strings. The launch never auto-creates an account; a removed/un-synced student lands here.)
+
+## Spark Challenges — group-by-student redesign (2026-06-25) — DRAFT, Barb sign-off required
+Teacher-only surface (scores/dates allowed). The page now groups challenges under each student (one row per student, expandable).
+- Collapsed student summary (only non-zero states, joined by " · "): **"{n} scored"** · **"{n} in progress"** · **"{n} not started"**; none → **"No challenges yet"**.
+- Per-challenge state marker: ✓ scored · ◷ in progress · ○ not started.
+- Scored line: **"Transfer: {word} ({n}%) · {engagement} · Submitted {Mon DD}"** where word = strong / developing / emerging / "not yet scored" (`transferWord`), engagement = **"engaged deeply"** / **"engaged lightly"** / **"did not engage"** (`content_quality`).
+- Rubric line: **"Rubric: {Dim} {n}/4 · …"** (dims: Problem · Reasoning · Evidence · Creativity · Communication · Reflection · Collaboration).
+- Effort line (subtle): **"{effort_label} · {n} revisions · {n} hints"**.
+- In-progress: **"In progress — not submitted yet"**. Not-started: **"Not started yet"**.
+- Hover/focus tooltip (gradebook pattern): line 1 = challenge name, line 2 = **"Submitted {Mon DD}"** (or the state).
+- Empty state (unchanged): "No Spark Challenges yet" / "Generate a SPARK-enabled assignment to start a challenge for this class."
+  (NOTE: "Open in SPARK" deferred — needs a net-new SPARK-side teacher-review build.)
