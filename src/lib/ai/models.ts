@@ -69,6 +69,13 @@ export const CLAUDE_TUTOR_MODEL =
 export const CLAUDE_TUTOR_CHECK_MODEL =
   process.env.ANTHROPIC_TUTOR_CHECK_MODEL || 'claude-haiku-4-5';
 
+/**
+ * Anthropic model for chapter test generation + grading. Never pass temperature (400 on opus-4.x).
+ * Env-overridable for staging/testing without a deploy.
+ */
+export const CLAUDE_CHAPTER_MODEL =
+  process.env.ANTHROPIC_CHAPTER_MODEL || 'claude-opus-4-8';
+
 /** Bumped whenever a calibration-locked prompt changes (eval drift trigger). */
 export const PROMPT_VERSION = '1.0.0';
 /** Bumped whenever a calibration-locked model ID changes (eval drift trigger). */
