@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { IconMenu } from '@/components/core/icons';
 
@@ -45,7 +46,11 @@ export function TeacherTopbar({
   const pathname = usePathname();
   const title = pageTitleFor(pathname);
   const initials = initialsOf(userName);
-  const greeting = greetingFor(new Date().getHours());
+  // #418 fix: the time-based greeting depends on the local hour, which the server and client can
+  // disagree on → hydration mismatch. Compute it client-only after mount; SSR + first client render
+  // both omit it, so they agree, then it fills in.
+  const [greeting, setGreeting] = useState<string | null>(null);
+  useEffect(() => { setGreeting(greetingFor(new Date().getHours())); }, []);
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-fg-muted/15 bg-surface px-5">
@@ -63,7 +68,7 @@ export function TeacherTopbar({
       <div className="flex items-center gap-3.5">
         {userName && (
           <span className="hidden text-sm text-fg-muted sm:inline">
-            {greeting}, <b className="font-semibold text-fg">{userName}</b>
+            {greeting ? <>{greeting}, </> : null}<b className="font-semibold text-fg">{userName}</b>
           </span>
         )}
         <span
