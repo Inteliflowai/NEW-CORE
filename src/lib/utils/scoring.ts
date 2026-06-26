@@ -98,6 +98,18 @@ export function bandToAssignmentMode(band: MasteryBand): AssignmentMode {
   return { reteach: 'scaffolded', grade_level: 'standard', advanced: 'extension' }[band] as AssignmentMode;
 }
 
+/** Single source of truth for level(mode)→band, shared by assignmentModeToBand and the
+ *  sectioned prompt (avoids a duplicated literal map drifting out of sync). */
+export const MODE_TO_BAND: Record<AssignmentMode, MasteryBand> = {
+  scaffolded: 'reteach',
+  standard: 'grade_level',
+  extension: 'advanced',
+};
+
+export function assignmentModeToBand(mode: AssignmentMode): MasteryBand {
+  return MODE_TO_BAND[mode];
+}
+
 export function scoreMCQ(studentAnswer: string, correctAnswer: string): number {
   if (!studentAnswer || !correctAnswer) return 0;
   const a = studentAnswer.trim().toLowerCase();
