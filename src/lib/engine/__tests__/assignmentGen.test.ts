@@ -251,6 +251,91 @@ describe('generateAssignment — sectioned skillTargets', () => {
   });
 });
 
+// ── FIX 2+7: finalizeAssignment — step renumber + skill_id snap ──────────────
+
+describe('generateAssignment — finalizeAssignment (step renumber + skill_id snap)', () => {
+  beforeEach(() => {
+    mockClaude.mockReset();
+    mockOpenAI.mockReset();
+    vi.resetModules();
+  });
+
+  it('FIX 2: duplicate steps from a sectioned LLM response are renumbered to [1,2,3,4]', async () => {
+    // LLM restarts step numbering per section: [1,2,1,2] → finalizeAssignment renumbers to [1,2,3,4]
+    const duplicateStepObj = {
+      ...ASSIGNMENT_OBJ,
+      tasks: [
+        { step: 1, description: 'Task A', type: 'write' as const, strategy: 'Goal First', atl_skill: 'Thinking', ib_attribute: 'Thinkers', bloom_level: 'Understand', skill_id: 'frac', skill_name: 'Fractions', power_skill: 'Monitor' },
+        { step: 2, description: 'Task B', type: 'draw' as const, strategy: 'Idea Mapping', atl_skill: 'Thinking', ib_attribute: 'Thinkers', bloom_level: 'Remember', skill_id: 'frac', skill_name: 'Fractions', power_skill: 'Monitor' },
+        { step: 1, description: 'Task C', type: 'write' as const, strategy: 'Explain It', atl_skill: 'Communication', ib_attribute: 'Communicators', bloom_level: 'Understand', skill_id: 'dec', skill_name: 'Decimals', power_skill: 'Communicate' },
+        { step: 2, description: 'Task D', type: 'analyze' as const, strategy: 'Text Detective', atl_skill: 'Research', ib_attribute: 'Inquirers', bloom_level: 'Analyze', skill_id: 'dec', skill_name: 'Decimals', power_skill: 'Research' },
+      ],
+    };
+    mockClaude.mockResolvedValue(JSON.stringify(duplicateStepObj));
+    const { generateAssignment } = await import('@/lib/engine/assignmentGen');
+    const out = await generateAssignment({
+      lessonSummary: 'Fractions and Decimals',
+      band: 'grade_level',
+      style: 'visual',
+      studentName: 'Sam',
+      skillTargets: [
+        { skill_id: 'frac', skill_name: 'Fractions', level: 'scaffolded', verb: 'Reinforce', confident: true },
+        { skill_id: 'dec', skill_name: 'Decimals', level: 'extension', verb: 'Enrich', confident: true },
+      ],
+    });
+    // Steps must be renumbered 1→4 regardless of what the LLM produced
+    expect(out.tasks.map((t) => t.step)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('FIX 7: a task with a garbled skill_id but matching skill_name gets skill_id snapped to the canonical section id', async () => {
+    const garbledIdObj = {
+      ...ASSIGNMENT_OBJ,
+      tasks: [
+        {
+          step: 1,
+          description: 'Fraction task',
+          type: 'write' as const,
+          strategy: 'Goal First',
+          atl_skill: 'Thinking',
+          ib_attribute: 'Thinkers',
+          bloom_level: 'Understand',
+          skill_id: 'GARBLED-UUID-NOT-CANONICAL',
+          skill_name: 'Fractions',
+          power_skill: 'Monitor',
+        },
+        {
+          step: 2,
+          description: 'Decimal task',
+          type: 'draw' as const,
+          strategy: 'Idea Mapping',
+          atl_skill: 'Thinking',
+          ib_attribute: 'Thinkers',
+          bloom_level: 'Remember',
+          skill_id: 'dec',
+          skill_name: 'Decimals',
+          power_skill: 'Think',
+        },
+      ],
+    };
+    mockClaude.mockResolvedValue(JSON.stringify(garbledIdObj));
+    const { generateAssignment } = await import('@/lib/engine/assignmentGen');
+    const out = await generateAssignment({
+      lessonSummary: 'Fractions and Decimals',
+      band: 'grade_level',
+      style: 'visual',
+      studentName: 'Sam',
+      skillTargets: [
+        { skill_id: 'frac', skill_name: 'Fractions', level: 'scaffolded', verb: 'Reinforce', confident: true },
+        { skill_id: 'dec', skill_name: 'Decimals', level: 'extension', verb: 'Enrich', confident: true },
+      ],
+    });
+    // Garbled skill_id snapped to canonical 'frac' via skill_name match
+    expect(out.tasks[0].skill_id).toBe('frac');
+    // Correctly-matched skill_id preserved
+    expect(out.tasks[1].skill_id).toBe('dec');
+  });
+});
+
 // ── inferLearningStyle (#5a) ──────────────────────────────────────────────────
 
 describe('inferLearningStyle (#5a)', () => {

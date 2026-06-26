@@ -19,6 +19,7 @@ import { getSparkLink } from '@/lib/spark/sparkLink';
 import { notifyAssignmentCreated } from '@/lib/spark/notifyAssignmentCreated';
 import { resolveLessonSkills } from '@/lib/lessons/resolveLessonSkills';
 import { loadSkillTargets } from '@/lib/skills/loadSkillTargets';
+import type { SkillTarget } from '@/lib/skills/skillTargets';
 
 // Shape of the widened quiz_attempts row (with quizzes/lessons + users joins).
 // Supabase's typed-query inference can't resolve a join this deep and returns
@@ -151,12 +152,20 @@ export async function POST(req: NextRequest) {
     }
 
     // ── CL → generation: resolve this lesson's skills + the student's per-skill CL ──
-    const lessonSkills = lessonId ? await resolveLessonSkills(admin, lessonId) : [];
-    const skillTargets = await loadSkillTargets(admin, {
-      studentId: attempt.student_id as string,
-      skills: lessonSkills,
-      fallbackBand: band,
-    });
+    // FIX 3: wrap in try/catch so a DB/network throw degrades to single-band rather than 500.
+    let lessonSkills: { skill_id: string; skill_name: string }[] = [];
+    let skillTargets: SkillTarget[] = [];
+    try {
+      lessonSkills = lessonId ? await resolveLessonSkills(admin, lessonId) : [];
+      skillTargets = await loadSkillTargets(admin, {
+        studentId: attempt.student_id as string,
+        skills: lessonSkills,
+        fallbackBand: band,
+      });
+    } catch (skillErr) {
+      console.warn('[assignments/generate] skill resolution failed — single-band fallback:', skillErr);
+      lessonSkills = []; skillTargets = [];
+    }
 
     // â”€â”€ Engine call #5: generate assignment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const assignment = await generateAssignment({
@@ -177,7 +186,7 @@ export async function POST(req: NextRequest) {
         lesson_id: lessonId,        // C15: from quizzes join
         mastery_band: band,
         learning_style: normalizeLearningStyle(style), // C6: normalize at boundary
-        skill_ids: lessonSkills.map((s) => s.skill_id),
+        skill_ids: skillTargets.map((t) => t.skill_id),
         content: assignment,
         status: 'draft',
         assigned_at: new Date().toISOString(), // gradebook v1.1: the day this was assigned (never changes)

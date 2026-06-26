@@ -61,8 +61,10 @@ export function assertNoBannedWord(text: string, ctx?: string): void {
   }
 }
 
-// Diagnostic teacher-only vocabulary that must never reach a student/parent surface.
-// (Mirrors assignmentResultBundle's DIAGNOSTIC_VOCAB_RE; this is the shared home.)
+// Diagnostic vocabulary for the player/section-heading context. STRICTER than
+// assignmentResultBundle's local DIAGNOSTIC_VOCAB_RE, which intentionally ALLOWS
+// "on track" / "scaffolded" / "extension" as approved student result-copy labels.
+// Do NOT drop-in replace the bundle's regex with this one.
 export const DIAGNOSTIC_VOCAB_RE =
   /\b(?:reteach|re-teach|reinforce|enrich|scaffolded|extension|partial mastery|strong mastery|(?:top|mid|low|high)-band|\bband\b|above grade level|grade level|on track)\b/i;
 

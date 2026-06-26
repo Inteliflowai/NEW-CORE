@@ -42,3 +42,24 @@ it('normalizeContent forwards ONLY skill_name (drops skill_id/power_skill) and n
   expect(Object.keys(out.tasks![0]).sort()).toEqual(['description', 'skill_name', 'step', 'type']);
   expect(JSON.stringify(out)).not.toMatch(/frac|Monitor|scaffolded|extension|Reinforce|Enrich/);
 });
+
+// FIX 1 tests
+it('normalizeContent drops skill_name that contains a diagnostic level word (safe degrade → no heading)', () => {
+  const out = normalizeContent({ tasks: [
+    { step: 1, description: 'd', skill_name: 'Scaffolded Fractions' } as never,
+  ] });
+  // "Scaffolded" is in DIAGNOSTIC_VOCAB_RE — must be dropped, not forwarded
+  expect(out.tasks![0].skill_name).toBeUndefined();
+});
+
+it('normalizeContent does NOT forward top-level mode (allow-list — never spreads c)', () => {
+  const out = normalizeContent({ mode: 'scaffolded', title: 'T', tasks: [{ step: 1, description: 'd' }] } as never);
+  // mode must not appear in the output at all (allow-list returns only title/instructions/reading_passage/audio_script/tasks)
+  expect('mode' in out).toBe(false);
+  expect(JSON.stringify(out)).not.toMatch(/scaffolded/);
+});
+
+it('normalizeContent still forwards a clean skill_name with no diagnostic vocab', () => {
+  const out = normalizeContent({ tasks: [{ step: 1, description: 'd', skill_name: 'Fractions' } as never] });
+  expect(out.tasks![0].skill_name).toBe('Fractions');
+});

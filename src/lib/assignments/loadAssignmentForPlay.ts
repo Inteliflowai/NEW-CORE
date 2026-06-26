@@ -8,6 +8,7 @@
 // All reads/writes go through the admin client (RLS is NOT the IDOR backstop — the caller
 // has already established the authenticated studentId). Never writes class_id.
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { hasDiagnosticVocab } from '@/lib/copy/leakGuard';
 
 export type AssignmentContent = { title?: string; instructions?: string; reading_passage?: string; audio_script?: string; tasks?: Array<{ step: number; description: string; type?: string; skill_name?: string }> };
 export type ResponsesShape = { tasks: Record<string, { text: string; image_url: string | null }> };
@@ -29,15 +30,17 @@ export function normalizeContent(raw: AssignmentContent | null): AssignmentConte
   const c = raw ?? {};
   const tasks = (c.tasks ?? []).map((t, i) => {
     const tt = t as { step?: number; description?: string; prompt?: string; type?: string; skill_name?: string };
+    const name = typeof tt.skill_name === 'string' && tt.skill_name.trim() ? tt.skill_name.trim() : undefined;
     return {
       step: typeof tt.step === 'number' ? tt.step : i + 1,
       description: tt.description ?? tt.prompt ?? c.instructions ?? '',
       type: tt.type,
-      // ONLY the topic name reaches the client. skill_id / power_skill / any level are never forwarded.
-      skill_name: typeof tt.skill_name === 'string' && tt.skill_name.trim() ? tt.skill_name : undefined,
+      // Topic name only; drop it if the LLM leaked a level/verb word into it (safe degrade → no heading).
+      skill_name: name && !hasDiagnosticVocab(name) ? name : undefined,
     };
   });
-  return { ...c, tasks };
+  // Allow-list top-level fields — NEVER spread `c` (would leak content.mode / learning_style to the client).
+  return { title: c.title, instructions: c.instructions, reading_passage: c.reading_passage, audio_script: c.audio_script, tasks };
 }
 
 export async function loadAssignmentForPlay(admin: SupabaseClient, studentId: string, assignmentId: string): Promise<PlayableAssignment> {

@@ -463,6 +463,36 @@ describe('POST /api/teacher/assignments/generate', () => {
     expect(insertPayload.skill_ids).toEqual(['frac', 'dec']);
   });
 
+  // ── FIX 3: skill resolution throw → degrade to single-band, route still succeeds ─
+  it('FIX 3: degrades to single-band when resolveLessonSkills throws (route returns 200, skill_ids=[])', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'teacher-1' } }, error: null }) },
+    } as never);
+
+    let insertPayload: Record<string, unknown> = {};
+    const adminMock = makeAdminMock({
+      onAssignmentsInsert: (payload) => { insertPayload = payload as Record<string, unknown>; },
+    });
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(adminMock as never);
+    mockGuardStudentAccess.mockResolvedValue(null);
+
+    // resolveLessonSkills rejects → must degrade, NOT 500
+    mockResolveLessonSkills.mockRejectedValue(new Error('DB timeout'));
+    mockGenerateAssignment.mockResolvedValue(FAKE_ASSIGNMENT);
+
+    const { POST } = await import('@/app/api/teacher/assignments/generate/route');
+    const res = await POST(makeRequest({ quiz_attempt_id: 'attempt-1', learning_style: 'visual' }));
+
+    // Must still succeed (not 500)
+    expect(res.status).toBe(200);
+    // generateAssignment called with empty skillTargets (single-band)
+    const genArg = mockGenerateAssignment.mock.calls[0][0];
+    expect(genArg.skillTargets ?? []).toEqual([]);
+    // skill_ids persisted as [] (capped set from empty skillTargets)
+    expect(insertPayload.skill_ids).toEqual([]);
+  });
+
   it('falls back to single-band (no skillTargets, skill_ids=[]) for an untagged lesson', async () => {
     const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
     vi.mocked(createServerSupabaseClient).mockResolvedValue({

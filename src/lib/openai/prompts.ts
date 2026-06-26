@@ -924,7 +924,7 @@ Section ${i + 1} — Skill "${sec.skill_name}" (skill_id: ${sec.skill_id}) — L
 ${strat}`;
     }).join('\n')}
 
-CONSTRAINT: Tasks MUST appear grouped by skill in the order above. A scaffolded section MUST obey its verb/Bloom limits even when a later section is harder.`
+CONSTRAINT: Number the tasks sequentially 1, 2, 3 … across ALL sections — never restart numbering within a section. Tasks MUST appear grouped by skill in the order above. A scaffolded section MUST obey its verb/Bloom limits even when a later section is harder.`
     : '';
 
   const strategyBlock = strategies && strategies.length > 0
@@ -1073,7 +1073,7 @@ Return this exact JSON:
 }
 
 RULES:
-- ${targetedPractice ? '2-3 tasks total — TIGHTER FOCUSED PRACTICE SET, NOT a full assignment' : '3-5 tasks total'}
+- ${sectionsOn ? '1-2 tasks per skill section, grouped by skill in the order shown in SKILL SECTIONS' : (targetedPractice ? '2-3 tasks total — TIGHTER FOCUSED PRACTICE SET, NOT a full assignment' : '3-5 tasks total')}
 - All tasks specific to THIS lesson content — never generic
 - reading_passage and audio_script are MANDATORY — never omit
 - Return ONLY the JSON object${sparkEnabled ? `

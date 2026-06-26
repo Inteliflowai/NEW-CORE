@@ -19,10 +19,10 @@ export async function resolveLessonSkills(
     .not('skill_id', 'is', null);
 
   const seen = new Map<string, string>();
-  for (const row of (qRows ?? []) as unknown as { skill_id: string | null; skills: { id: string; name: string } | null }[]) {
-    if (row.skill_id && row.skills && !seen.has(row.skill_id)) {
-      seen.set(row.skill_id, row.skills.name);
-    }
+  for (const row of (qRows ?? []) as unknown as { skill_id: string | null; skills: { id: string; name: string } | { id: string; name: string }[] | null }[]) {
+    // FIX 9: PostgREST may return the skills embed as an array in some resolutions — normalize.
+    const sk = Array.isArray(row.skills) ? row.skills[0] : row.skills;
+    if (row.skill_id && sk && !seen.has(row.skill_id)) seen.set(row.skill_id, sk.name);
   }
   return [...seen.entries()].map(([skill_id, skill_name]) => ({ skill_id, skill_name }));
 }
