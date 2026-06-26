@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { NAV_ENTRIES, isGroup, matchActive, type NavItem, type NavIconKey } from './navConfig';
 import {
   IconToday, IconRoster, IconGradebook, IconAlerts, IconHighFive,
-  IconLessons, IconQuizzes, IconInsights, IconUpload, IconBolt,
+  IconLessons, IconQuizzes, IconChapters, IconInsights, IconUpload, IconBolt,
 } from '@/components/core/icons';
 
 const ICON: Record<NavIconKey, (p: { className?: string }) => React.JSX.Element> = {
@@ -17,6 +17,7 @@ const ICON: Record<NavIconKey, (p: { className?: string }) => React.JSX.Element>
   highFive: IconHighFive,
   lessons: IconLessons,
   quizzes: IconQuizzes,
+  chapters: IconChapters,
   insights: IconInsights,
   upload: IconUpload,
   googleClassroom: IconUpload,

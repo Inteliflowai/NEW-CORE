@@ -14,6 +14,7 @@ export type NavIconKey =
   | 'highFive'
   | 'lessons'
   | 'quizzes'
+  | 'chapters'
   | 'insights'
   | 'upload'
   | 'googleClassroom';
@@ -55,6 +56,7 @@ export const NAV_ENTRIES: NavEntry[] = [
     items: [
       { label: 'Lesson Library', href: '/library/lessons', icon: 'lessons' },
       { label: 'Quiz Library', href: '/library/quizzes', icon: 'quizzes' },
+      { label: 'Chapters', href: '/chapters', icon: 'chapters' },
     ],
   },
   {

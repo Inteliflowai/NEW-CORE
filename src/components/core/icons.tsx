@@ -104,3 +104,9 @@ export const IconBolt = (p: IconProps) => (
     <path d="M13 2 5 13h6l-1 9 8-11h-6l1-9z" />
   </Svg>
 );
+export const IconChapters = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M7 8h10M7 12h10M7 16h6" />
+  </Svg>
+);
