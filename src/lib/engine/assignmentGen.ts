@@ -21,6 +21,9 @@ import {
   LEARNING_STYLE_SYSTEM,
   learningStylePrompt,
 } from '@/lib/openai/prompts';
+import { assignmentModeToBand } from '@/lib/utils/scoring';
+import type { SkillTarget } from '@/lib/skills/skillTargets';
+import type { AssignmentSection } from '@/lib/openai/prompts';
 import {
   AssignmentSchema,
   type Assignment,
@@ -39,6 +42,9 @@ export interface AssignmentInput {
   studentName: string;
   sparkEnabled?: boolean;
   targetedPractice?: boolean;
+  /** Per-skill CL targets for this lesson. When present, the assignment is sectioned
+   *  per skill (each at its own level) and tasks are tagged. Empty/absent → single-band. */
+  skillTargets?: SkillTarget[];
 }
 
 /**
@@ -57,6 +63,20 @@ export async function generateAssignment(input: AssignmentInput): Promise<Assign
     power_skill: s.critical_thinking_skill,
   }));
 
+  const sections: AssignmentSection[] = (input.skillTargets ?? []).map((t) => ({
+    skill_id: t.skill_id,
+    skill_name: t.skill_name,
+    level: t.level,
+    strategies: getStrategiesForStudent(assignmentModeToBand(t.level), input.style).map((s) => ({
+      name: s.name,
+      what_students_do: s.what_students_do,
+      atl_skills: s.atl_skills,
+      ib_learner_profile: s.ib_learner_profile,
+      bloom_level: s.bloom_level,
+      power_skill: s.critical_thinking_skill,
+    })),
+  }));
+
   const userPrompt = assignmentPrompt(
     input.lessonSummary,
     input.band,
@@ -65,6 +85,7 @@ export async function generateAssignment(input: AssignmentInput): Promise<Assign
     strategies,
     input.sparkEnabled,
     input.targetedPractice,
+    sections.length > 0 ? sections : undefined,
   );
 
   // ── Primary: Claude (temp 0.7, 4500 tok, 120s timeout) ───────────────────

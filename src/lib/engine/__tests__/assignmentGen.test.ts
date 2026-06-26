@@ -155,6 +155,102 @@ describe('generateAssignment', () => {
   });
 });
 
+// ── generateAssignment — sectioned skillTargets path ─────────────────────────
+
+describe('generateAssignment — sectioned skillTargets', () => {
+  beforeEach(() => {
+    mockClaude.mockReset();
+    mockOpenAI.mockReset();
+    vi.resetModules();
+  });
+
+  // A valid assignment with sectioned tasks (skill_id/skill_name/power_skill present)
+  const SECTIONED_OBJ = {
+    ...ASSIGNMENT_OBJ,
+    tasks: [
+      {
+        step: 1,
+        description: 'Identify a fraction',
+        type: 'draw' as const,
+        strategy: 'Text Detective',
+        atl_skill: 'Thinking',
+        ib_attribute: 'Thinkers',
+        bloom_level: 'Understand',
+        skill_id: 'frac',
+        skill_name: 'Fractions',
+        power_skill: 'Monitor',
+      },
+      {
+        step: 2,
+        description: 'Analyze a decimal',
+        type: 'write' as const,
+        strategy: 'Idea Mapping',
+        atl_skill: 'Thinking',
+        ib_attribute: 'Thinkers',
+        bloom_level: 'Analyze',
+        skill_id: 'dec',
+        skill_name: 'Decimals',
+        power_skill: 'Analyze',
+      },
+    ],
+  };
+  const SECTIONED = JSON.stringify(SECTIONED_OBJ);
+
+  it('prompt contains SKILL SECTIONS when skillTargets provided', async () => {
+    mockClaude.mockResolvedValue(SECTIONED);
+    const { generateAssignment } = await import('@/lib/engine/assignmentGen');
+    await generateAssignment({
+      lessonSummary: 'Fractions and Decimals',
+      band: 'grade_level',
+      style: 'visual',
+      studentName: 'Sam',
+      skillTargets: [
+        { skill_id: 'frac', skill_name: 'Fractions', level: 'scaffolded', verb: 'Reinforce', confident: true },
+        { skill_id: 'dec', skill_name: 'Decimals', level: 'extension', verb: 'Enrich', confident: true },
+      ],
+    });
+    const prompt = mockClaude.mock.calls[0][1] as string;
+    expect(prompt).toContain('SKILL SECTIONS');
+    expect(prompt.indexOf('Fractions')).toBeLessThan(prompt.indexOf('Decimals'));
+    expect(prompt).toContain('OVERRIDE');
+    expect(prompt).toMatch(/FORBIDDEN IN STUDENT-VISIBLE TEXT/);
+  });
+
+  it('prompt does NOT contain SKILL SECTIONS when no skillTargets (single-band path unchanged)', async () => {
+    mockClaude.mockResolvedValue(ASSIGNMENT);
+    const { generateAssignment } = await import('@/lib/engine/assignmentGen');
+    await generateAssignment({
+      lessonSummary: 'Fractions intro',
+      band: 'reteach',
+      style: 'visual',
+      studentName: 'Sam',
+    });
+    const prompt = mockClaude.mock.calls[0][1] as string;
+    expect(prompt).not.toContain('SKILL SECTIONS');
+  });
+
+  it('sectioned LLM response preserves skill_id/skill_name/power_skill on tasks', async () => {
+    mockClaude.mockResolvedValue(SECTIONED);
+    const { generateAssignment } = await import('@/lib/engine/assignmentGen');
+    const out = await generateAssignment({
+      lessonSummary: 'Fractions and Decimals',
+      band: 'grade_level',
+      style: 'visual',
+      studentName: 'Sam',
+      skillTargets: [
+        { skill_id: 'frac', skill_name: 'Fractions', level: 'scaffolded', verb: 'Reinforce', confident: true },
+        { skill_id: 'dec', skill_name: 'Decimals', level: 'extension', verb: 'Enrich', confident: true },
+      ],
+    });
+    expect(out.tasks[0].skill_id).toBe('frac');
+    expect(out.tasks[0].skill_name).toBe('Fractions');
+    expect(out.tasks[0].power_skill).toBe('Monitor');
+    expect(out.tasks[1].skill_id).toBe('dec');
+    expect(out.tasks[1].skill_name).toBe('Decimals');
+    expect(out.tasks[1].power_skill).toBe('Analyze');
+  });
+});
+
 // ── inferLearningStyle (#5a) ──────────────────────────────────────────────────
 
 describe('inferLearningStyle (#5a)', () => {

@@ -6,6 +6,7 @@
 // ============================================================
 
 import { MATH_FORMAT_DIRECTIVE } from '@/lib/math/mathPromptDirective';
+import { MODE_TO_BAND } from '@/lib/utils/scoring';
 
 // ============================================================
 // INTELIFLOW LEARNING STRATEGY TOOLKIT
@@ -742,12 +743,27 @@ COMPREHENSION BAND IS LOCKED — never override it.
 Return ONLY valid JSON. No markdown, no explanation, no preamble.
 ${MATH_FORMAT_DIRECTIVE}`;
 
+export interface AssignmentSectionStrategy {
+  name: string;
+  what_students_do: string;
+  atl_skills: string[];
+  ib_learner_profile: string[];
+  bloom_level: string;
+  power_skill: string;
+}
+export interface AssignmentSection {
+  skill_id: string;
+  skill_name: string;
+  level: 'scaffolded' | 'standard' | 'extension';
+  strategies: AssignmentSectionStrategy[];
+}
+
 export function assignmentPrompt(
   lessonSummary: string,
   band: string,
   style: string,
   studentName: string,
-  strategies?: { name: string; what_students_do: string; atl_skills: string[]; ib_learner_profile: string[]; bloom_level: string }[],
+  strategies?: { name: string; what_students_do: string; atl_skills: string[]; ib_learner_profile: string[]; bloom_level: string; power_skill?: string }[],
   sparkEnabled?: boolean,
   // Tier 4 Phase 2.3 v3 (Barb 2026-05-14): when true the prompt
   // generates a tighter focused-practice set — fewer tasks, smaller
@@ -756,6 +772,7 @@ export function assignmentPrompt(
   // student is at-band but needs more reps on the area of confusion;
   // give them a small, doable set, not a full assignment."
   targetedPractice?: boolean,
+  sections?: AssignmentSection[],
 ): string {
 
   const bandProfiles: Record<string, {
@@ -884,6 +901,32 @@ export function assignmentPrompt(
   const bp = bandProfiles[band] || bandProfiles.grade_level;
   const sp = styleProfiles[style] || styleProfiles.emerging;
 
+  const sectionsOn = !!(sections && sections.length > 0);
+  const skillSectionsBlock = sectionsOn
+    ? `
+═══════════════════════════════════════
+SKILL SECTIONS — GENERATE TASKS GROUPED BY SKILL, IN THIS ORDER
+═══════════════════════════════════════
+${studentName}'s understanding differs by skill. Generate the tasks GROUPED BY the skills below, in this exact order. Write each skill's tasks at THAT skill's LEVEL using the per-level verb/Bloom rules below. THESE PER-SECTION RULES OVERRIDE the single "BAND CONSTRAINTS" task-complexity/verb/Bloom guidance for the TASKS; the BAND CONSTRAINTS still govern the reading_passage, audio_script, and diagram. Generate 1-2 tasks per skill. Tag EVERY task with its skill_id and skill_name, and put the strategy's power skill in the task's power_skill field.
+
+FORBIDDEN IN STUDENT-VISIBLE TEXT: never write any of these words/labels into the title, reading_passage, audio_script, instructions, skill_name, or any task description — scaffolded, standard, extension, reteach, reinforce, "on track", enrich, mastery, band, "grade level", "above grade level", partial, remedial, advanced (as a label). The skill_name shows the TOPIC only (e.g. "Fractions"), never a level.
+${sections!.map((sec, i) => {
+      const lp = bandProfiles[MODE_TO_BAND[sec.level]] || bandProfiles.grade_level;
+      const strat = sec.strategies.length
+        ? sec.strategies.map((s) => `    • "${s.name}" — ${s.what_students_do} — ATL: ${s.atl_skills.join(', ')} — IB: ${s.ib_learner_profile.join(', ')} — Bloom: ${s.bloom_level} — Power skill: ${s.power_skill}`).join('\n')
+        : `    • (Assign appropriate Inteliflow strategies for this level and ${style} style; each task still names a strategy, an ATL skill, an IB attribute, a Bloom level, AND a power skill.)`;
+      return `
+Section ${i + 1} — Skill "${sec.skill_name}" (skill_id: ${sec.skill_id}) — LEVEL (internal, never shown): ${lp.label}
+  Task verbs: ${lp.verb_starters}
+  Forbidden: ${lp.forbidden}
+  Bloom's level: ${lp.bloom}
+  Strategies (embed one per task; copy its power skill into the task's power_skill):
+${strat}`;
+    }).join('\n')}
+
+CONSTRAINT: Tasks MUST appear grouped by skill in the order above. A scaffolded section MUST obey its verb/Bloom limits even when a later section is harder.`
+    : '';
+
   const strategyBlock = strategies && strategies.length > 0
     ? `REQUIRED INTELIFLOW STRATEGIES — embed one per task:
 ${strategies.map((s, i) => `Strategy ${i + 1}: "${s.name}"
@@ -928,12 +971,12 @@ a SHORTER, MORE FOCUSED set:
 BAND CONSTRAINTS — NON-NEGOTIABLE
 ═══════════════════════════════════════
 Reading level: ${bp.reading_level}
-Task complexity: ${bp.task_complexity}
-Passage length: ${bp.passage_length}
+${sectionsOn ? 'Task complexity, verbs, forbidden types, and Bloom level are set PER SKILL — see SKILL SECTIONS below. The lines below govern the reading passage only.' : `Task complexity: ${bp.task_complexity}
 Task verb starters to use: ${bp.verb_starters}
-FORBIDDEN task types: ${bp.forbidden}
+FORBIDDEN task types: ${bp.forbidden}`}
+Passage length: ${bp.passage_length}
 Tone: ${bp.tone}
-Bloom's taxonomy: ${bp.bloom}
+${sectionsOn ? '' : `Bloom's taxonomy: ${bp.bloom}`}
 ATL skill focus: ${bp.atl_focus}
 IB Core Powers focus: ${bp.ib_focus}
 ${bp.support_note_required ? 'support_note: REQUIRED — write a warm encouraging message for this reteach student' : 'support_note: OMIT'}
@@ -951,7 +994,7 @@ Additional constraints: ${sp.constraints}
 STRATEGY + CORE POWERS CONSTRAINTS — NON-NEGOTIABLE
 ═══════════════════════════════════════
 ${strategyBlock}
-
+${skillSectionsBlock}
 ═══════════════════════════════════════
 MEDIA REQUIREMENTS — ALL REQUIRED
 ═══════════════════════════════════════
@@ -970,7 +1013,7 @@ youtube_search_query: Specific YouTube search query to find a good educational v
 ═══════════════════════════════════════
 SELF-CHECK BEFORE RETURNING
 ═══════════════════════════════════════
-1. Would a reteach student find this assignment significantly simpler than a grade_level version? If not — rewrite.
+1. ${sectionsOn ? 'For EACH skill section: are that section\'s tasks calibrated to the section\'s level (a scaffolded section markedly simpler, an extension section markedly harder)? If any section\'s tasks ignore its level — rewrite that section.' : 'Would a reteach student find this assignment significantly simpler than a grade_level version? If not — rewrite.'}
 2. Do the tasks look and feel completely different from a different learning style? If not — rewrite.
 3. Does every task name a specific Inteliflow strategy that shapes what the student does? If not — rewrite.
 4. Does every task have a specific ATL skill and IB Core Power earned by doing the task? If not — rewrite.
@@ -1017,7 +1060,10 @@ Return this exact JSON:
       "strategy": "Named Inteliflow strategy used in this task",
       "atl_skill": "Specific ATL skill category practiced",
       "ib_attribute": "Specific IB Learner Profile attribute (Core Power) practiced",
-      "bloom_level": "Bloom's taxonomy level"
+      "bloom_level": "Bloom's taxonomy level"${sectionsOn ? `,
+      "skill_id": "the skill_id of the section this task belongs to",
+      "skill_name": "the TOPIC name of the section, shown to the student (e.g. \\"Fractions\\") — NEVER a level word",
+      "power_skill": "the power skill (critical-thinking skill) from the strategy used"` : ''}
     }
   ],
   ${bp.support_note_required ? '"support_note": "Warm encouraging message for this reteach student",' : ''}
