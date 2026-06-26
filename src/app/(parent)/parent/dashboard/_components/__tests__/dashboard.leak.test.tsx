@@ -155,17 +155,20 @@ describe('SeeMoreDetail — leak regression (C1 + C3)', () => {
     expect(hasParentLeak(container.textContent ?? '')).toBe(false);
   });
 
-  it('C3 — cold-start sparkline (<2 points) does not leak digits', () => {
+  it('C3/CS-4 — sparkline is NOT rendered for <4 points and no digits leak', () => {
+    // CS-4: GradeTrendSparkline is gated on growthHistory.length >= 4. With an
+    // empty growthHistory, the sparkline element is not rendered at all — the
+    // GrowthMotif cold-start state covers the "just getting started" UX instead.
     const { container, queryByTestId } = render(
       <SeeMoreDetail
         highFives={[]}
         growthHistory={[]}
-        sparklinePoints={[{ date: '2026-06-01', grade: 80, label: 'Poetry' }]}
+        sparklinePoints={[{ date: '2026-06-01', grade: 0.8, label: 'Poetry' }]}
         gradeTrendDirection={null}
       />,
     );
-    // Cold-start branch should render (only 1 point)
-    expect(queryByTestId('trend-cold-start')).not.toBeNull();
+    // Sparkline is gated out entirely when growthHistory < 4
+    expect(queryByTestId('trend-cold-start')).toBeNull();
 
     expect(hasParentLeak(container.textContent ?? '')).toBe(false);
   });

@@ -7,7 +7,7 @@ describe('parentGuard — CLEAN warm prose passes', () => {
     "Alex's reading is trending up — keep celebrating the effort and curiosity.",
     "the reasoning behind her answer was thoughtful",
     "approaching new problems with curiosity",
-    "ways to enrich reading at home",
+    // NOTE: "enrich"/"enriching" are now BANNED — removed from clean cases (M1)
     "Alex is a wonderful role model at home",
   ];
 
@@ -52,6 +52,16 @@ describe('parentGuard — CAUGHT leaks', () => {
     ['reading at an A level', 'a letter grade'],
     ["she's getting straight A's this year", 'straight As'],
     ['earned a solid B this semester', 'a letter grade'],
+    // M1 morphology regression cases
+    ['she has some misconceptions about fractions', 'misconception'],
+    ['comprehension levels vary widely', 'comprehension level'],
+    ['the school uses reinforcement techniques', 'reinforce'],
+    ['she is reinforcing her skills daily', 'reinforce'],
+    ['the topic needs further reinforcing', 'reinforce'],
+    ['ways to enrich reading at home', 'enrichment'],
+    ['enriching activities help learning', 'enrichment'],
+    ['she has enriched her vocabulary', 'enrichment'],
+    ['there are risks in skipping practice', 'risk'],
   ];
 
   for (const [text, expectedPhrase] of caughtCases) {

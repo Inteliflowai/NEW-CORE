@@ -41,7 +41,9 @@ export default async function ChildReportPage({
   const admin = createAdminSupabaseClient();
   const report = await perChildReportData(admin, studentId);
 
-  const currentYear = new Date().getFullYear();
+  // CS-3: Render the report date without digits — month name only so no 4-digit
+  // calendar year leaks onto a zero-number surface.
+  const currentMonth = new Date().toLocaleString('en-US', { month: 'long' });
 
   return (
     <>
@@ -72,7 +74,7 @@ export default async function ChildReportPage({
         {/* Report header */}
         <header className="flex flex-col gap-1 border-b border-surface pb-6">
           <p className="text-xs text-fg-muted uppercase tracking-wide">
-            Learning Report · {currentYear}
+            Learning Report · {currentMonth}
           </p>
           <h1 className="font-display text-fg text-2xl">
             {report.firstName}&apos;s Progress Summary
@@ -89,7 +91,7 @@ export default async function ChildReportPage({
         {/* Footer — shown on print */}
         <footer className="mt-8 pt-6 border-t border-surface text-xs text-fg-muted">
           <p>
-            Prepared by CORE &middot; {currentYear} &middot; For {report.firstName}&apos;s family
+            Prepared by CORE &middot; {currentMonth} &middot; For {report.firstName}&apos;s family
           </p>
         </footer>
       </div>

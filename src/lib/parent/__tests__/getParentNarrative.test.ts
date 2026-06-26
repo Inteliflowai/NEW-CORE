@@ -157,4 +157,75 @@ describe('getParentNarrative', () => {
     // Still returns the generated result — DB failure must not bubble
     expect(result.paragraphs).toEqual(GENERATED_RESULT.paragraphs);
   });
+
+  // M2: cache hit with leaked content → treat as stale and regenerate
+  it('treats a fresh cached row as stale when it contains a leaked paragraph', async () => {
+    const LEAKED_ROW = {
+      payload: {
+        paragraphs: ['there is a risk of falling behind'],
+        conversation_starters: ['What surprised you today?'],
+        source: 'ai',
+      },
+      generated_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1h ago — still fresh
+    };
+    const admin = makeAdmin(LEAKED_ROW);
+    const result = await getParentNarrative(admin, 'stu-5');
+
+    // Must NOT return the leaked cache row — must fall through to regenerate
+    expect(result.paragraphs).toEqual(GENERATED_RESULT.paragraphs);
+    expect(loadCtx).toHaveBeenCalledTimes(1);
+    expect(generateNarrative).toHaveBeenCalledTimes(1);
+  });
+
+  // M5: fallback source → no upsert
+  it('skips the cache upsert when the engine returns source="fallback"', async () => {
+    const admin = makeAdmin(null);
+    generateNarrative.mockResolvedValue({
+      paragraphs: ['Just getting started.'],
+      conversation_starters: ['What are you curious about?'],
+      source: 'fallback',
+    });
+
+    await getParentNarrative(admin, 'stu-6');
+
+    // Upsert must NOT be called for a transient fallback
+    expect(admin._upsert).not.toHaveBeenCalled();
+  });
+
+  // ENG-2: context load error → never throws
+  it('never throws when loadParentNarrativeContext rejects', async () => {
+    const admin = makeAdmin(null);
+    loadCtx.mockRejectedValue(new Error('DB connection lost'));
+
+    // Must resolve (not throw) and return a result
+    const result = await expect(getParentNarrative(admin, 'stu-7')).resolves.toBeDefined();
+    void result; // suppress unused-variable lint
+    expect(generateNarrative).toHaveBeenCalledTimes(1);
+  });
+
+  // ENG-2: cache read DB error → treated as cache-miss, falls through to generate
+  it('still generates when the cache DB read throws', async () => {
+    // Simulate a thrown DB error on the maybeSingle call
+    const maybeSingle = vi.fn().mockRejectedValue(new Error('Supabase unreachable'));
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const admin = {
+      from: (table: string) => {
+        if (table === 'parent_narratives') {
+          return { select: () => ({ eq: () => ({ maybeSingle }) }), upsert };
+        }
+        return { select: () => ({ eq: () => ({ maybeSingle: vi.fn().mockResolvedValue({ data: null }) }), limit: () => ({}) }), order: () => ({}) };
+      },
+      _upsert: upsert,
+      _maybeSingle: maybeSingle,
+    } as unknown as import('@supabase/supabase-js').SupabaseClient & {
+      _upsert: typeof upsert;
+      _maybeSingle: typeof maybeSingle;
+    };
+
+    const result = await getParentNarrative(admin, 'stu-8');
+
+    // Must resolve and return generated content
+    expect(result.paragraphs).toEqual(GENERATED_RESULT.paragraphs);
+    expect(generateNarrative).toHaveBeenCalledTimes(1);
+  });
 });

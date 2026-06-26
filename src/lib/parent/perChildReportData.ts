@@ -25,8 +25,9 @@ const WINDOW_SIZE = 6;
 /**
  * Minimum number of data points in a window before a direction can be computed.
  * Below this threshold, computeDirection returns null (cold-start for that window).
+ * M6: unified with GrowthMotif's COLD_START_THRESHOLD so direction and the motif agree.
  */
-const MIN_WINDOW_POINTS = 3;
+const MIN_WINDOW_POINTS = 4;
 
 /**
  * avg_score delta (in snapshot units) required to call a window 'climbing' or

@@ -83,7 +83,7 @@ describe('loadParentNarrativeContext', () => {
 
   // ── gradeTrendDirection (I1: class-agnostic from snapshots) ───────────────
 
-  it('returns null direction when fewer than 3 snapshots', async () => {
+  it('returns null direction when fewer than 4 snapshots (cold-start gate, M6)', async () => {
     const admin = makeAdmin({
       users: [{ full_name: 'Alex' }],
       student_model_snapshots: makeSnapshotRows([70, 75]),
@@ -134,14 +134,16 @@ describe('loadParentNarrativeContext', () => {
     expect(ctx.gradeTrendDirection).toBe('steady');
   });
 
-  it('handles odd-count (3-point) series — uses floor split', async () => {
-    // 3 points: mid=1 → earlier=[60], recent=[70,80] → earlier mean=60, recent mean=75 → climbing
+  it('returns null direction for exactly 3 snapshots (cold-start gate is n<4, M6)', async () => {
+    // M6: the unified cold-start threshold is 4. Exactly 3 points → null direction,
+    // even though the series shows a clear upward trend. GrowthMotif shows "just
+    // getting started" at n<4, so direction must also be null to stay in sync.
     const admin = makeAdmin({
       users: [{ full_name: 'Alex' }],
       student_model_snapshots: makeSnapshotRows([60, 70, 80]),
     });
     const ctx = await loadParentNarrativeContext(admin, STUDENT_ID);
-    expect(ctx.gradeTrendDirection).toBe('climbing');
+    expect(ctx.gradeTrendDirection).toBeNull();
     expect(ctx.dataPoints).toBe(3);
   });
 

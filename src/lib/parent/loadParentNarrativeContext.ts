@@ -43,7 +43,7 @@ const MAX_RECENT_TOPICS = 5;
 export interface ParentContext {
   /** Student's first name only. */
   firstName: string;
-  /** Direction word from the class-agnostic snapshot series; null when cold-start (<3 pts). */
+  /** Direction word from the class-agnostic snapshot series; null when cold-start (<4 pts). */
   gradeTrendDirection: 'climbing' | 'steady' | 'sliding' | null;
   /** True when there are ≥4 scored snapshots (enough for a meaningful trend narrative). */
   hasGrowth: boolean;
@@ -92,13 +92,14 @@ function stripTopicDigits(title: string): string | null {
  * Splits into earlier half (first floor(n/2) points) and recent half (the rest),
  * compares their means, and returns a direction word — NEVER the raw scores.
  *
- * Returns null when there are fewer than 3 data points (cold-start).
+ * Returns null when there are fewer than 4 data points (cold-start, M6: unified
+ * with GrowthMotif's COLD_START_THRESHOLD so direction and the motif agree).
  */
 function computeDirection(
   scores: number[],
 ): 'climbing' | 'steady' | 'sliding' | null {
   const n = scores.length;
-  if (n < 3) return null;
+  if (n < 4) return null;
 
   const mid = Math.floor(n / 2);
   const earlier = scores.slice(0, mid);

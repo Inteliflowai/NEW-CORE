@@ -31,7 +31,9 @@ export interface DigitFreeSparklinePoint {
 
 export interface SeeMoreDetailProps {
   highFives: ParentHighFive[];
-  /** Raw score series for GrowthMotif bars (≥4 for non-cold-start). Never shown as digits. */
+  /** Normalized 0–1 score series for GrowthMotif bars (≥4 for non-cold-start).
+   *  Raw scores are never passed here — they are normalized server-side and do
+   *  not appear in client props (M7). */
   growthHistory: number[];
   /** ≥2 points for the sparkline to render; each point MUST have a digit-free label. */
   sparklinePoints: DigitFreeSparklinePoint[];
@@ -89,13 +91,17 @@ export function SeeMoreDetail({
           {/* GrowthMotif bars — score values never rendered as text */}
           <GrowthMotif history={growthHistory} />
 
-          {/* Digit-free sparkline — C3: label always provided, ariaLabel has no digits */}
-          <GradeTrendSparkline
-            points={safePoints}
-            ariaLabel={sparklineAriaLabel}
-            size="sm"
-            coldStartLabel="Just getting started — more to show soon."
-          />
+          {/* CS-4: Gate the sparkline on ≥4 points so it stays in sync with
+               GrowthMotif's COLD_START_THRESHOLD — avoids drawing a trend line
+               while GrowthMotif is still showing "just getting started". */}
+          {growthHistory.length >= 4 && (
+            <GradeTrendSparkline
+              points={safePoints}
+              ariaLabel={sparklineAriaLabel}
+              size="sm"
+              coldStartLabel="Just getting started — more to show soon."
+            />
+          )}
         </section>
 
         {/* Read-only high-fives */}

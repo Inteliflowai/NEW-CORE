@@ -7,15 +7,16 @@ import { hasLeak, hasBannedWord } from '@/lib/copy/leakGuard';
 import { FOUR_AUDIENCE_LEAKS } from '@/lib/highfives/guardrail';
 
 export const PARENT_FORBIDDEN: { pattern: RegExp; phrase: string }[] = [
-  { pattern: /\brisk\b/i, phrase: 'risk' },
-  { pattern: /\breinforce\b/i, phrase: 'reinforce' },
+  { pattern: /\brisks?\b/i, phrase: 'risk' },
+  { pattern: /\breinforc(?:e|es|ed|ing|ement)\b/i, phrase: 'reinforce' },
   { pattern: /\bon track\b/i, phrase: 'on track' },
-  { pattern: /\bcomprehension level\b/i, phrase: 'comprehension level' },
+  { pattern: /\bcomprehension levels?\b/i, phrase: 'comprehension level' },
   { pattern: /\bapproaching (?:grade|standard|proficiency|the next level)\b/i, phrase: 'approaching (band)' },
-  { pattern: /\benrichment\b/i, phrase: 'enrichment' },
+  // enrich/enriches/enriched/enriching/enrichment — all banned (covers the former separate 'enrichment' entry)
+  { pattern: /\benrich(?:es|ed|ing|ment)?\b/i, phrase: 'enrichment' },
   { pattern: /\bpartial mastery\b/i, phrase: 'partial mastery' },
-  { pattern: /\bmisconception\b/i, phrase: 'misconception' },
-  { pattern: /\berror type\b/i, phrase: 'error type' },
+  { pattern: /\bmisconceptions?\b/i, phrase: 'misconception' },
+  { pattern: /\berror types?\b/i, phrase: 'error type' },
   { pattern: /\bcompared to\b/i, phrase: 'compared to' },
   { pattern: /\bcompared with\b/i, phrase: 'compared with' },
   { pattern: /\b(?:versus|vs\.?)\b/i, phrase: 'versus' },

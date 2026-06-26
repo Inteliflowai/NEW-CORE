@@ -20,6 +20,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { loadParentChildren } from '@/lib/parent/loadParentChildren';
 import { loadStudentHighFivesReadonly } from '@/lib/parent/loadStudentHighFivesReadonly';
 import { getParentNarrative } from '@/lib/parent/getParentNarrative';
+import { checkRateLimit, aiRateLimit } from '@/lib/rateLimit';
 
 import { ChildSelector } from './_components/ChildSelector';
 import { NarrativeCard } from './_components/NarrativeCard';
@@ -77,39 +78,67 @@ export default async function ParentDashboardPage({
   const denied = await guardStudentAccess(childId);
   if (denied) redirect('/parent/dashboard');
 
-  const forceRefresh = forceParam === '1';
+  // ── M3: Rate-limit the force/generate path ────────────────────────────────────
+  // In a Server Component we cannot return a NextResponse 429, so we use
+  // checkRateLimit → { success } and silently fall back to cache when over-limit.
+  // A hammered ?force=1 becomes a cache-served request rather than unbounded AI calls.
+  let forceRefresh = forceParam === '1';
+  if (forceRefresh) {
+    const { success } = await checkRateLimit(aiRateLimit, userId);
+    if (!success) {
+      forceRefresh = false; // rate-limited: serve from cache
+    }
+  }
 
   // ── Parallel data load ────────────────────────────────────────────────────────
   const [narrative, highFives, snapshotResult] = await Promise.all([
     // I6: use getParentNarrative (shared cache layer), never the engine directly
     getParentNarrative(admin, childId, { force: forceRefresh }),
     loadStudentHighFivesReadonly(admin, childId),
-    // Growth data: avg_score series from student_model_snapshots (parent-safe; digits stay server-side)
+    // M4: Fetch most-recent 20 descending, then reverse to chronological ASC for
+    // the chart. Raw avg_score values are normalized 0-1 below — never leave server.
     admin
       .from('student_model_snapshots')
       .select('avg_score, snapshot_date')
       .eq('student_id', childId)
-      .order('snapshot_date', { ascending: true })
+      .order('snapshot_date', { ascending: false })
       .limit(20),
   ]);
 
   // ── Build digit-free growth data ──────────────────────────────────────────────
+  // M4: reverse the DESC fetch back to chronological ASC order so the chart
+  // draws oldest→newest left-to-right, matching the series used in getParentNarrative.
   const snapshots: SnapshotRow[] = (
     (snapshotResult.data ?? []) as SnapshotRow[]
-  ).filter((s) => s.avg_score != null);
+  )
+    .filter((s) => s.avg_score != null)
+    .reverse();
 
-  // GrowthMotif bars — raw number values drive the visual; NEVER rendered as text
-  const growthHistory: number[] = snapshots.map((s) => s.avg_score as number);
+  // M7: Normalize avg_score to relative 0–1 positions before passing to the client.
+  // GrowthMotif and GradeTrendSparkline draw the same visual SHAPE from 0-1 values
+  // as from raw scores. The raw numbers never leave the server — they are not
+  // recoverable via devtools, source maps, or component props.
+  const rawScores: number[] = snapshots.map((s) => s.avg_score as number);
+  const minScore = rawScores.length > 0 ? Math.min(...rawScores) : 0;
+  const maxScore = rawScores.length > 0 ? Math.max(...rawScores) : 0;
+  const range = (maxScore - minScore) || 1; // guard divide-by-zero on flat series
+  const normalizedScores: number[] = rawScores.map((s) => (s - minScore) / range);
 
-  // C3: sparkline points with digit-free labels ('' → SeeMoreDetail converts to 'activity')
-  const sparklinePoints: DigitFreeSparklinePoint[] = snapshots.map((s) => ({
+  // Normalized 0–1 series for GrowthMotif bars (≥4 for non-cold-start).
+  // Raw digits are normalized server-side and never reach the client.
+  const growthHistory: number[] = normalizedScores;
+
+  // C3: sparkline points with digit-free labels ('' → SeeMoreDetail converts to 'activity').
+  // grade field carries the normalized 0–1 position, not the raw score.
+  const sparklinePoints: DigitFreeSparklinePoint[] = snapshots.map((s, i) => ({
     date: s.snapshot_date,
-    grade: s.avg_score as number,
+    grade: normalizedScores[i], // normalized 0-1, raw score NOT included in client props
     label: '', // digit-free; SeeMoreDetail ensures the <title> fallback never fires
   }));
 
-  // Derive the trend direction word from the same series (matches loadParentNarrativeContext logic)
-  const gradeTrendDirection = deriveDirection(growthHistory);
+  // M6: Derive the trend direction word from the same series — unified cold-start
+  // gate at n<4 (matches GrowthMotif COLD_START_THRESHOLD and computeDirection).
+  const gradeTrendDirection = deriveDirection(normalizedScores);
 
   // ── Refresh href ──────────────────────────────────────────────────────────────
   const refreshHref = `?child=${encodeURIComponent(childId)}&force=1`;
@@ -156,13 +185,13 @@ export default async function ParentDashboardPage({
 
 /**
  * Derive a direction word from a score series (mirrors loadParentNarrativeContext).
- * Returns null for cold-start (<3 points).
+ * M6: Returns null for cold-start (<4 points) to unify with GrowthMotif's threshold.
  */
 function deriveDirection(
   scores: number[],
 ): 'climbing' | 'steady' | 'sliding' | null {
   const n = scores.length;
-  if (n < 3) return null;
+  if (n < 4) return null;
 
   const mid = Math.floor(n / 2);
   const earlier = scores.slice(0, mid);
@@ -170,7 +199,9 @@ function deriveDirection(
   const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
   const delta = mean(recent) - mean(earlier);
 
-  if (delta > 3) return 'climbing';
-  if (delta < -3) return 'sliding';
+  // Use a proportional threshold on normalized [0,1] scores:
+  // DIRECTION_DELTA_THRESHOLD of 3 on a 0-100 scale ≈ 0.03 on a 0-1 scale.
+  if (delta > 0.03) return 'climbing';
+  if (delta < -0.03) return 'sliding';
   return 'steady';
 }

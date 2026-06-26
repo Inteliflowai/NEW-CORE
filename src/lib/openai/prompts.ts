@@ -1141,7 +1141,10 @@ export const PARENT_NARRATIVE_SYSTEM =
 const PARENT_NARRATIVE_AVOID_BLOCK = `AVOID completely — these words and phrases are forbidden:
 - Numbers, percentages, or grades of any kind (no digits, no "87%", no letter grades)
 - Level words: reteach, grade level, proficient, advanced, mastery, band, basic, remedial
-- "risk", "reinforce", "on track", "comprehension level", "approaching grade/standard/proficiency"
+- "risk", "reinforce" (and reinforcing/reinforcement), "on track", "comprehension level",
+  "approaching grade/standard/proficiency"
+- "enrich", "enriching", "enriched", "enrichment" — use plain home-activity language instead
+  (e.g. "try reading together", "explore stories at home", "practice with everyday examples")
 - Comparison language: "compared to", "class average", "peers", "other students", "ahead of",
   "behind the class", "than average", "rest of the class"
 - Do NOT quote any topic name or assignment title verbatim — use general topic words only
@@ -1235,7 +1238,8 @@ export const PARENT_NARRATIVE_RETRY_SUFFIX = [
   'You MUST NOT use any of these in any paragraph or conversation starter:',
   '- Numbers, percentages, or grades',
   '- Level words (reteach, grade level, proficient, advanced, mastery, band, basic, remedial)',
-  '- "risk", "reinforce", "on track", "comprehension level", "approaching"',
+  '- "risk", "reinforce" (and reinforcing/reinforcement), "on track", "comprehension level", "approaching"',
+  '- "enrich", "enriching", "enriched", "enrichment" — use plain home-activity language instead',
   '- Comparison words ("class average", "peers", "other students", "ahead of", "behind the class", "than average")',
   '- Any topic or assignment title quoted verbatim',
   'Return ONLY the json object with clean, warm prose.',
