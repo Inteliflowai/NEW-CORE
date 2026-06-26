@@ -13,9 +13,10 @@ import { firstClassIdForTeacher } from '@/lib/teacher/firstClassIdForTeacher';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { loadChallenges } from '@/lib/spark/loadChallenges';
+import { groupChallengesByStudent } from '@/lib/spark/groupChallenges';
 import { EmptyState } from '@/components/core/EmptyState';
 import { PageHeader } from '../_components/PageHeader';
-import { ChallengeCard } from './_components/ChallengeCard';
+import { ChallengesList } from './_components/ChallengesList';
 
 const NO_CLASSES = (
   <EmptyState
@@ -54,6 +55,7 @@ export default async function ChallengesPage({
 
   const admin = createAdminSupabaseClient();
   const { challenges } = await loadChallenges(admin, classId);
+  const groups = groupChallengesByStudent(challenges);
 
   return (
     <div className="p-5 flex flex-col gap-5">
@@ -66,11 +68,7 @@ export default async function ChallengesPage({
           bodyOverride="Generate a SPARK-enabled assignment to start a challenge for this class."
         />
       ) : (
-        <div className="flex flex-col gap-2">
-          {challenges.map((row) => (
-            <ChallengeCard key={row.assignmentId} row={row} />
-          ))}
-        </div>
+        <ChallengesList groups={groups} />
       )}
     </div>
   );

@@ -1,52 +1,80 @@
 // src/app/(teacher)/challenges/_components/ChallengeCard.tsx
-// Teacher-only row for one student's Spark Challenge. Restrained: status pill +
-// transfer (word + %) + content_quality as a soft teacher label. Pop-Art chrome
-// (hard ink edge + sticker shadow); status pill uses the WCAG-validated
-// signal-surface/fg pairs. Tokens only; deep-ink text.
+// Per-challenge detail row inside an expanded student group. Teacher-only: transfer + engagement +
+// rubric + date for scored ones; soft state for the rest. The title is the hover-tooltip trigger
+// (name + submission date), mirroring the gradebook cell. Tokens only; deep-ink text.
+'use client';
 import React from 'react';
 import type { ChallengeRow } from '@/lib/spark/loadChallenges';
 import { transferWord } from '@/lib/spark/contract';
+import { challengeTooltipLines, shortDate } from '@/lib/spark/groupChallenges';
 
-const STATUS_LABEL: Record<ChallengeRow['status'], string> = {
-  assigned: 'Assigned',
-  in_progress: 'In progress',
-  completed: 'Completed',
-};
-
-const STATUS_PILL: Record<ChallengeRow['status'], string> = {
-  assigned: 'bg-brand-surface text-brand-fg',
-  in_progress: 'bg-warn-surface text-warn-fg',
-  completed: 'bg-ok-surface text-ok-fg',
-};
-
+const STATE_GLYPH: Record<ChallengeRow['status'], string> = { completed: '✓', in_progress: '◷', assigned: '○' };
 const QUALITY_LABEL: Record<NonNullable<ChallengeRow['contentQuality']>, string> = {
-  engaged: 'engaged deeply',
-  minimal: 'engaged lightly',
-  non_engaged: 'did not engage',
+  engaged: 'engaged deeply', minimal: 'engaged lightly', non_engaged: 'did not engage',
+};
+const RUBRIC_LABEL: Record<string, string> = {
+  problem_understanding: 'Problem', reasoning_strategy: 'Reasoning', use_of_evidence: 'Evidence',
+  creativity_application: 'Creativity', communication: 'Communication',
+  reflection_metacognition: 'Reflection', collaboration: 'Collaboration',
 };
 
-export function ChallengeCard({ row }: { row: ChallengeRow }): React.JSX.Element {
+function rubricParts(rubric: Record<string, number | null> | null): string[] {
+  if (!rubric) return [];
+  return Object.entries(rubric)
+    .filter(([, v]) => typeof v === 'number')
+    .map(([k, v]) => `${RUBRIC_LABEL[k] ?? k} ${v}/4`);
+}
+
+export function ChallengeCard({
+  row,
+  onTip,
+  onHideTip,
+}: {
+  row: ChallengeRow;
+  onTip: (lines: string[], x: number, y: number) => void;
+  onHideTip: () => void;
+}): React.JSX.Element {
+  const lines = challengeTooltipLines(row);
+  const dateLabel = row.status === 'completed' && row.completedAt ? `Submitted ${shortDate(row.completedAt)}` : '';
+  const effortBits: string[] = [];
+  if (row.effortLabel) effortBits.push(row.effortLabel);
+  if (row.revisionCount != null) effortBits.push(`${row.revisionCount} ${row.revisionCount === 1 ? 'revision' : 'revisions'}`);
+  if (row.teliHintCount != null) effortBits.push(`${row.teliHintCount} ${row.teliHintCount === 1 ? 'hint' : 'hints'}`);
+  const rubric = rubricParts(row.rubric);
+
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg border-2 border-sidebar-edge bg-surface px-4 py-3 shadow-sticker">
-      <div className="flex flex-col">
-        <span className="text-fg text-sm font-semibold">{row.studentName}</span>
-        <span className="text-fg text-xs">{row.title}</span>
-      </div>
-      <div className="flex items-center gap-3">
-        {row.status === 'completed' && row.transferScore != null && (
-          <span className="text-fg text-sm">
-            Transfer: <span className="font-semibold">{transferWord(row.transferScore)}</span> ({row.transferScore}%)
-          </span>
-        )}
-        {row.contentQuality && (
-          <span className="text-fg-muted text-xs">{QUALITY_LABEL[row.contentQuality]}</span>
-        )}
+    <div className="flex flex-col gap-1 rounded-md border-2 border-sidebar-edge bg-surface px-3 py-2">
+      <div className="flex items-center gap-2">
+        <span aria-hidden="true" className="text-fg-muted">{STATE_GLYPH[row.status]}</span>
         <span
-          className={`shrink-0 rounded-full border-2 border-sidebar-edge px-2.5 py-0.5 text-xs font-bold ${STATUS_PILL[row.status]}`}
+          tabIndex={0}
+          aria-label={lines.join(', ')}
+          className="rounded text-fg text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          onMouseEnter={(e) => onTip(lines, e.clientX, e.clientY)}
+          onMouseLeave={onHideTip}
+          onFocus={(e) => { const r = e.currentTarget.getBoundingClientRect(); onTip(lines, r.left + r.width / 2, r.top); }}
+          onBlur={onHideTip}
+          onKeyDown={(e) => { if (e.key === 'Escape') onHideTip(); }}
         >
-          {STATUS_LABEL[row.status]}
+          {row.title}
         </span>
       </div>
+      {row.status === 'completed' ? (
+        <div className="flex flex-col gap-0.5 pl-6 text-xs text-fg">
+          <span>
+            Transfer: <span className="font-semibold">{transferWord(row.transferScore)}</span>
+            {row.transferScore != null && <> ({row.transferScore}%)</>}
+            {row.contentQuality && <> · {QUALITY_LABEL[row.contentQuality]}</>}
+            {dateLabel && <> · {dateLabel}</>}
+          </span>
+          {rubric.length > 0 && <span className="text-fg-muted">Rubric: {rubric.join(' · ')}</span>}
+          {effortBits.length > 0 && <span className="text-fg-muted">{effortBits.join(' · ')}</span>}
+        </div>
+      ) : (
+        <span className="pl-6 text-xs text-fg-muted">
+          {row.status === 'in_progress' ? 'In progress — not submitted yet' : 'Not started yet'}
+        </span>
+      )}
     </div>
   );
 }
