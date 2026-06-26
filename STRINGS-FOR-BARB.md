@@ -1100,3 +1100,155 @@ Teacher-only surface (scores/dates allowed). The page now groups challenges unde
 - Hover/focus tooltip (gradebook pattern): line 1 = challenge name, line 2 = **"Submitted {Mon DD}"** (or the state).
 - Empty state (unchanged): "No Spark Challenges yet" / "Generate a SPARK-enabled assignment to start a challenge for this class."
   (NOTE: "Open in SPARK" deferred — needs a net-new SPARK-side teacher-review build.)
+
+## Parent Dashboard (Epic 4) — DRAFT, Barb gates all copy
+
+> **BINDING four-audience rule:** NO numbers, grades, percentages, mastery-band
+> labels, CL verbs (reinforce / enrich / approaching), risk, divergence, or
+> peer-comparisons appear on ANY parent surface. Every dynamic non-AI string
+> (high-five notes, assignment/lesson titles) is filtered through `hasParentLeak`
+> at render — leaking strings are dropped silently, never passed through.
+> The AI narrative is the ONLY free-text surface, and it is validated by
+> `parentLeaks` before being saved (with a warm deterministic fallback on any
+> violation). Barb must sign off on this entire section before any copy ships.
+
+---
+
+### Narrative — paragraph order and tone
+
+The AI-generated "Learning Summary" has **five paragraphs** in this order. The
+tone is warm, observational, and coach-like — it names what is happening, offers
+one actionable idea, and never compares the student to their class or a grade
+scale. Drafted by the AI; validated by `parentLeaks`; cached 24 h.
+
+| # | Purpose | Sample direction (NOT final — Barb gates) |
+|---|---|---|
+| 1 | What we're noticing right now | "{Name} has been putting real effort into their work lately — the more they stick with something, the more confident they get." |
+| 2 | How they learn / unique approach | "Every learner has their own way of taking in new ideas — {Name} tends to think things through before they speak up, and that careful approach is a real strength." |
+| 3 | The one conversation-starter prompt | "Asking {Name} what they found tricky this week — and sitting with them while they try to explain it — is one of the most helpful things you can do right now." |
+| 4 | Home connection / everyday | "Connecting what they are learning to everyday moments — cooking, reading together, going outside — helps make the ideas feel real and worth remembering." |
+| 5 | Celebration / effort acknowledgment | "There is a lot to celebrate about {Name}'s commitment to showing up and trying. Naming the effort out loud matters more than any single result." |
+
+**Tone rules (Barb to confirm):**
+- Lead with an observation, not a verdict ("is putting effort into" not "is doing well / is struggling").
+- One thing at a time — no lists, no summaries of multiple topics.
+- Plain language — no stat jargon, no edu-jargon (no "formative", "summative", "proficiency", "band").
+- Warm and direct — write as if a trusted teacher is speaking to the parent in person.
+- Growth is "you vs your own past" — never "they are ahead of / behind the class."
+
+---
+
+### Conversation-starter framing
+
+Two starters follow the narrative. They are open questions the parent can ask
+their child at home. Validated by `parentLeaks` before saving.
+
+**Framing label above the starters:** "Something to ask {Name} this week"
+*(Barb: simpler than "Conversation Starters" — check?)*
+
+**Sample direction:**
+- "What was one thing that surprised you this week?"
+- "If you had to explain something from this week to a younger kid, what would you pick?"
+
+**Rules:** never yes/no questions; never reference a grade, score, or subject
+directly; invite the child to tell a story, not evaluate themselves.
+
+---
+
+### Cold-start copy (≤ 2 data points — no trend history yet)
+
+Shown when the student is new and the system does not yet have enough data for a
+trend-aware narrative. The AI narrative still runs (cold-start prompt variant),
+but the growth visual is hidden and no direction word appears.
+
+**"Just getting started" fallback card (shown when AI also unavailable):**
+
+> "{Name} is working hard and developing new skills — the effort and curiosity
+> they bring to learning is wonderful to see.
+>
+> Every learner has a unique way of taking in new ideas. Talking with {Name}
+> about what they are thinking helps strengthen that approach every day."
+
+*(Barb: this is the deterministic fallback — warm, name-personalised, zero
+numbers, zero comparisons. Approve wording?)*
+
+---
+
+### Reports page (per-child list)
+
+**Page heading:** "Reports"
+**Page subhead:** "A printable progress summary for each of your children."
+**Per-child row link label:** "{Name}'s Progress Summary"
+**Per-child link affordance:** "View →"
+
+---
+
+### Report card (printable, per child)
+
+The printable report (`/parent/children/[id]/report`) is a PDF-ready summary.
+It renders the same narrative paragraphs and conversation-starters as the
+dashboard, with a header block and a growth-over-time visual (digit-free).
+
+**Report header block copy:**
+- Title: **"{Name}'s Progress Summary"**
+- Subtitle: **"A summary of {Name}'s learning — prepared for your family"**
+- Generated line: **"Prepared {Month DD, YYYY}"**
+
+**Growth section heading:** "How {Name} is growing"
+**Growth empty state (cold-start, < 3 data points):** "We're just getting started — check back after a few sessions to see {Name}'s progress over time."
+
+**High-fives section heading:** "Recent wins"
+**High-fives empty state:** "No wins yet — they'll appear here when a teacher sends one."
+*(C1 binding: each high-five `note_text` is filtered by `hasParentLeak` before
+render — any note containing a forbidden word is silently dropped. This is a
+runtime guard, not just a test.)*
+
+---
+
+### No-children empty state (dashboard + reports)
+
+Shown when the parent account is not yet linked to any student.
+
+**Dashboard:** "Your child's learning summary will appear here once they are connected to your account. Reach out to their school to get started."
+**Reports:** "Reports will appear here once your child is connected to your account. Reach out to their school to get started."
+
+---
+
+### PARENT_FORBIDDEN list — Barb must sign off on each entry
+
+The following words and phrases are blocked from ALL parent-facing strings
+(AI output, high-fives, titles, any dynamic text) by `src/lib/copy/parentGuard.ts`.
+Barb gates the final list. Separator variants (hyphenated, underscored) are
+pre-normalised before matching so "grade-level", "on-track", "class-average"
+are also caught.
+
+| Forbidden phrase / pattern | Why blocked |
+|---|---|
+| `risk` | Internal risk-score concept — not parent-safe |
+| `reinforce` | Mastery-band-adjacent teacher verb |
+| `on track` | Implicit comparison to a standard |
+| `comprehension level` | Internal CL diagnostic term |
+| `approaching (grade/standard/proficiency/the next level)` | Band label |
+| `enrichment` | Band-adjacent label |
+| `partial mastery` | Band label |
+| `misconception` | Internal diagnostic term |
+| `error type` | Internal diagnostic term |
+| `compared to` / `compared with` | Peer-comparison trigger |
+| `versus` / `vs.` | Peer-comparison trigger |
+| `falling behind` | Negative comparison |
+| `behind the class / grade / schedule / the rest` | Negative comparison |
+| `class average` | Peer-comparison trigger |
+| `peers` | Peer-comparison trigger |
+| `other students` | Peer-comparison trigger |
+| `than average` | Peer-comparison trigger |
+| `rest of the class` | Peer-comparison trigger |
+| Letter-grade phrases (e.g. "A level", "solid B", "straight As") | Raw grade |
+| Any number or percentage (`\d`) | Raw score — digit-free rule |
+| FOUR_AUDIENCE_LEAKS (inherited from high-fives guardrail) | Band enum / CL verbs |
+
+**Exemptions (Barb to confirm):**
+- "role model" and "model student" — warm phrases that contain "model" but are NOT the ML sense; explicitly un-blocked.
+- "approaching" alone (without band qualifier) is allowed (e.g. "approaching the problem").
+
+*(NOTE: Barb should also confirm whether earned grade digits should ever appear on the parent
+surface — e.g. in the printable report. Current answer = NO (digit-free rule); this is a Barb/Marvin decision deferred from Epic 4 planning.)*

@@ -13,13 +13,10 @@ export default async function ParentLayout({
   await requireRole(['parent']);
   const nav = (
     <>
-      <a href="/parent/dashboard" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
+      <a href="/parent/dashboard" className="text-fg hover:text-brand px-3 py-1">
         Dashboard
       </a>
-      <a href="/parent/children" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
-        My Children
-      </a>
-      <a href="/parent/reports" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
+      <a href="/parent/reports" className="text-fg hover:text-brand px-3 py-1">
         Reports
       </a>
     </>

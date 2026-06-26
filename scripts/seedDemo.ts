@@ -252,6 +252,21 @@ async function main() {
     }
   }
 
+  // ── Step 5b: Link parent → Sofia (second child — M8: makes ChildSelector demoable) ──
+  const sofiaId = studentIds['sofia'];
+  if (parentId && sofiaId) {
+    try {
+      await admin.from('users').update({ parent_id: parentId }).eq('id', sofiaId);
+      await admin.from('guardians').upsert(
+        { parent_id: parentId, student_id: sofiaId },
+        { onConflict: 'parent_id,student_id' }
+      );
+      console.log('[seed] Linked parent → Sofia');
+    } catch (e) {
+      console.warn('[seed] guardian link (Sofia) failed (soft):', (e as Error).message);
+    }
+  }
+
   // ── Step 6: Ensure two classes (soft fail) ───────────────────────────────
   // Class 1: English Literature gr7 → Dana Whitfield (primary; all signals here)
   let classId: string | null = null;

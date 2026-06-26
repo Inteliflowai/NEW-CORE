@@ -172,4 +172,17 @@ describe('seedTrialDemoData — SeedReport', () => {
       })
     ).resolves.not.toThrow();
   });
+
+  // M4: demo parent must be linked to BOTH Alex (student 0) and Sofia (student 1)
+  it('seeds guardian_link_sofia for the second child (M4 — parent has 2 children)', async () => {
+    // makeFailingAdmin('class') has class-insert failing but all user/guardian
+    // update+upsert steps succeed. students step runs successfully so sofiaId is
+    // populated, and both guardian steps should land in seeded.
+    const admin = makeFailingAdmin('class');
+    const report = await seedTrialDemoData(seedInput(admin));
+    expect(report.seeded, 'guardian_link should be seeded (Alex)').toContain('guardian_link');
+    expect(report.seeded, 'guardian_link_sofia should be seeded (Sofia)').toContain('guardian_link_sofia');
+    expect(report.skipped.map((s) => s.step)).not.toContain('guardian_link');
+    expect(report.skipped.map((s) => s.step)).not.toContain('guardian_link_sofia');
+  });
 });

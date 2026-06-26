@@ -1117,3 +1117,130 @@ export function unitSegmentPrompt(input: {
     'Each "focus" is 1-2 sentences specific enough to write a full lesson from. Order days so they build on each other.',
   ].filter(Boolean).join('\n');
 }
+
+// ---- 7. PARENT LEARNING SUMMARY ----
+// Four-audience wall: ZERO numbers, band labels, CL verbs, peer comparisons.
+// I3: every prompt variant contains the literal word "json" (required by json_object mode).
+// I4: separate cold-start variant — no trend claim when direction is null.
+// I8: explicit AVOID block mirrors PARENT_FORBIDDEN so the model self-polices.
+
+// Locally-scoped subset of ParentContext — keeps prompts.ts import-safe (no @/lib/parent/ import).
+type ParentNarrativeCtx = {
+  firstName: string;
+  gradeTrendDirection: 'climbing' | 'steady' | 'sliding' | null;
+  learningStyleLabel: string | null;
+  recentTopics: string[];
+};
+
+export const PARENT_NARRATIVE_SYSTEM =
+  "You are writing a warm, calm Learning Summary for a parent about their child's school experience. " +
+  'You write in plain, human language — no jargon, scores, levels, grades, or comparisons. ' +
+  'Return ONLY valid json matching the exact schema you are shown. No markdown, no preamble, no explanation.';
+
+/** I8: AVOID block — mirrors PARENT_FORBIDDEN; re-used in both prompt variants + retry suffix. */
+const PARENT_NARRATIVE_AVOID_BLOCK = `AVOID completely — these words and phrases are forbidden:
+- Numbers, percentages, or grades of any kind (no digits, no "87%", no letter grades)
+- Level words: reteach, grade level, proficient, advanced, mastery, band, basic, remedial
+- "risk", "reinforce" (and reinforcing/reinforcement), "on track", "comprehension level",
+  "approaching grade/standard/proficiency"
+- "enrich", "enriching", "enriched", "enrichment" — use plain home-activity language instead
+  (e.g. "try reading together", "explore stories at home", "practice with everyday examples")
+- Comparison language: "compared to", "class average", "peers", "other students", "ahead of",
+  "behind the class", "than average", "rest of the class"
+- Do NOT quote any topic name or assignment title verbatim — use general topic words only
+- Do NOT invent any statistic, score, or number`;
+
+/** Prompt for the warm (non-cold-start) path. Contains "json" (I3). */
+export function parentNarrativePrompt(ctx: ParentNarrativeCtx): string {
+  const styleHint = ctx.learningStyleLabel
+    ? `How ${ctx.firstName} learns best: ${ctx.learningStyleLabel} learner.`
+    : `Learning style: still emerging — use a warm, balanced approach.`;
+  const topicsHint =
+    ctx.recentTopics.length > 0
+      ? `Recent topics the class has explored: ${ctx.recentTopics.join(', ')}.`
+      : `Recent topics: not yet available — keep the writing general and warm.`;
+  const directionHint = ctx.gradeTrendDirection
+    ? `Overall learning direction lately: ${ctx.gradeTrendDirection}.`
+    : '';
+
+  return [
+    `Write a parent Learning Summary for ${ctx.firstName}.`,
+    '',
+    styleHint,
+    topicsHint,
+    directionHint,
+    '',
+    `Write exactly 5-6 warm, calm paragraphs in this order:`,
+    `1. A warm opener about what ${ctx.firstName} has been experiencing in their learning lately.`,
+    `2. How ${ctx.firstName} learns best + 2 specific home strategies that match that style.`,
+    `3. The thinking skills ${ctx.firstName} is building, tied to the recent topics.`,
+    `4. Three specific things families can try at home to support learning.`,
+    `5. One thing to celebrate about ${ctx.firstName}'s curiosity and effort.`,
+    '',
+    `Then include 2-3 short conversation starters a parent can use tonight.`,
+    '',
+    PARENT_NARRATIVE_AVOID_BLOCK,
+    '',
+    `Return a json object with this exact schema:`,
+    `{ "paragraphs": ["paragraph 1", "...", "paragraph 5 or 6"], "conversation_starters": ["question 1", "question 2"] }`,
+  ]
+    .filter((s) => s !== undefined)
+    .join('\n');
+}
+
+/**
+ * Cold-start variant (I4): used when gradeTrendDirection === null.
+ * No trend claim, no progress/direction words. Contains "json" (I3).
+ */
+export function parentNarrativeColdStartPrompt(ctx: ParentNarrativeCtx): string {
+  const styleHint = ctx.learningStyleLabel
+    ? `How ${ctx.firstName} learns best: ${ctx.learningStyleLabel} learner.`
+    : `Learning style: still emerging — use a warm, balanced approach.`;
+  const topicsHint =
+    ctx.recentTopics.length > 0
+      ? `Recent topics the class has explored: ${ctx.recentTopics.join(', ')}.`
+      : `Recent topics: not yet available — keep the writing general and warm.`;
+
+  return [
+    `Write a parent Learning Summary for ${ctx.firstName}, who is just getting started.`,
+    '',
+    styleHint,
+    topicsHint,
+    '',
+    `${ctx.firstName} is in the early stages — there is not yet enough history to speak to any direction or progress.`,
+    `Use a warm "just getting started" tone. DO NOT make any claim about whether learning is improving, declining, or moving in any direction.`,
+    `DO NOT use any of these words or variations: climbing, improving, declining, trending, progress, sliding.`,
+    `"steady" may only appear in a non-directional sense (e.g., "steady effort") — NOT as a learning-direction claim.`,
+    '',
+    `Write exactly 5-6 warm, calm paragraphs in this order:`,
+    `1. A warm opener welcoming ${ctx.firstName}'s learning journey, with no trend claim.`,
+    `2. How ${ctx.firstName} learns best + 2 specific home strategies (or a balanced approach if style is emerging).`,
+    `3. The thinking skills and topics ${ctx.firstName} is beginning to explore.`,
+    `4. Three specific things families can try at home to support learning.`,
+    `5. One thing to celebrate about the start of ${ctx.firstName}'s year.`,
+    '',
+    `Then include 2-3 short conversation starters a parent can use tonight.`,
+    '',
+    PARENT_NARRATIVE_AVOID_BLOCK,
+    '',
+    `Return a json object with this exact schema:`,
+    `{ "paragraphs": ["paragraph 1", "...", "paragraph 5 or 6"], "conversation_starters": ["question 1", "question 2"] }`,
+  ]
+    .filter((s) => s !== undefined)
+    .join('\n');
+}
+
+/** Retry suffix (I8): re-emphasizes the AVOID list on the second attempt. */
+export const PARENT_NARRATIVE_RETRY_SUFFIX = [
+  '',
+  '---',
+  'IMPORTANT — The previous response violated the four-audience rules for parents.',
+  'You MUST NOT use any of these in any paragraph or conversation starter:',
+  '- Numbers, percentages, or grades',
+  '- Level words (reteach, grade level, proficient, advanced, mastery, band, basic, remedial)',
+  '- "risk", "reinforce" (and reinforcing/reinforcement), "on track", "comprehension level", "approaching"',
+  '- "enrich", "enriching", "enriched", "enrichment" — use plain home-activity language instead',
+  '- Comparison words ("class average", "peers", "other students", "ahead of", "behind the class", "than average")',
+  '- Any topic or assignment title quoted verbatim',
+  'Return ONLY the json object with clean, warm prose.',
+].join('\n');
