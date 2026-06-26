@@ -83,12 +83,15 @@ function buildAdmin(scenario: Scenario) {
             { class_id: 'c2' },
           ];
         } else if (table === 'assignments') {
+          // Fan-out: a teacher sends one lesson to multiple students → multiple rows.
+          // c1: lesson l1 sent to 2 students (a1+a2), lesson l2 sent to 1 student (a3) → 2 distinct lessons
+          // c2: lesson l3 sent to 2 students (a4+a5) → 1 distinct lesson
           data = [
-            { id: 'a1', class_id: 'c1' },
-            { id: 'a2', class_id: 'c1' },
-            { id: 'a3', class_id: 'c1' },
-            { id: 'a4', class_id: 'c2' },
-            { id: 'a5', class_id: 'c2' },
+            { id: 'a1', class_id: 'c1', lesson_id: 'l1' },
+            { id: 'a2', class_id: 'c1', lesson_id: 'l1' },
+            { id: 'a3', class_id: 'c1', lesson_id: 'l2' },
+            { id: 'a4', class_id: 'c2', lesson_id: 'l3' },
+            { id: 'a5', class_id: 'c2', lesson_id: 'l3' },
           ];
         } else if (table === 'homework_attempts') {
           // 2 submitted for c1 (a1, a2), 1 for c2 (a4)
@@ -154,7 +157,8 @@ describe('loadSchoolReport', () => {
     expect(c1!.className).toBe('English 7B');
     expect(c1!.teacherName).toBe('Alice Teacher');
     expect(c1!.enrolledStudents).toBe(3);
-    expect(c1!.assignmentsCreated).toBe(3);
+    // 3 fan-out rows but only 2 distinct lesson_ids (l1 × 2 students, l2 × 1 student)
+    expect(c1!.assignmentsCreated).toBe(2);
     expect(c1!.assignmentsSubmitted).toBe(2);
     expect(c1!.quizzesPublished).toBe(2);
 
@@ -163,7 +167,8 @@ describe('loadSchoolReport', () => {
     expect(c2!.className).toBe('Math 9A');
     expect(c2!.teacherName).toBe('Bob Teacher');
     expect(c2!.enrolledStudents).toBe(2);
-    expect(c2!.assignmentsCreated).toBe(2);
+    // 2 fan-out rows but only 1 distinct lesson_id (l3 × 2 students)
+    expect(c2!.assignmentsCreated).toBe(1);
     expect(c2!.assignmentsSubmitted).toBe(1);
     expect(c2!.quizzesPublished).toBe(1);
   });

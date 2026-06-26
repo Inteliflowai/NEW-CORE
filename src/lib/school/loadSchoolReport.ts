@@ -118,22 +118,25 @@ export async function loadSchoolReport(
   }
 
   // ── 6. Assignments per class (.in scoped to classIds) ─────────────────────
+  // Select lesson_id so we can count DISTINCT lessons per class (not fan-out rows).
+  // assignments is a per-student fan-out: one row per student per lesson-assignment,
+  // so a teacher sending one lesson to 30 students creates 30 rows.
+  // The operational report should show the number of distinct lessons assigned, not rows.
   const { data: assignmentRows } = await admin
     .from('assignments')
-    .select('id, class_id')
+    .select('id, class_id, lesson_id')
     .in('class_id', classIds);
 
   const assignments = (
-    assignmentRows as Array<{ id: string; class_id: string }> | null
+    assignmentRows as Array<{ id: string; class_id: string; lesson_id: string | null }> | null
   ) ?? [];
 
-  const assignmentsCreatedPerClass = new Map<string, number>();
+  // Count DISTINCT lesson_ids per class (null lesson_id = legacy/unlinked row, excluded).
+  const distinctLessonsByClass = new Map<string, Set<string>>();
+  for (const classId of classIds) distinctLessonsByClass.set(classId, new Set());
   const assignmentToClass = new Map<string, string>();
   for (const a of assignments) {
-    assignmentsCreatedPerClass.set(
-      a.class_id,
-      (assignmentsCreatedPerClass.get(a.class_id) ?? 0) + 1,
-    );
+    if (a.lesson_id) distinctLessonsByClass.get(a.class_id)?.add(a.lesson_id);
     assignmentToClass.set(a.id, a.class_id);
   }
 
@@ -179,7 +182,7 @@ export async function loadSchoolReport(
     teacherName:
       cls.teacher_id != null ? (teacherMap.get(cls.teacher_id) ?? null) : null,
     enrolledStudents: enrollmentCount.get(cls.id) ?? 0,
-    assignmentsCreated: assignmentsCreatedPerClass.get(cls.id) ?? 0,
+    assignmentsCreated: distinctLessonsByClass.get(cls.id)?.size ?? 0,
     assignmentsSubmitted: submittedPerClass.get(cls.id) ?? 0,
     quizzesPublished: quizzesPerClass.get(cls.id) ?? 0,
   }));
