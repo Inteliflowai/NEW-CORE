@@ -1,8 +1,31 @@
-# Task 9 Report — Demo seed CL history + Barb copy drafts
+# Task 9 Report — Student Attention rollup + admin drill-in (School-Admin Pages, Option A)
 
-**Status:** DONE  
-**Commit:** `4d6c289`  
-**Tests:** 1/1 passed (`scripts/__tests__/backfillSkillStateSnapshots.test.ts` — pure row-builder: 8 rows, 4 distinct dates, solid-state count climbs from earliest to latest week)  
+**Status:** DONE (feat/school-admin-pages, final task)
+**Tests:** 14 new tests passed (6 loader + 3 rollup page + 5 drill-in page)
+**Full suite:** 3077/3077 passed
+**tsc:** 0 errors
+
+## Files Created
+
+| File | Purpose |
+|---|---|
+| `src/lib/school/loadStudentAttention.ts` | 3-step loader: reteach snapshots → school-scoped users → enrollments+classes → grade/class grouping |
+| `src/lib/school/__tests__/loadStudentAttention.test.ts` | 6 loader tests: normal case, empty, no-school-match, no-risk-keys, dedup, sorted grades |
+| `src/app/(school-admin)/admin/students/page.tsx` | Rollup page with `caps.canSeeStudentAttention` URL re-guard |
+| `src/app/(school-admin)/admin/students/_components/AttentionRollup.tsx` | Grade → class → student list; links to `/admin/students/<id>` |
+| `src/app/(school-admin)/admin/students/[studentId]/page.tsx` | Admin-scoped drill-in (Option A); IDOR guard + band-only data |
+| `src/app/(school-admin)/admin/students/__tests__/page.test.tsx` | 3 rollup page tests |
+| `src/app/(school-admin)/admin/students/[studentId]/__tests__/page.test.tsx` | 5 drill-in tests |
+
+## Key Design Decisions
+
+- **Option A implemented**: drill-in lives inside `(school-admin)/admin/students/[studentId]/` — never crosses into `(teacher)` which runs `requireRole(['teacher'])` and would redirect admins.
+- **`masteryDisplayLabel`** used (the real export from `masteryLabel.ts`; brief used `masteryLabel`).
+- **Four-audience**: loader SELECTs only `student_id, mastery_band, snapshot_date`; no `risk_score` or `divergence` ever touched; no-risk-keys test enforces this contract.
+- **IDOR boundary**: both pages do `users.eq('school_id', ctx.schoolId)` before reading any student data.
+- **Quiet-when-empty**: AttentionRollup shows "No students need attention right now" card when grades==[].
+
+
 **tsc:** 0 errors  
 
 **Seed variable names confirmed (wired against):**
@@ -60,3 +83,35 @@ Added `import { logAudit } from '@/lib/audit/logAudit'` and, immediately after t
 
 - Both affected suites: **17/17 tests passed**.
 - `npx tsc --noEmit`: **0 errors**.
+
+---
+
+## Whole-branch review fixes (2026-06-26)
+
+Three findings from the whole-branch review of `feat/school-admin-pages` — all resolved.
+
+### Fix 1 (Important): Overview page — "N students need a look" attention line
+
+**Files modified:**
+- `src/app/(school-admin)/admin/overview/page.tsx`
+- `src/app/(school-admin)/admin/overview/_components/OverviewCards.tsx`
+
+`page.tsx` now destructures `caps` from `resolveAdminContext` and runs `loadStudentAttention` in parallel with `loadSchoolOverview` when `caps.canSeeStudentAttention` is true. Counts are computed (total students, classes with ≥1 student) and passed as props to `OverviewCards`. `OverviewCards` renders a `warn`-bordered attention line linking to `/admin/students` when `studentsNeedingAttention > 0`; quiet-when-empty (0 or null = nothing rendered). Sysadmin gets `null` → no line.
+
+### Fix 2 (Important): STRINGS-FOR-BARB.md §School Admin
+
+**File modified:** `STRINGS-FOR-BARB.md`
+
+New `## School Admin` section appended covering: license status labels, seat-cap warning text, student attention line copy (1/N/M variants, quiet-when-empty), section headings, empty states, AttentionRollup labels, and "Building…" placeholder flagged as Barb-TBD.
+
+### Fix 3 (Minor): CSV formula injection guard in escapeCsv
+
+**File modified:** `src/app/api/admin/school-report/route.ts`
+
+`escapeCsv` now also quotes values starting with `=`, `+`, `-`, `@`, or tab (Excel/Sheets formula injection prevention). Logic refactored to a single `needsQuoting` boolean.
+
+### Gate results
+
+- `npx tsc --noEmit`: **0 errors**
+- Targeted tests (`loadStudentAttention.test.ts` + `school-report/route.test.ts`): **15/15 passed**
+- Full suite (`npm test`): **3077/3077 passed** (355 test files)
