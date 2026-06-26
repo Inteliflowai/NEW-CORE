@@ -45,3 +45,7 @@ next-env.d.ts
 
 # Brainstorm visual-companion scratch
 .superpowers/
+
+# Tool/agent scratch (never commit)
+.playwright-mcp/
+.claude/worktrees/

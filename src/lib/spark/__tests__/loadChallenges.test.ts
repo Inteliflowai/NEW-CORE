@@ -29,11 +29,11 @@ describe('loadChallenges', () => {
       { id: 'a2', student_id: 's2', spark_status: 'created', content: { title: 'Forces' }, users: { full_name: 'Sofia' } },
     ];
     const completions = [
-      { assignment_id: 'a1', transfer_score: 88, content_quality: 'engaged', rubric_dimensions: { problem_understanding: 4 } },
+      { assignment_id: 'a1', transfer_score: 88, content_quality: 'engaged', rubric_dimensions: { problem_understanding: 4 }, completed_at: '2026-06-22T10:00:00Z', effort_label: 'persistent', revision_count: 2, teli_hint_count: 1 },
     ];
     const data = await loadChallenges(admin(assignments, completions), 'cls-1');
     const byId = Object.fromEntries(data.challenges.map((c) => [c.assignmentId, c]));
-    expect(byId['a1']).toMatchObject({ status: 'completed', transferScore: 88, contentQuality: 'engaged', studentName: 'Alex', title: 'Ecosystems' });
+    expect(byId['a1']).toMatchObject({ status: 'completed', transferScore: 88, contentQuality: 'engaged', studentName: 'Alex', title: 'Ecosystems', completedAt: '2026-06-22T10:00:00Z', effortLabel: 'persistent', revisionCount: 2, teliHintCount: 1 });
     expect(byId['a2']).toMatchObject({ status: 'assigned', transferScore: null, studentName: 'Sofia' });
   });
 });
