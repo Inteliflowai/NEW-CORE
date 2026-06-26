@@ -9,7 +9,7 @@
 // has already established the authenticated studentId). Never writes class_id.
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type AssignmentContent = { title?: string; instructions?: string; reading_passage?: string; audio_script?: string; tasks?: Array<{ step: number; description: string; type?: string }> };
+export type AssignmentContent = { title?: string; instructions?: string; reading_passage?: string; audio_script?: string; tasks?: Array<{ step: number; description: string; type?: string; skill_name?: string }> };
 export type ResponsesShape = { tasks: Record<string, { text: string; image_url: string | null }> };
 export interface PlayableAssignment {
   assignment: { id: string; content: AssignmentContent };
@@ -28,11 +28,13 @@ const NO_ATTEMPT = { id: '', status: 'none', responses: EMPTY, attempt_no: 0 };
 export function normalizeContent(raw: AssignmentContent | null): AssignmentContent {
   const c = raw ?? {};
   const tasks = (c.tasks ?? []).map((t, i) => {
-    const tt = t as { step?: number; description?: string; prompt?: string; type?: string };
+    const tt = t as { step?: number; description?: string; prompt?: string; type?: string; skill_name?: string };
     return {
       step: typeof tt.step === 'number' ? tt.step : i + 1,
       description: tt.description ?? tt.prompt ?? c.instructions ?? '',
       type: tt.type,
+      // ONLY the topic name reaches the client. skill_id / power_skill / any level are never forwarded.
+      skill_name: typeof tt.skill_name === 'string' && tt.skill_name.trim() ? tt.skill_name : undefined,
     };
   });
   return { ...c, tasks };

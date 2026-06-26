@@ -1,6 +1,6 @@
 // src/lib/assignments/__tests__/loadAssignmentForPlay.test.ts
 import { describe, it, expect, vi } from 'vitest';
-import { loadAssignmentForPlay } from '@/lib/assignments/loadAssignmentForPlay';
+import { loadAssignmentForPlay, normalizeContent } from '@/lib/assignments/loadAssignmentForPlay';
 
 function makeAdmin(opts: { assignmentRow: unknown; latestAttempt: unknown; insertedId?: string }) {
   const insert = vi.fn().mockReturnValue({ select: () => ({ single: async () => ({ data: { id: opts.insertedId ?? 'att-new', attempt_no: 2, status: 'in_progress', responses: { tasks: {} } }, error: null }) }) });
@@ -32,4 +32,13 @@ describe('loadAssignmentForPlay', () => {
     expect(r.assignment.content.tasks?.[1].step).toBe(2);
     expect(r.assignment.content.tasks?.[1].description).toBe('Compare two examples from class.');
   });
+});
+
+it('normalizeContent forwards ONLY skill_name (drops skill_id/power_skill) and no level/verb', () => {
+  const out = normalizeContent({ tasks: [
+    { step: 1, description: 'd', skill_name: 'Fractions', skill_id: 'frac', power_skill: 'Monitor' } as never,
+  ] });
+  expect(out.tasks![0]).toEqual({ step: 1, description: 'd', type: undefined, skill_name: 'Fractions' });
+  expect(Object.keys(out.tasks![0]).sort()).toEqual(['description', 'skill_name', 'step', 'type']);
+  expect(JSON.stringify(out)).not.toMatch(/frac|Monitor|scaffolded|extension|Reinforce|Enrich/);
 });
