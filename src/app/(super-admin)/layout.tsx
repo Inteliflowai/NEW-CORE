@@ -13,16 +13,8 @@ export default async function SuperAdminLayout({
   await requireRole(['platform_admin']);
   const nav = (
     <>
-      <a href="/platform/dashboard" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
-        Dashboard
-      </a>
-      <a href="/platform/schools" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
-        Schools
-      </a>
-      <a href="/platform/users" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
-        Users
-      </a>
       <a href="/provision" className="text-fg hover:text-brand px-3 py-1">Provision</a>
+      <a href="/schools" className="text-fg hover:text-brand px-3 py-1">Schools</a>
     </>
   );
 

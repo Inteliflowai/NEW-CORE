@@ -12,18 +12,9 @@ export default async function SchoolAdminLayout({
   children: React.ReactNode;
 }) {
   await requireRole(SCHOOL_ADMIN_ROLES);
+  // Only /admin/dashboard exists today; School + Teachers pages aren't built yet (don't ship dead links).
   const nav = (
-    <>
-      <a href="/admin/dashboard" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
-        Dashboard
-      </a>
-      <a href="/admin/school" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
-        School
-      </a>
-      <a href="/admin/teachers" className="text-[var(--fg)] hover:text-[var(--brand)] px-3 py-1">
-        Teachers
-      </a>
-    </>
+    <a href="/admin/dashboard" className="text-fg hover:text-brand px-3 py-1">Dashboard</a>
   );
 
   return (

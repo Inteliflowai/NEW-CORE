@@ -4,12 +4,21 @@
 // come from the .sidebar-dots / .sidebar-glow utilities.
 
 import Image from 'next/image';
+import Link from 'next/link';
 import { ClassSwitcherPill } from './ClassSwitcherPill';
 import { SidebarNav } from './SidebarNav';
 import { IconSignOut } from '@/components/core/icons';
 import { initialsOf } from './TeacherTopbar';
 
-export function TeacherSidebar({ userName, alertCount }: { userName: string | null; alertCount?: number }) {
+export function TeacherSidebar({
+  userName,
+  alertCount,
+  avatarUrl,
+}: {
+  userName: string | null;
+  alertCount?: number;
+  avatarUrl?: string | null;
+}) {
   const initials = initialsOf(userName);
   return (
     <div className="sidebar-glow relative flex h-full flex-col overflow-hidden border-r-[3px] border-sidebar-edge bg-sidebar">
@@ -52,20 +61,33 @@ export function TeacherSidebar({ userName, alertCount }: { userName: string | nu
         {/* Nav */}
         <SidebarNav alertCount={alertCount} />
 
-        {/* Footer: user + sign out */}
+        {/* Footer: user (→ /profile) + sign out */}
         <div className="flex flex-col gap-1.5 border-t border-sidebar-fg/20 p-2.5">
-          <div className="flex items-center gap-2.5 rounded-xl bg-sidebar-fg/15 px-2.5 py-2">
-            <span
-              aria-hidden
-              className="grid size-8 place-items-center rounded-full bg-sidebar-plate text-sm font-bold text-brand"
-            >
-              {initials}
-            </span>
+          <Link
+            href="/profile"
+            className="flex items-center gap-2.5 rounded-xl bg-sidebar-fg/15 px-2.5 py-2 hover:bg-sidebar-fg/25"
+          >
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={avatarUrl}
+                alt=""
+                aria-hidden
+                className="size-8 rounded-full object-cover"
+              />
+            ) : (
+              <span
+                aria-hidden
+                className="grid size-8 place-items-center rounded-full bg-sidebar-plate text-sm font-bold text-brand"
+              >
+                {initials}
+              </span>
+            )}
             <span className="flex flex-col leading-tight">
               <span className="text-sm font-bold text-sidebar-fg">{userName ?? 'Teacher'}</span>
               <span className="text-[11px] text-sidebar-fg-muted">Teacher</span>
             </span>
-          </div>
+          </Link>
           <form method="post" action="/logout">
             <button
               type="submit"
