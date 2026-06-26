@@ -17,7 +17,7 @@ export default async function TeacherLayout({
   const admin = createAdminSupabaseClient();
   const [alertCount, avatarRow] = await Promise.all([
     openAlertCountForTeacher(admin, userId),
-    admin.from('users').select('avatar_url').eq('id', userId).single(),
+    admin.from('users').select('avatar_url').eq('id', userId).maybeSingle(),
   ]);
   const avatarUrl = (avatarRow.data?.avatar_url ?? null) as string | null;
   return (
