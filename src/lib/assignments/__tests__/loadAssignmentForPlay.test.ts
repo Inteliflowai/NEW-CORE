@@ -1,6 +1,6 @@
 // src/lib/assignments/__tests__/loadAssignmentForPlay.test.ts
 import { describe, it, expect, vi } from 'vitest';
-import { loadAssignmentForPlay } from '@/lib/assignments/loadAssignmentForPlay';
+import { loadAssignmentForPlay, normalizeContent } from '@/lib/assignments/loadAssignmentForPlay';
 
 function makeAdmin(opts: { assignmentRow: unknown; latestAttempt: unknown; insertedId?: string }) {
   const insert = vi.fn().mockReturnValue({ select: () => ({ single: async () => ({ data: { id: opts.insertedId ?? 'att-new', attempt_no: 2, status: 'in_progress', responses: { tasks: {} } }, error: null }) }) });
@@ -32,4 +32,34 @@ describe('loadAssignmentForPlay', () => {
     expect(r.assignment.content.tasks?.[1].step).toBe(2);
     expect(r.assignment.content.tasks?.[1].description).toBe('Compare two examples from class.');
   });
+});
+
+it('normalizeContent forwards ONLY skill_name (drops skill_id/power_skill) and no level/verb', () => {
+  const out = normalizeContent({ tasks: [
+    { step: 1, description: 'd', skill_name: 'Fractions', skill_id: 'frac', power_skill: 'Monitor' } as never,
+  ] });
+  expect(out.tasks![0]).toEqual({ step: 1, description: 'd', type: undefined, skill_name: 'Fractions' });
+  expect(Object.keys(out.tasks![0]).sort()).toEqual(['description', 'skill_name', 'step', 'type']);
+  expect(JSON.stringify(out)).not.toMatch(/frac|Monitor|scaffolded|extension|Reinforce|Enrich/);
+});
+
+// FIX 1 tests
+it('normalizeContent drops skill_name that contains a diagnostic level word (safe degrade → no heading)', () => {
+  const out = normalizeContent({ tasks: [
+    { step: 1, description: 'd', skill_name: 'Scaffolded Fractions' } as never,
+  ] });
+  // "Scaffolded" is in DIAGNOSTIC_VOCAB_RE — must be dropped, not forwarded
+  expect(out.tasks![0].skill_name).toBeUndefined();
+});
+
+it('normalizeContent does NOT forward top-level mode (allow-list — never spreads c)', () => {
+  const out = normalizeContent({ mode: 'scaffolded', title: 'T', tasks: [{ step: 1, description: 'd' }] } as never);
+  // mode must not appear in the output at all (allow-list returns only title/instructions/reading_passage/audio_script/tasks)
+  expect('mode' in out).toBe(false);
+  expect(JSON.stringify(out)).not.toMatch(/scaffolded/);
+});
+
+it('normalizeContent still forwards a clean skill_name with no diagnostic vocab', () => {
+  const out = normalizeContent({ tasks: [{ step: 1, description: 'd', skill_name: 'Fractions' } as never] });
+  expect(out.tasks![0].skill_name).toBe('Fractions');
 });

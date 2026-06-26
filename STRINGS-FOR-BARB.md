@@ -1252,3 +1252,7 @@ are also caught.
 
 *(NOTE: Barb should also confirm whether earned grade digits should ever appear on the parent
 surface — e.g. in the printable report. Current answer = NO (digit-free rule); this is a Barb/Marvin decision deferred from Epic 4 planning.)*
+
+## CL Generation
+- On an assignment that spans 2+ skills, the student sees the **skill (topic) name** as a small heading above each section (e.g. "Fractions", "Decimals"). Topic name only — never a difficulty level or a Reinforce/On Track/Enrich verb.
+- A single-skill assignment shows no heading (unchanged from today).

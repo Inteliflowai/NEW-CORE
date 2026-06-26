@@ -30,6 +30,7 @@ import {
   type SkillSparkObservation,
 } from './computeSkillState';
 import { toSessionErrorPattern } from './errorPatternMap';
+import { extractTaskSkillTags, buildPerSkillHomeworkObs } from './perTaskAttribution';
 
 // ── Return type ──────────────────────────────────────────────────────────────
 
@@ -66,6 +67,7 @@ interface AssignmentRow {
   skill_ids: string[] | null;           // uuid[] added in 0005
   reteach_needed: boolean | null;       // 0004
   created_at: string;
+  content: { tasks?: Array<{ step?: number; skill_id?: string | null }> } | null; // CL → gen per-task tags
 }
 
 interface HwAttemptRow {
@@ -81,6 +83,7 @@ interface HwAttemptRow {
   flagged_by: string | null;            // 0011 — 'reteach' if teacher flagged
   submitted_at: string | null;
   graded_at: string | null;
+  task_grades: Array<{ step: number; grade: number }> | null; // 0011 — per-task AI grades
 }
 
 // ── Main export (C11 object signature) ───────────────────────────────────────
@@ -175,7 +178,7 @@ export async function recomputeSkillStatesForStudent(
     // NO reteach_completed_at (phantom column).
     const { data: asgData, error: asgErr } = await admin
       .from('assignments')
-      .select('id, skill_ids, reteach_needed, created_at')
+      .select('id, skill_ids, reteach_needed, created_at, content')
       .eq('student_id', studentId)
       .limit(1000);
 
@@ -200,7 +203,7 @@ export async function recomputeSkillStatesForStudent(
         .from('homework_attempts')
         .select(
           'assignment_id, student_id, status, score_pct, teacher_score, ' +
-          'effort_label, allow_redo, is_redo, flagged_by, submitted_at, graded_at',
+          'effort_label, allow_redo, is_redo, flagged_by, submitted_at, graded_at, task_grades',
         )
         .eq('student_id', studentId)
         .in(
@@ -245,57 +248,47 @@ export async function recomputeSkillStatesForStudent(
           h.submitted_at != null,
       );
 
-      // C10: gradePct = teacher_score ?? score_pct (no phantom `grade`)
-      const gradePct =
-        graded
-          ? (typeof graded.teacher_score === 'number'
-              ? graded.teacher_score
-              : graded.score_pct ?? null)
-          : null;
+      const occurredAt = graded?.graded_at ?? graded?.submitted_at ?? a.created_at;
+      const effortLabel = graded?.effort_label ?? null;
 
-      const obs: SkillHomeworkObservation = {
-        gradePct,
-        submitted,
-        occurredAt:
-          graded?.graded_at ??
-          graded?.submitted_at ??
-          a.created_at,
-        effortLabel: graded?.effort_label ?? null,
-      };
+      // Override wins: a teacher-overridden grade is authoritative → assignment-level fan-out.
+      const hasOverride = graded != null && typeof graded.teacher_score === 'number';
+      const assignmentGradePct = graded
+        ? (typeof graded.teacher_score === 'number' ? graded.teacher_score : graded.score_pct ?? null)
+        : null;
+      const assignmentObs: SkillHomeworkObservation = { gradePct: assignmentGradePct, submitted, occurredAt, effortLabel };
 
-      // C10: reteach derived from redo flags — NO reteach_completed_at column.
-      // A graded redo attempt (is_redo=true) on this assignment = reteach completion.
-      // type: 'different_approach' if flagged_by reteach | reteach_needed=true;
-      //       'more_practice' for a plain allow_redo redo.
-      // If completedAt not determinable → pass reteach: null (computeSkillState handles null).
-      const redoAttempt = attempts.find(
-        (h) =>
-          h.is_redo === true &&
-          (h.status === 'graded' || h.submitted_at != null),
-      );
-
-      let reteach: SkillReteachEvent | null = null;
-      if (redoAttempt && (redoAttempt.submitted_at ?? redoAttempt.graded_at)) {
-        const completedAt =
-          redoAttempt.graded_at ?? redoAttempt.submitted_at!;
-        const isDifferentApproach =
-          a.reteach_needed === true ||
-          redoAttempt.flagged_by === 'reteach';
-        reteach = {
-          type: isDifferentApproach ? 'different_approach' : 'more_practice',
-          completedAt,
-        };
-      }
+      // CL → generation: ONE averaged observation per skill from per-task tags (no
+      // observation-count inflation), unless overridden. A skill not covered by any
+      // tagged task falls back to the assignment-level observation (never dropped).
+      const perSkill = hasOverride
+        ? null
+        : buildPerSkillHomeworkObs(
+            extractTaskSkillTags(a.content),
+            (graded?.task_grades ?? []) as { step: number; grade: number }[],
+            { submitted, occurredAt, effortLabel },
+          );
 
       for (const skillId of a.skill_ids!) {
+        const obs = perSkill?.get(skillId) ?? assignmentObs;
         if (!hwBySkill.has(skillId)) hwBySkill.set(skillId, []);
         hwBySkill.get(skillId)!.push(obs);
+      }
 
+      // ── reteach (UNCHANGED — stays assignment-level) ──
+      const redoAttempt = attempts.find(
+        (h) => h.is_redo === true && (h.status === 'graded' || h.submitted_at != null),
+      );
+      let reteach: SkillReteachEvent | null = null;
+      if (redoAttempt && (redoAttempt.submitted_at ?? redoAttempt.graded_at)) {
+        const completedAt = redoAttempt.graded_at ?? redoAttempt.submitted_at!;
+        const isDifferentApproach = a.reteach_needed === true || redoAttempt.flagged_by === 'reteach';
+        reteach = { type: isDifferentApproach ? 'different_approach' : 'more_practice', completedAt };
+      }
+      for (const skillId of a.skill_ids!) {
         if (reteach) {
           const prev = reteachBySkill.get(skillId);
-          if (!prev || prev.completedAt < reteach.completedAt) {
-            reteachBySkill.set(skillId, reteach);
-          }
+          if (!prev || prev.completedAt < reteach.completedAt) reteachBySkill.set(skillId, reteach);
         }
       }
     }

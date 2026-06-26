@@ -21,6 +21,9 @@ import {
   LEARNING_STYLE_SYSTEM,
   learningStylePrompt,
 } from '@/lib/openai/prompts';
+import { assignmentModeToBand } from '@/lib/utils/scoring';
+import type { SkillTarget } from '@/lib/skills/skillTargets';
+import type { AssignmentSection } from '@/lib/openai/prompts';
 import {
   AssignmentSchema,
   type Assignment,
@@ -39,6 +42,9 @@ export interface AssignmentInput {
   studentName: string;
   sparkEnabled?: boolean;
   targetedPractice?: boolean;
+  /** Per-skill CL targets for this lesson. When present, the assignment is sectioned
+   *  per skill (each at its own level) and tasks are tagged. Empty/absent → single-band. */
+  skillTargets?: SkillTarget[];
 }
 
 /**
@@ -54,6 +60,21 @@ export async function generateAssignment(input: AssignmentInput): Promise<Assign
     atl_skills: s.atl_skills,
     ib_learner_profile: s.ib_learner_profile,
     bloom_level: s.bloom_level,
+    power_skill: s.critical_thinking_skill,
+  }));
+
+  const sections: AssignmentSection[] = (input.skillTargets ?? []).map((t) => ({
+    skill_id: t.skill_id,
+    skill_name: t.skill_name,
+    level: t.level,
+    strategies: getStrategiesForStudent(assignmentModeToBand(t.level), input.style).map((s) => ({
+      name: s.name,
+      what_students_do: s.what_students_do,
+      atl_skills: s.atl_skills,
+      ib_learner_profile: s.ib_learner_profile,
+      bloom_level: s.bloom_level,
+      power_skill: s.critical_thinking_skill,
+    })),
   }));
 
   const userPrompt = assignmentPrompt(
@@ -63,15 +84,21 @@ export async function generateAssignment(input: AssignmentInput): Promise<Assign
     input.studentName,
     strategies,
     input.sparkEnabled,
-    input.targetedPractice,
+    // FIX 10: targetedPractice and sectioned mode contradict — suppress when sections present.
+    sections.length > 0 ? undefined : input.targetedPractice,
+    sections.length > 0 ? sections : undefined,
   );
 
-  // ── Primary: Claude (temp 0.7, 4500 tok, 120s timeout) ───────────────────
+  // FIX 6: sectioned output (≤8 tasks × 3 extra fields + full passage/audio) can exceed
+  // the 4500-token cap → truncated JSON → parse fail on both legs. Raise when sections present.
+  const maxTokens = sections.length > 0 ? 7000 : 4500;
+
+  // ── Primary: Claude (temp 0.7, maxTokens, 120s timeout) ──────────────────
   let claudeRaw: string | null = null;
   try {
     claudeRaw = await claudeChat(ASSIGNMENT_SYSTEM, userPrompt, {
       temperature: 0.7,
-      maxTokens: 4500,
+      maxTokens,
       timeoutMs: 120000,
       model: CLAUDE_GEN_MODEL,
     });
@@ -80,7 +107,7 @@ export async function generateAssignment(input: AssignmentInput): Promise<Assign
   }
   if (claudeRaw) {
     const parsed = tryParseAssignment(claudeRaw);
-    if (parsed) return parsed;
+    if (parsed) return finalizeAssignment(parsed, sections);
   }
 
   // ── Fallback: GPT (OPENAI_GEN_MODEL = gpt-4o) ────────────────────────────
@@ -94,7 +121,7 @@ export async function generateAssignment(input: AssignmentInput): Promise<Assign
           { role: 'user', content: userPrompt },
         ],
         temperature: 0.7,
-        max_tokens: 4500,
+        max_tokens: maxTokens,
         response_format: { type: 'json_object' },
       },
       { timeoutMs: 45000 },
@@ -105,7 +132,7 @@ export async function generateAssignment(input: AssignmentInput): Promise<Assign
   }
   if (gptRaw) {
     const parsed = tryParseAssignment(gptRaw);
-    if (parsed) return parsed;
+    if (parsed) return finalizeAssignment(parsed, sections);
   }
 
   // Both legs exhausted or both produced unparseable output — NEVER fabricate.
@@ -120,6 +147,23 @@ function tryParseAssignment(raw: string): Assignment | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * FIX 2+7: Post-parse normalization applied to EVERY returned assignment.
+ * 1) Renumber steps sequentially (1, 2, 3 …) — duplicate/restarted LLM steps collide on
+ *    responses/grader/attribution keys.
+ * 2) Snap each task's skill_id to the section's canonical id by skill_name — the LLM may
+ *    mangle a raw UUID while keeping the skill_name intact.
+ * Safe for single-band (sections = []) — idByName is empty, steps still renumbered.
+ */
+function finalizeAssignment(a: Assignment, sections: AssignmentSection[]): Assignment {
+  const idByName = new Map(sections.map((s) => [s.skill_name, s.skill_id]));
+  const tasks = a.tasks.map((t, i) => {
+    const canonical = t.skill_name ? idByName.get(t.skill_name) : undefined;
+    return { ...t, step: i + 1, skill_id: canonical ?? t.skill_id };
+  });
+  return { ...a, tasks };
 }
 
 /**

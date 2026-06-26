@@ -16,6 +16,9 @@ import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/sup
 import { STAFF_ROLES } from '@/lib/auth/roles';
 import { guardClassAccess } from '@/lib/auth/guards';
 import { generateAssignment } from '@/lib/engine/assignmentGen';
+import { resolveLessonSkills } from '@/lib/lessons/resolveLessonSkills';
+import { loadSkillTargets } from '@/lib/skills/loadSkillTargets';
+import type { SkillTarget } from '@/lib/skills/skillTargets';
 import { normalizeLearningStyle } from '@/lib/utils/learningStyle';
 import { LlmExhaustedError } from '@/lib/ai/errors';
 import { OPENAI_GEN_MODEL } from '@/lib/ai/models';
@@ -136,11 +139,27 @@ export async function POST(req: NextRequest) {
   // ── Return 202 immediately — generation runs in the background ───────────────
   after(async () => {
     try {
+      // FIX 3: wrap skill resolution in its own try/catch so a throw degrades to single-band
+      // rather than aborting the entire after() generation silently.
+      let lessonSkills: { skill_id: string; skill_name: string }[] = [];
+      let skillTargets: SkillTarget[] = [];
+      try {
+        lessonSkills = lessonId ? await resolveLessonSkills(admin, lessonId) : [];
+        skillTargets = await loadSkillTargets(admin, {
+          studentId,
+          skills: lessonSkills,
+          fallbackBand: 'reteach',
+        });
+      } catch (skillErr) {
+        console.warn('[assignments/reinforce] skill resolution failed — single-band fallback:', skillErr);
+        lessonSkills = []; skillTargets = [];
+      }
       const assignment = await generateAssignment({
         lessonSummary,
         band: 'reteach',
         style: learningStyle,
         studentName,
+        skillTargets,
       });
 
       const { data: insRow, error: insErr } = await admin
@@ -156,6 +175,7 @@ export async function POST(req: NextRequest) {
           status: 'draft',
           assigned_at: new Date().toISOString(),
           generation_model: OPENAI_GEN_MODEL,
+          skill_ids: skillTargets.map((t) => t.skill_id),
         })
         .select('id')
         .single();

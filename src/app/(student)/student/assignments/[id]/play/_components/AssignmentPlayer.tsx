@@ -393,6 +393,10 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
   const currentTask = tasks[currentIndex] ?? null;
   if (!currentTask) return null;
 
+  // Show a topic heading only when the assignment spans 2+ skills (else it's redundant).
+  const distinctSkills = new Set(tasks.map((t) => t.skill_name).filter(Boolean));
+  const showSkillHeading = distinctSkills.size >= 2;
+
   const currentText = textFor(responses, currentTask.step);
   const isFirst = currentIndex === 0;
   const isLast = currentIndex === tasks.length - 1;
@@ -409,6 +413,11 @@ export function AssignmentPlayer({ assignmentId: _assignmentId, attemptId, conte
       />
 
       <div className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full flex flex-col gap-6">
+        {showSkillHeading && currentTask.skill_name ? (
+          <p className="text-fg-muted text-xs font-semibold uppercase tracking-wide" data-testid="task-skill-heading">
+            {currentTask.skill_name}
+          </p>
+        ) : null}
         <TaskCard
           step={currentTask.step}
           description={currentTask.description}

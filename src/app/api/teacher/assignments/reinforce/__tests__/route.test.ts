@@ -207,6 +207,16 @@ vi.mock('@/lib/spark/notifyAssignmentCreated', () => ({
   notifyAssignmentCreated: (...a: unknown[]) => mockNotifyAssignmentCreated(...a),
 }));
 
+const mockResolveLessonSkills = vi.fn();
+vi.mock('@/lib/lessons/resolveLessonSkills', () => ({
+  resolveLessonSkills: (...a: unknown[]) => mockResolveLessonSkills(...a),
+}));
+
+const mockLoadSkillTargets = vi.fn();
+vi.mock('@/lib/skills/loadSkillTargets', () => ({
+  loadSkillTargets: (...a: unknown[]) => mockLoadSkillTargets(...a),
+}));
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('POST /api/teacher/assignments/reinforce', () => {
@@ -216,6 +226,11 @@ describe('POST /api/teacher/assignments/reinforce', () => {
     mockGenerateAssignment.mockReset();
     mockGetSparkLink.mockReset();
     mockNotifyAssignmentCreated.mockReset();
+    mockResolveLessonSkills.mockReset();
+    mockLoadSkillTargets.mockReset();
+    // Safe defaults so existing tests that invoke after() don't fail on the new calls
+    mockResolveLessonSkills.mockResolvedValue([]);
+    mockLoadSkillTargets.mockResolvedValue([]);
     vi.resetModules();
   });
 
@@ -452,5 +467,62 @@ describe('POST /api/teacher/assignments/reinforce', () => {
 
     // insert happened before the SPARK call — it is done
     expect(insertSpy).toHaveBeenCalledOnce();
+  });
+
+  // ── CL targets: skillTargets threaded + skill_ids persisted (tagged lesson) ──
+  it('threads skillTargets and persists skill_ids on the reinforced assignment', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u-1' } }, error: null }) },
+    } as never);
+    const { mock, insertSpy } = makeAdminMock();
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(mock as never);
+    mockGuardClassAccess.mockResolvedValue(null);
+    mockGenerateAssignment.mockResolvedValue(FAKE_GENERATED);
+    mockGetSparkLink.mockResolvedValue(null);
+
+    // lesson resolves to a single tagged skill
+    mockResolveLessonSkills.mockResolvedValue([{ skill_id: 'frac', skill_name: 'Fractions' }]);
+    mockLoadSkillTargets.mockResolvedValue([
+      { skill_id: 'frac', skill_name: 'Fractions', level: 'scaffolded', verb: 'Reinforce', confident: true },
+    ]);
+
+    const { POST } = await import('@/app/api/teacher/assignments/reinforce/route');
+    await POST(makeRequest({ attempt_id: 'ha-1' }));
+    await capturedAfterCallback!();
+
+    // generateAssignment was called with band='reteach' and skillTargets of length >= 1
+    const genArg = mockGenerateAssignment.mock.calls[0][0] as Record<string, unknown>;
+    expect(genArg.band).toBe('reteach');
+    expect(((genArg.skillTargets ?? []) as unknown[]).length).toBeGreaterThanOrEqual(1);
+
+    // insert captured the resolved skill_ids
+    const insertData = insertSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(insertData.skill_ids).toEqual(['frac']);
+  });
+
+  // ── CL targets: untagged lesson → skill_ids=[] but row still inserted ─────────
+  it('still creates a reinforced assignment with skill_ids=[] when the lesson is untagged', async () => {
+    const { createServerSupabaseClient, createAdminSupabaseClient } = await import('@/lib/supabase/server');
+    vi.mocked(createServerSupabaseClient).mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u-1' } }, error: null }) },
+    } as never);
+    const { mock, insertSpy } = makeAdminMock();
+    vi.mocked(createAdminSupabaseClient).mockReturnValue(mock as never);
+    mockGuardClassAccess.mockResolvedValue(null);
+    mockGenerateAssignment.mockResolvedValue(FAKE_GENERATED);
+    mockGetSparkLink.mockResolvedValue(null);
+
+    // defaults from beforeEach: resolveLessonSkills → [], loadSkillTargets → []
+
+    const { POST } = await import('@/app/api/teacher/assignments/reinforce/route');
+    await POST(makeRequest({ attempt_id: 'ha-1' }));
+    await capturedAfterCallback!();
+
+    // a row was still inserted
+    expect(insertSpy).toHaveBeenCalledOnce();
+    // skill_ids must be an empty array
+    const insertData = insertSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(insertData.skill_ids).toEqual([]);
   });
 });

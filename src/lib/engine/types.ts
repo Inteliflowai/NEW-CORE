@@ -135,6 +135,11 @@ const AssignmentTaskSchema = z.object({
   atl_skill: z.string(),
   ib_attribute: z.string(),
   bloom_level: z.string(),
+  // CL → generation: per-skill section tagging. Optional so an untagged (single-band)
+  // or partially-tagged LLM response still parses (never fabricate / never hard-fail).
+  skill_id: z.string().nullable().optional(),
+  skill_name: z.string().optional(),
+  power_skill: z.string().optional(),
 });
 export const AssignmentSchema = z.object({
   title: z.string(),
