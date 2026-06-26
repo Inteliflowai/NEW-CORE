@@ -38,9 +38,11 @@ export function greetingFor(hour: number): string {
 
 export function TeacherTopbar({
   userName,
+  avatarUrl,
   onMenuClick,
 }: {
   userName: string | null;
+  avatarUrl?: string | null;
   onMenuClick: () => void;
 }) {
   const pathname = usePathname();
@@ -77,12 +79,22 @@ export function TeacherTopbar({
         >
           ?
         </span>
-        <span
-          aria-hidden
-          className="grid size-9 place-items-center rounded-full bg-brand text-sm font-bold text-fg-on-brand"
-        >
-          {initials}
-        </span>
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={avatarUrl}
+            alt=""
+            aria-hidden
+            className="size-9 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            aria-hidden
+            className="grid size-9 place-items-center rounded-full bg-brand text-sm font-bold text-fg-on-brand"
+          >
+            {initials}
+          </span>
+        )}
       </div>
     </header>
   );

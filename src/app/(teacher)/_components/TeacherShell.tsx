@@ -8,10 +8,12 @@ import { TeacherTopbar } from './TeacherTopbar';
 export function TeacherShell({
   userName,
   alertCount,
+  avatarUrl,
   children,
 }: {
   userName: string | null;
   alertCount?: number;
+  avatarUrl?: string | null;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -28,7 +30,7 @@ export function TeacherShell({
           `hidden`), so this single instance owns the class fetch + default ?class=.
           display:none also keeps it out of the a11y tree / tab order on small screens. */}
       <aside className="hidden w-64 shrink-0 lg:block">
-        <TeacherSidebar userName={userName} alertCount={alertCount} />
+        <TeacherSidebar userName={userName} alertCount={alertCount} avatarUrl={avatarUrl} />
       </aside>
 
       {/* Mobile drawer — mounted ONLY while open. Mounting on demand avoids a second
@@ -43,14 +45,14 @@ export function TeacherShell({
             aria-hidden
           />
           <aside className="fixed inset-y-0 left-0 z-50 w-64 lg:hidden">
-            <TeacherSidebar userName={userName} alertCount={alertCount} />
+            <TeacherSidebar userName={userName} alertCount={alertCount} avatarUrl={avatarUrl} />
           </aside>
         </>
       )}
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <TeacherTopbar userName={userName} onMenuClick={() => setOpen((o) => !o)} />
+        <TeacherTopbar userName={userName} avatarUrl={avatarUrl} onMenuClick={() => setOpen((o) => !o)} />
         <main className="pop-canvas flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>

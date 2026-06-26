@@ -15,6 +15,14 @@ export default async function TeacherLayout({
 }) {
   const { fullName, userId } = await requireRole(['teacher']);
   const admin = createAdminSupabaseClient();
-  const alertCount = await openAlertCountForTeacher(admin, userId);
-  return <TeacherShell userName={fullName} alertCount={alertCount}>{children}</TeacherShell>;
+  const [alertCount, avatarRow] = await Promise.all([
+    openAlertCountForTeacher(admin, userId),
+    admin.from('users').select('avatar_url').eq('id', userId).single(),
+  ]);
+  const avatarUrl = (avatarRow.data?.avatar_url ?? null) as string | null;
+  return (
+    <TeacherShell userName={fullName} alertCount={alertCount} avatarUrl={avatarUrl}>
+      {children}
+    </TeacherShell>
+  );
 }
