@@ -1,9 +1,11 @@
 'use client';
 
 /**
- * UrlImportStudio — the "From a URL" tab. Imports a public / link-shared URL (incl. published
- * Google Docs) into a lesson, runs the same fuzzy-duplicate gate as the file uploader, then drafts
- * a quiz. Reuses the shared DupModal + detectDuplicates. Token-only; deep-ink; strings DRAFT → Barb.
+ * UrlImportStudio — the "From a URL" tab. Imports a public/link-shared URL OR a
+ * Google Drive file into a lesson, runs the fuzzy-duplicate gate, then drafts a quiz.
+ * Drive URLs are detected client-side via parseDriveUrl() and routed to /import-drive;
+ * all other URLs use the existing /import-url path unchanged.
+ * Token-only; deep-ink; strings DRAFT → Barb (§GC Seg 5).
  */
 import React, { useRef, useState } from 'react';
 import Link from 'next/link';
@@ -12,6 +14,7 @@ import { DupModal } from './DupModal';
 import { readErrorMessage } from './errorMessage';
 import type { UploadLessonLite } from './UploadStudio';
 import { SectionLabel } from '../../_components/SectionLabel';
+import { parseDriveUrl } from '@/lib/google/drive';
 
 export interface UrlImportStudioProps {
   classId: string;
@@ -24,6 +27,7 @@ const INPUT = 'rounded-md border-2 border-sidebar-edge bg-bg px-3 py-2 text-fg t
 
 export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioProps): React.JSX.Element {
   const [url, setUrl] = useState('');
+  const [driveFileId, setDriveFileId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [fuzzyMatch, setFuzzyMatch] = useState<LessonRowLite | null>(null);
@@ -35,6 +39,11 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
 
   function fail(message: string) { setError(message); setPhase('error'); }
 
+  function handleUrlChange(value: string) {
+    setUrl(value);
+    setDriveFileId(parseDriveUrl(value));
+  }
+
   function archivePendingLesson() {
     const lessonId = lessonIdRef.current;
     if (!lessonId) return;
@@ -42,34 +51,6 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ lesson_id: lessonId, action: 'archive' }),
     }).catch(() => {});
-  }
-
-  async function onImport() {
-    if (!url.trim() || busy) return;
-    setError(null); setFuzzyMatch(null);
-    setPhase('importing');
-    let res: Response;
-    try {
-      res = await fetch('/api/teacher/lessons/import-url', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim(), class_id: classId }),
-      });
-    } catch { fail("We couldn't reach that link."); return; }
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => null);
-      fail(readErrorMessage(body, "That didn't import — check the link and try again."));
-      return;
-    }
-    const body = (await res.json()) as { lesson_id: string; parsed_content?: { title?: string | null; key_concepts?: string[] } };
-    lessonIdRef.current = body.lesson_id;
-    const parsed = body.parsed_content ?? {};
-
-    setPhase('checking');
-    const candidate = { title: parsed.title ?? null, concept_tags: Array.isArray(parsed.key_concepts) ? parsed.key_concepts : [] };
-    const matches = detectDuplicates(candidate, existingLessons as LessonRowLite[]);
-    if (matches.length > 0) { setFuzzyMatch(matches[0].lesson); setPhase('idle'); return; }
-    await doGenerate(body.lesson_id);
   }
 
   async function doGenerate(lessonId: string) {
@@ -86,6 +67,93 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
     setPhase('done');
   }
 
+  /** Shared handler for the public /import-url path (non-Drive or Drive fallback). */
+  async function doUrlImport() {
+    let res: Response;
+    try {
+      res = await fetch('/api/teacher/lessons/import-url', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim(), class_id: classId }),
+      });
+    } catch { fail("We couldn't reach that link."); return; }
+
+    if (res.ok) {
+      const body = await res.json().catch(() => null);
+      const parsed = body as { lesson_id?: string; parsed_content?: { title?: string | null; key_concepts?: string[] } } | null;
+      if (!parsed?.lesson_id) { fail("That didn't import — try again."); return; }
+      lessonIdRef.current = parsed.lesson_id;
+      const parsedContent = parsed.parsed_content ?? {};
+
+      setPhase('checking');
+      const candidate = {
+        title: parsedContent.title ?? null,
+        concept_tags: Array.isArray(parsedContent.key_concepts) ? parsedContent.key_concepts : [],
+      };
+      const matches = detectDuplicates(candidate, existingLessons as LessonRowLite[]);
+      if (matches.length > 0) { setFuzzyMatch(matches[0].lesson); setPhase('idle'); return; }
+      await doGenerate(parsed.lesson_id);
+    } else {
+      const body = await res.json().catch(() => null);
+      fail(readErrorMessage(body, "That didn't import — check the link and try again."));
+    }
+  }
+
+  async function onImport() {
+    if (!url.trim() || busy) return;
+    setError(null); setFuzzyMatch(null);
+    setPhase('importing');
+
+    // Non-Drive URL → use the public import path directly.
+    if (!driveFileId) { await doUrlImport(); return; }
+
+    // Drive URL → try /import-drive first; silently fall back to /import-url when the
+    // teacher isn't connected, the file isn't in their Drive, or access is denied.
+    let driveRes: Response;
+    try {
+      driveRes = await fetch('/api/teacher/lessons/import-drive', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_id: driveFileId, class_id: classId }),
+      });
+    } catch { fail("We couldn't reach that link."); return; }
+
+    if (driveRes.ok) {
+      const body = await driveRes.json().catch(() => null);
+      const resp = body as Record<string, unknown> | null;
+
+      // gcErrorResponse: { connected: false } — teacher not connected → fall back silently.
+      if (resp?.['connected'] === false) { await doUrlImport(); return; }
+
+      const parsed = resp as { lesson_id?: string; parsed_content?: { title?: string | null; key_concepts?: string[] } } | null;
+      if (!parsed?.lesson_id) { fail("That didn't import — try again."); return; }
+      lessonIdRef.current = parsed.lesson_id;
+      const parsedContent = parsed.parsed_content ?? {};
+
+      setPhase('checking');
+      const candidate = {
+        title: parsedContent.title ?? null,
+        concept_tags: Array.isArray(parsedContent.key_concepts) ? parsedContent.key_concepts : [],
+      };
+      const matches = detectDuplicates(candidate, existingLessons as LessonRowLite[]);
+      if (matches.length > 0) { setFuzzyMatch(matches[0].lesson); setPhase('idle'); return; }
+      await doGenerate(parsed.lesson_id);
+    } else {
+      const body = await driveRes.json().catch(() => null);
+      const code = (body as Record<string, unknown> | null)?.['code'];
+
+      // Not in the teacher's Drive or access denied → fall back to public URL import.
+      if (
+        (driveRes.status === 404 && code === 'drive_not_found') ||
+        (driveRes.status === 400 && code === 'drive_access_denied')
+      ) {
+        await doUrlImport();
+        return;
+      }
+
+      // drive_unsupported_type or any other error → surface it inline.
+      fail(readErrorMessage(body, "That didn't import — check the link and try again."));
+    }
+  }
+
   function onCreateAnyway() {
     const lessonId = lessonIdRef.current;
     setFuzzyMatch(null);
@@ -97,12 +165,26 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
     <div className="flex flex-col gap-4">
       <label className="flex flex-col gap-1">
         <span className="font-display text-sm font-extrabold text-fg">Paste a link</span>
-        <span className="text-fg text-sm">A public web page or a shared Google Doc (&ldquo;Anyone with the link&rdquo;). We&apos;ll read it and draft a quiz.</span>
+        <span className="text-fg text-sm">
+          A public web page, a shared Google Doc, or a linked Drive file.
+          We&apos;ll read it and draft a quiz.
+        </span>
         <input
           className={INPUT} type="url" inputMode="url" value={url} aria-label="Link or web address"
-          onChange={(e) => setUrl(e.target.value)} placeholder="https://…"
+          onChange={(e) => handleUrlChange(e.target.value)} placeholder="https://…"
         />
       </label>
+
+      {driveFileId && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center gap-2 rounded-lg border-2 border-sidebar-edge bg-surface px-3 py-2 text-fg text-sm shadow-sticker"
+        >
+          <SectionLabel tone="brand">Google Drive</SectionLabel>
+          <span>Google Drive file detected — uses your connected Google account.</span>
+        </div>
+      )}
 
       <div>
         <button
@@ -114,7 +196,9 @@ export function UrlImportStudio({ classId, existingLessons }: UrlImportStudioPro
       {busy && (
         <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-lg border-2 border-sidebar-edge bg-surface p-4 shadow-sticker">
           <SectionLabel tone="brand">Working</SectionLabel>
-          <span className="text-fg text-sm">{phase === 'importing' ? 'Reading that link…' : phase === 'checking' ? 'Checking your library…' : 'Building a quiz…'}</span>
+          <span className="text-fg text-sm">
+            {phase === 'importing' ? 'Reading that link…' : phase === 'checking' ? 'Checking your library…' : 'Building a quiz…'}
+          </span>
         </div>
       )}
 

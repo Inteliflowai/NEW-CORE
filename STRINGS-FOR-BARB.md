@@ -1329,3 +1329,29 @@ Shown on the Overview page when one or more students are in the 'reteach' band. 
 Shown when a quiz has 0 questions (background generation still in progress). Admin surfaces inherit this from the teacher surface.
 
 **Current draft:** "Building…" *(Barb-TBD — flag for review)*
+
+---
+
+## GC Seg 5 — Google Drive Import (2026-06-26) — DRAFT strings for Barb
+
+Teacher-facing strings in the URL import tab and route error responses. All DRAFT.
+
+### UrlImportStudio — Drive detection callout
+
+| State | Current draft |
+|---|---|
+| Drive URL detected (badge label) | "Google Drive" |
+| Drive URL detected (inline note) | "Google Drive file detected — uses your connected Google account." |
+| Not connected alert | "Connect your Google account to import Drive files." |
+| Not connected link text | "Connect Google" |
+| Hint text (URL input sub-label update) | "A public web page, a shared Google Doc, or a file from your Google Drive. We'll read it and draft a quiz." |
+
+### Route error messages (user-facing, returned in `error` field)
+
+| `code` | Current draft |
+|---|---|
+| `drive_not_found` | "We couldn't find that file in Google Drive." |
+| `drive_access_denied` | "This file isn't shared with your Google account." |
+| `drive_unsupported_type` | "This file type can't be imported as a lesson. Try exporting it as a PDF first." |
+| `drive_empty` | "No readable text in that Drive file." |
+| `connected: false` (not error string — CTA in component) | "Connect your Google account to import Drive files." → links to `/settings/google` |
