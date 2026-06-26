@@ -146,6 +146,27 @@ export async function seedTrialDemoData(input: SeedTrialDemoDataInput): Promise<
     recordSkip('guardian_link', 'prerequisite parentId or alexId missing');
   }
 
+  // ── Step 4b: Link parent → second student (Sofia Chen): users.parent_id + guardians ──
+  // M4: the demo parent has TWO children (Alex + Sofia) so multi-child UI is exercised.
+  const sofiaKey = DEMO_STUDENTS[1]?.key; // 'sofia'
+  const sofiaId = sofiaKey ? studentIds[sofiaKey] : undefined;
+  if (parentId && sofiaId) {
+    try {
+      const { error: upErr } = await admin.from('users').update({ parent_id: parentId }).eq('id', sofiaId);
+      if (upErr) throw upErr;
+      const { error: gErr } = await admin.from('guardians').upsert(
+        { parent_id: parentId, student_id: sofiaId },
+        { onConflict: 'parent_id,student_id' }
+      );
+      if (gErr) throw gErr;
+      recordOk('guardian_link_sofia');
+    } catch (e) {
+      recordSkip('guardian_link_sofia', (e as Error).message);
+    }
+  } else {
+    recordSkip('guardian_link_sofia', 'prerequisite parentId or sofiaId missing');
+  }
+
   // ── Step 5: Lesson (soft fail) ───────────────────────────────────────────────
   let lessonId: string | null = null;
   if (classId) {
