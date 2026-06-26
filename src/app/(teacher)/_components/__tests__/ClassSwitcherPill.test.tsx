@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ClassSwitcherPill, classMetaLine } from '../ClassSwitcherPill';
 
 const replace = vi.fn();
@@ -39,7 +39,10 @@ describe('ClassSwitcherPill', () => {
   it('defaults ?class= to the first class on mount when none is selected', async () => {
     render(<ClassSwitcherPill />);
     await screen.findByText('Algebra I — Period 3');
-    expect(replace).toHaveBeenCalledWith(expect.stringContaining('class=c1'));
+    // router.replace fires in a SECOND effect (keyed on [classes]) that commits after
+    // the option text renders — poll for it so a slow effect flush under parallel-run
+    // CPU contention can't race the assertion (was an intermittent suite flake).
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(expect.stringContaining('class=c1')));
   });
 
   it('renders fetched classes and writes ?class= on selection', async () => {
