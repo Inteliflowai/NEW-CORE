@@ -109,19 +109,48 @@ describe('UrlImportStudio — Drive URL branch', () => {
     expect(calls.some((c) => c.url.includes('/import-url'))).toBe(false);
   });
 
-  it('shows the reconnect CTA when the drive route returns { connected: false }', async () => {
+  it('falls back to /import-url when drive returns { connected: false }', async () => {
     mockFetch({
       '/import-drive': () =>
         new Response(JSON.stringify({ connected: false }), { status: 200 }),
+      '/import-url': () =>
+        new Response(
+          JSON.stringify({ lesson_id: 'LFB1', parsed_content: { title: 'Fallback Doc', key_concepts: [] } }),
+          { status: 200 },
+        ),
+      '/quizzes/generate': () => new Response(JSON.stringify({ quiz_id: 'QFB1' }), { status: 200 }),
     });
     render(<UrlImportStudio classId="c1" existingLessons={[]} />);
     fireEvent.change(screen.getByLabelText(/link|url|web address/i), {
       target: { value: 'https://docs.google.com/document/d/FILEID/edit' },
     });
     fireEvent.click(screen.getByRole('button', { name: /import/i }));
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
-    expect(screen.getByRole('alert')).toHaveTextContent(/connect your google account/i);
-    expect(screen.getByRole('link', { name: /connect google/i })).toHaveAttribute('href', '/settings/google');
+    await waitFor(() => expect(screen.getByTestId('upload-done')).toBeInTheDocument());
+    expect(calls.some((c) => c.url.includes('/import-drive'))).toBe(true);
+    expect(calls.some((c) => c.url.includes('/import-url'))).toBe(true);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('falls back to /import-url when drive returns drive_not_found (404)', async () => {
+    mockFetch({
+      '/import-drive': () =>
+        new Response(JSON.stringify({ code: 'drive_not_found', error: 'File not found in Drive' }), { status: 404 }),
+      '/import-url': () =>
+        new Response(
+          JSON.stringify({ lesson_id: 'LFB2', parsed_content: { title: 'Web Fallback', key_concepts: [] } }),
+          { status: 200 },
+        ),
+      '/quizzes/generate': () => new Response(JSON.stringify({ quiz_id: 'QFB2' }), { status: 200 }),
+    });
+    render(<UrlImportStudio classId="c1" existingLessons={[]} />);
+    fireEvent.change(screen.getByLabelText(/link|url|web address/i), {
+      target: { value: 'https://docs.google.com/document/d/FILEID/edit' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /import/i }));
+    await waitFor(() => expect(screen.getByTestId('upload-done')).toBeInTheDocument());
+    expect(calls.some((c) => c.url.includes('/import-drive'))).toBe(true);
+    expect(calls.some((c) => c.url.includes('/import-url'))).toBe(true);
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('non-Drive URL still calls /import-url and does NOT show the Drive callout (regression)', async () => {
