@@ -702,6 +702,149 @@ describe('recomputeSkillStatesForStudent', () => {
     expect(upsertArg.evidence.metrics.spark_transfer).toBe('strong');
   });
 
+  // ── Per-skill attribution (Task I: CL → generation close-the-loop) ──────────
+
+  it('per-skill: attributes averaged grades to each skill from task tags (no override)', async () => {
+    // assignment: content.tasks tagged per-skill; task_grades different per task
+    // frac: task 1 → 90; dec: task 2 → 40 — should get DIFFERENT obs grades
+    const admin = makeAdmin({
+      assignments: [
+        {
+          id: 'asg-ps',
+          skill_ids: ['frac', 'dec'],
+          reteach_needed: false,
+          created_at: '2026-06-01T00:00:00Z',
+          content: { tasks: [{ step: 1, skill_id: 'frac' }, { step: 2, skill_id: 'dec' }] },
+        },
+      ],
+      hwAttempts: [
+        {
+          assignment_id: 'asg-ps',
+          student_id: 'stu-1',
+          status: 'graded',
+          score_pct: 65,         // assignment-level (should NOT win here — no override)
+          teacher_score: null,   // no override
+          effort_label: null,
+          allow_redo: false,
+          is_redo: false,
+          flagged_by: null,
+          submitted_at: '2026-06-02T00:00:00Z',
+          graded_at: '2026-06-02T12:00:00Z',
+          task_grades: [{ step: 1, grade: 90 }, { step: 2, grade: 40 }],
+        },
+      ],
+    });
+    const result = await recomputeSkillStatesForStudent(admin as never, {
+      studentId: 'stu-1',
+      schoolId: 'school-1',
+      skillIds: ['frac', 'dec'],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.skillsRecomputed).toBe(2);
+
+    // Each skill upserted exactly once
+    expect(admin._upsert).toHaveBeenCalledTimes(2);
+    const calls = admin._upsert.mock.calls as Array<[{ skill_id: string; evidence: { metrics: { hw_avg: number } }; observation_count: number }]>;
+    const fracCall = calls.find((c) => c[0].skill_id === 'frac')![0];
+    const decCall  = calls.find((c) => c[0].skill_id === 'dec')![0];
+
+    // DIFFERENT grades per skill (per-skill routing)
+    expect(fracCall.evidence.metrics.hw_avg).toBe(90);
+    expect(decCall.evidence.metrics.hw_avg).toBe(40);
+    // Exactly one homework observation per skill (no inflation)
+    expect(fracCall.observation_count).toBe(1);
+    expect(decCall.observation_count).toBe(1);
+  });
+
+  it('per-skill: falls back to assignment-level fan-out when teacher overrode the grade', async () => {
+    // Same setup but teacher_score=85 → both skills get 85 (override-wins)
+    const admin = makeAdmin({
+      assignments: [
+        {
+          id: 'asg-ov',
+          skill_ids: ['frac', 'dec'],
+          reteach_needed: false,
+          created_at: '2026-06-01T00:00:00Z',
+          content: { tasks: [{ step: 1, skill_id: 'frac' }, { step: 2, skill_id: 'dec' }] },
+        },
+      ],
+      hwAttempts: [
+        {
+          assignment_id: 'asg-ov',
+          student_id: 'stu-1',
+          status: 'graded',
+          score_pct: 65,
+          teacher_score: 85,   // override → should win for ALL skills
+          effort_label: null,
+          allow_redo: false,
+          is_redo: false,
+          flagged_by: null,
+          submitted_at: '2026-06-02T00:00:00Z',
+          graded_at: '2026-06-02T12:00:00Z',
+          task_grades: [{ step: 1, grade: 90 }, { step: 2, grade: 40 }],
+        },
+      ],
+    });
+    const result = await recomputeSkillStatesForStudent(admin as never, {
+      studentId: 'stu-1',
+      schoolId: 'school-1',
+      skillIds: ['frac', 'dec'],
+    });
+    expect(result.ok).toBe(true);
+    const calls = admin._upsert.mock.calls as Array<[{ skill_id: string; evidence: { metrics: { hw_avg: number } } }]>;
+    const fracCall = calls.find((c) => c[0].skill_id === 'frac')![0];
+    const decCall  = calls.find((c) => c[0].skill_id === 'dec')![0];
+    // Both get the override grade (85), not the per-task grades
+    expect(fracCall.evidence.metrics.hw_avg).toBe(85);
+    expect(decCall.evidence.metrics.hw_avg).toBe(85);
+  });
+
+  it('per-skill: a skill_ids skill not covered by any tagged task still gets the assignment-level obs', async () => {
+    // content only tags 'frac' (step 1); skill_ids includes 'dec' too.
+    // 'dec' must NOT be dropped — it should get the assignment-level obs (score_pct 60).
+    const admin = makeAdmin({
+      assignments: [
+        {
+          id: 'asg-nc',
+          skill_ids: ['frac', 'dec'],
+          reteach_needed: false,
+          created_at: '2026-06-01T00:00:00Z',
+          content: { tasks: [{ step: 1, skill_id: 'frac' }] }, // 'dec' not tagged
+        },
+      ],
+      hwAttempts: [
+        {
+          assignment_id: 'asg-nc',
+          student_id: 'stu-1',
+          status: 'graded',
+          score_pct: 60,         // assignment-level fallback for 'dec'
+          teacher_score: null,
+          effort_label: null,
+          allow_redo: false,
+          is_redo: false,
+          flagged_by: null,
+          submitted_at: '2026-06-02T00:00:00Z',
+          graded_at: '2026-06-02T12:00:00Z',
+          task_grades: [{ step: 1, grade: 90 }], // only step 1 graded
+        },
+      ],
+    });
+    const result = await recomputeSkillStatesForStudent(admin as never, {
+      studentId: 'stu-1',
+      schoolId: 'school-1',
+      skillIds: ['frac', 'dec'],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.skillsRecomputed).toBe(2);
+    const calls = admin._upsert.mock.calls as Array<[{ skill_id: string; evidence: { metrics: { hw_avg: number } } }]>;
+    const fracCall = calls.find((c) => c[0].skill_id === 'frac')![0];
+    const decCall  = calls.find((c) => c[0].skill_id === 'dec')![0];
+    // 'frac' gets per-skill grade (90)
+    expect(fracCall.evidence.metrics.hw_avg).toBe(90);
+    // 'dec' not dropped — gets assignment-level (60)
+    expect(decCall.evidence.metrics.hw_avg).toBe(60);
+  });
+
   it('skips rows with null skill_id (no skill tag)', async () => {
     const admin = makeAdmin({
       quizResponses: [
