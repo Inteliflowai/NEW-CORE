@@ -785,3 +785,68 @@ describe('0024 gc_roster', () => {
     expect(s()).toMatch(/CREATE INDEX IF NOT EXISTS idx_external_identities_email\s+ON public\.external_identities\s*\(\s*school_id\s*,\s*provider\s*,\s*email\s*\)/);
   });
 });
+
+describe('0030 chapter_eval', () => {
+  const s = () => sql('0030_chapter_eval.sql');
+
+  it('creates all 6 chapter tables', () => {
+    for (const t of ['chapters','chapter_tests','chapter_test_sections','chapter_test_questions','chapter_test_attempts','chapter_test_responses']) {
+      expect(s()).toMatch(new RegExp(`CREATE TABLE IF NOT EXISTS public\\.${t}`));
+    }
+  });
+
+  it('adds lessons.chapter_id nullable with ON DELETE SET NULL', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.lessons\s+ADD COLUMN IF NOT EXISTS chapter_id\s+uuid/i);
+    expect(s()).toMatch(/ON DELETE SET NULL/);
+  });
+
+  it('chapter_tests has generation_status + status CHECKs', () => {
+    expect(s()).toMatch(/generation_status[^;]*CHECK[^;]*'queued'[^;]*'generating'[^;]*'ready'[^;]*'failed'/);
+    expect(s()).toMatch(/status[^;]*CHECK[^;]*'draft'[^;]*'published'[^;]*'archived'/);
+  });
+
+  it('chapter_test_questions has the personalization UNIQUE(section_id, student_id, question_order)', () => {
+    expect(s()).toMatch(/UNIQUE \(section_id, student_id, question_order\)/);
+  });
+
+  it('chapter_test_questions question_type CHECK uses full names (data_interpretation not data_interp)', () => {
+    expect(s()).toMatch(/question_type[^;]*CHECK[^;]*'data_interpretation'/);
+    expect(s()).not.toContain("'data_interp'");
+    expect(s()).toMatch(/question_type[^;]*CHECK[^;]*'multi_step_problem'/);
+    expect(s()).not.toContain("'multi_step'");
+  });
+
+  it('chapter_test_attempts has UNIQUE(chapter_test_id, student_id) + total_grade numeric(5,2)', () => {
+    expect(s()).toMatch(/UNIQUE \(chapter_test_id, student_id\)/);
+    expect(s()).toMatch(/total_grade\s+numeric\(5,2\)/);
+  });
+
+  it('chapter_test_attempts status CHECK includes all 4 lifecycle values', () => {
+    for (const v of ['not_started','in_progress','submitted','graded']) {
+      expect(s()).toContain(`'${v}'`);
+    }
+  });
+
+  it('chapter_test_responses has UNIQUE(attempt_id, question_id)', () => {
+    expect(s()).toMatch(/UNIQUE \(attempt_id, question_id\)/);
+  });
+
+  it('enables RLS on all 6 tables (deny-by-default)', () => {
+    for (const t of ['chapters','chapter_tests','chapter_test_sections','chapter_test_questions','chapter_test_attempts','chapter_test_responses']) {
+      expect(s()).toMatch(new RegExp(`ALTER TABLE public\\.${t}\\s+ENABLE ROW LEVEL SECURITY`));
+    }
+  });
+
+  it('creates service_role_all policies (DROP-then-CREATE, re-runnable)', () => {
+    expect(s()).toMatch(/DROP POLICY IF EXISTS/);
+    for (const t of ['chapters','chapter_tests','chapter_test_sections','chapter_test_questions','chapter_test_attempts','chapter_test_responses']) {
+      expect(s()).toMatch(new RegExp(`CREATE POLICY "${t}_service_role_all".*FOR ALL TO service_role`, 's'));
+    }
+  });
+
+  it('grants ALL to authenticated, anon, service_role on all 6 tables (Bug #7)', () => {
+    for (const t of ['chapters','chapter_tests','chapter_test_sections','chapter_test_questions','chapter_test_attempts','chapter_test_responses']) {
+      expect(s()).toMatch(new RegExp(`GRANT ALL ON public\\.${t}\\s+TO authenticated, anon, service_role`));
+    }
+  });
+});
