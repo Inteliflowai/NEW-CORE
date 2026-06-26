@@ -1256,3 +1256,76 @@ surface — e.g. in the printable report. Current answer = NO (digit-free rule);
 ## CL Generation
 - On an assignment that spans 2+ skills, the student sees the **skill (topic) name** as a small heading above each section (e.g. "Fractions", "Decimals"). Topic name only — never a difficulty level or a Reinforce/On Track/Enrich verb.
 - A single-skill assignment shows no heading (unchanged from today).
+
+---
+
+## School Admin
+
+> DRAFTS — all wording below awaits Barb's sign-off before shipping.
+> Admin-facing only (school_admin + platform_admin). These strings are never visible to students or parents.
+
+### License status labels (`formatStatus`, `OverviewCards.tsx`)
+
+| Status key | Current draft |
+|---|---|
+| `active` | Active |
+| `trialing` | Trial |
+| `past_due` | Past due |
+| `suspended` | Suspended |
+| `cancelled` | Cancelled |
+| *(no status)* | — |
+
+### Seat-cap warning text (`LicenseSeatsCard`, `OverviewCards.tsx`)
+
+Shown only when seats used ≥ 75 % of the limit.
+
+| Tone | Current draft |
+|---|---|
+| `warn` (≥ 75 %) | Nearing seat limit |
+| `risk` (≥ 90 %) | Approaching seat limit |
+
+### Student Attention line (`OverviewCards.tsx` — school_admin only)
+
+Shown on the Overview page when one or more students are in the 'reteach' band. Hidden for sysadmin. Quiet when zero students need attention.
+
+| Variant | Current draft |
+|---|---|
+| 1 student, 1 class | "1 student across 1 class may need a look this week →" |
+| N students, 1 class | "N students across 1 class may need a look this week →" |
+| N students, M classes | "N students across M classes may need a look this week →" |
+| Zero attention students | *(nothing rendered — quiet-when-empty)* |
+
+*(Link goes to `/admin/students` — the Student Attention page. Barb: confirm "may need a look this week" vs a softer or more action-oriented phrase.)*
+
+### Section headings (nav + page `<h1>` labels)
+
+| Page | Current draft |
+|---|---|
+| Overview | *(school name as `<h1>`)* |
+| Teachers | Teachers |
+| Classes & Roster | Classes & Roster |
+| Analytics | Analytics |
+| Reports | Reports |
+| Student Attention | Student Attention |
+
+### Empty states
+
+| Surface | Current draft |
+|---|---|
+| Teachers page — no active teachers | No active teachers |
+| Roster page — no students enrolled | No students enrolled yet |
+| Student Attention page — no students need attention | No students need attention right now |
+
+### AttentionRollup labels (`src/app/(school-admin)/admin/students/_components/AttentionRollup.tsx`)
+
+| Element | Current draft |
+|---|---|
+| Section heading | Student Attention |
+| Per-class subline | "{N} students to check" |
+| Empty state body | No students need attention right now |
+
+### "Building…" placeholder (quiz library)
+
+Shown when a quiz has 0 questions (background generation still in progress). Admin surfaces inherit this from the teacher surface.
+
+**Current draft:** "Building…" *(Barb-TBD — flag for review)*

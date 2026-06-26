@@ -16,11 +16,13 @@ import { loadSchoolReport, type SchoolReport } from '@/lib/school/loadSchoolRepo
 const CSV_HEADER =
   'classId,className,teacherName,enrolledStudents,assignmentsCreated,assignmentsSubmitted,quizzesPublished';
 
-/** Wrap a value in double-quotes if it contains a comma, double-quote, or newline. */
+/** Wrap a value in double-quotes if it contains a comma, double-quote, newline,
+ *  or starts with a formula-injection character (=, +, -, @, tab). */
 function escapeCsv(v: string | number | null | undefined): string {
   if (v == null) return '';
   const str = String(v);
-  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+  const needsQuoting = /[,"\n\r]/.test(str) || /^[=+\-@\t]/.test(str);
+  if (needsQuoting) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;

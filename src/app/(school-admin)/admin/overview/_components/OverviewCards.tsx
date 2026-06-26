@@ -170,7 +170,20 @@ function ThisWeekCard({ thisWeek }: { thisWeek: SchoolOverview['thisWeek'] }) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
-export function OverviewCards({ data }: { data: SchoolOverview }) {
+interface OverviewCardsProps {
+  data: SchoolOverview;
+  /** school_admin only: total students in the 'reteach' band across all classes.
+   *  null = not available for this role (sysadmin). 0 = no students need a look. */
+  studentsNeedingAttention?: number | null;
+  /** school_admin only: number of classes that contain at least one attention student. */
+  classesNeedingAttention?: number | null;
+}
+
+export function OverviewCards({
+  data,
+  studentsNeedingAttention,
+  classesNeedingAttention,
+}: OverviewCardsProps) {
   return (
     <div className="space-y-6">
       <h1 className="text-fg font-display text-2xl font-bold">{data.schoolName}</h1>
@@ -179,6 +192,16 @@ export function OverviewCards({ data }: { data: SchoolOverview }) {
         <CountsCard counts={data.counts} />
         <ThisWeekCard thisWeek={data.thisWeek} />
       </div>
+      {studentsNeedingAttention != null && studentsNeedingAttention > 0 && (
+        <div className="mt-4 p-3 border border-warn rounded-md">
+          <a href="/admin/students" className="text-fg text-sm font-medium hover:underline">
+            {studentsNeedingAttention}{' '}
+            {studentsNeedingAttention === 1 ? 'student' : 'students'} across{' '}
+            {classesNeedingAttention}{' '}
+            {classesNeedingAttention === 1 ? 'class' : 'classes'} may need a look this week →
+          </a>
+        </div>
+      )}
     </div>
   );
 }
