@@ -18,6 +18,7 @@ const data: Gradebook = {
   },
   class_average: 88, column_averages: { 'due:d1': 88 }, missing_count: 1,
   quizzes: [], quiz_cells: { s1: {}, s2: {} },
+  chapter_test_columns: [], chapter_test_cells: { s1: {}, s2: {} },
 };
 
 /** A single-student, single-column gradebook with one cell overridden for focused assertions. */
@@ -29,6 +30,7 @@ function oneCell(cell: GradebookCell): Gradebook {
     cells: { s1: { 'due:d1': cell } },
     class_average: cell.displayed_grade, column_averages: { 'due:d1': cell.displayed_grade }, missing_count: 0,
     quizzes: [], quiz_cells: { s1: {} },
+    chapter_test_columns: [], chapter_test_cells: { s1: {} },
   };
 }
 
@@ -54,6 +56,7 @@ function makeData(nCols: number): Gradebook {
     class_id: 'c1', students: [{ student_id: 's1', name: 'Ana Diaz' }],
     assignments, cells, class_average: 80, column_averages: {}, missing_count: 0,
     quizzes: [], quiz_cells: {},
+    chapter_test_columns: [], chapter_test_cells: {},
   };
 }
 
@@ -214,6 +217,7 @@ function publishedData(overrides: { googleCourseId?: string | null; publishedLes
     cells: { s1: { 'lesson:L99:2026-06-10': gradedCell(85) } },
     class_average: 85, column_averages: { 'lesson:L99:2026-06-10': 85 }, missing_count: 0,
     quizzes: [], quiz_cells: { s1: {} },
+    chapter_test_columns: [], chapter_test_cells: { s1: {} },
   };
 }
 
@@ -267,6 +271,7 @@ describe('GradebookGrid — Send grades to Classroom', () => {
       cells: { s1: { 'due:2026-06-10T00:00:00Z': gradedCell(80) } },
       class_average: 80, column_averages: {}, missing_count: 0,
       quizzes: [], quiz_cells: { s1: {} },
+      chapter_test_columns: [], chapter_test_cells: { s1: {} },
     };
     render(
       <GradebookGrid
