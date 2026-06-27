@@ -22,7 +22,13 @@ vi.mock('@/lib/ai/models', () => ({
   CLAUDE_GRADING_MODEL: 'claude-sonnet-4-6',
 }));
 
-import { gradeMcq, gradeMatching, gradeOpenEnded } from '@/lib/chapters/gradeChapterTest';
+import {
+  gradeMcq,
+  gradeMatching,
+  gradeOpenEnded,
+  gradeChapterAttempt,
+} from '@/lib/chapters/gradeChapterTest';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 // ── Shared fixture types ──────────────────────────────────────────────────────
 
@@ -359,4 +365,320 @@ describe('gradeOpenEnded', () => {
   });
 });
 
-// ── placeholder: T3 tests added in next commit ────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// T3: gradeChapterAttempt orchestrator
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Admin mock factory ────────────────────────────────────────────────────────
+
+interface AttemptDbRow {
+  id: string;
+  student_id: string;
+  chapter_test_id: string;
+  status: string;
+}
+interface SectionDbRow { id: string }
+interface ResponseDbRow {
+  question_id: string;
+  response_text: string | null;
+  response_payload: Record<string, unknown> | null;
+}
+
+function makeGradeAdmin({
+  attempt,
+  sections,
+  questions,
+  responses = [],
+  upsertError = null,
+  updateError = null,
+}: {
+  attempt: AttemptDbRow | null;
+  sections: SectionDbRow[];
+  questions: QuestionRow[];
+  responses?: ResponseDbRow[];
+  upsertError?: Record<string, unknown> | null;
+  updateError?: Record<string, unknown> | null;
+}) {
+  const attemptUpdates: Record<string, unknown>[] = [];
+  const responseUpserts: Record<string, unknown>[] = [];
+
+  function makeChain(table: string) {
+    let method: 'select' | 'update' | 'upsert' | null = null;
+    let updateData: Record<string, unknown> | null = null;
+    let upsertData: Record<string, unknown> | null = null;
+
+    const q: Record<string, unknown> & {
+      then: (
+        resolve: (v: { data: unknown; error: unknown }) => void,
+        reject: (e: unknown) => void,
+      ) => void;
+    } = {
+      select(_cols: string) { method = 'select'; return q; },
+      update(d: Record<string, unknown>) { method = 'update'; updateData = d; return q; },
+      upsert(d: Record<string, unknown>, _opts?: unknown) {
+        method = 'upsert';
+        upsertData = d;
+        return q;
+      },
+      eq(_col: string, _val: unknown) { return q; },
+      in(_col: string, _vals: unknown[]) { return q; },
+      single() { return q; },
+      then(
+        resolve: (v: { data: unknown; error: unknown }) => void,
+        reject: (e: unknown) => void,
+      ) {
+        try {
+          if (table === 'chapter_test_attempts') {
+            if (method === 'select') {
+              resolve({ data: attempt, error: attempt ? null : { message: 'Not found' } });
+            } else if (method === 'update') {
+              if (updateData) attemptUpdates.push({ ...updateData });
+              resolve({ data: null, error: updateError ?? null });
+            } else {
+              resolve({ data: null, error: null });
+            }
+          } else if (table === 'chapter_test_sections') {
+            resolve({ data: sections, error: null });
+          } else if (table === 'chapter_test_questions') {
+            resolve({ data: questions, error: null });
+          } else if (table === 'chapter_test_responses') {
+            if (method === 'select') {
+              resolve({ data: responses, error: null });
+            } else if (method === 'upsert') {
+              if (upsertData) responseUpserts.push({ ...upsertData });
+              resolve({ data: null, error: upsertError ?? null });
+            } else {
+              resolve({ data: null, error: null });
+            }
+          } else {
+            resolve({ data: null, error: null });
+          }
+        } catch (err) {
+          reject(err);
+        }
+      },
+    };
+    return q;
+  }
+
+  return {
+    attemptUpdates,
+    responseUpserts,
+    from(table: string) { return makeChain(table); },
+  };
+}
+
+// ── Orchestrator fixtures ─────────────────────────────────────────────────────
+
+const SUBMITTED: AttemptDbRow = {
+  id: 'attempt-1',
+  student_id: 'stu-1',
+  chapter_test_id: 'test-1',
+  status: 'submitted',
+};
+
+const SECTION: SectionDbRow = { id: 'sec-1' };
+
+const MCQ_Q: QuestionRow = {
+  id: 'q-mcq',
+  question_type: 'mcq',
+  question_text: 'Which planet is largest?',
+  payload: {
+    choices: [{ label: 'A', text: 'Jupiter' }, { label: 'B', text: 'Mars' }],
+    correct_answer: 'A',
+  },
+  points: 4,
+};
+
+const SA_Q: QuestionRow = {
+  id: 'q-sa',
+  question_type: 'short_answer',
+  question_text: 'Explain gravity.',
+  payload: { rubric: 'Mention attraction between masses.' },
+  points: 6,
+};
+
+const MCQ_RESP: ResponseDbRow = {
+  question_id: 'q-mcq',
+  response_text: null,
+  response_payload: { selected_label: 'A' }, // correct → 4 pts
+};
+
+const SA_RESP: ResponseDbRow = {
+  question_id: 'q-sa',
+  response_text: 'Gravity pulls objects toward each other.',
+  response_payload: null,
+};
+
+// ── Orchestrator tests ────────────────────────────────────────────────────────
+
+describe('gradeChapterAttempt', () => {
+  beforeEach(() => {
+    mockResilientClaudeChat.mockReset();
+  });
+
+  it('grades all questions and writes total_grade + status="graded" to attempt', async () => {
+    // MCQ correct (4 pts) + SA graded by Claude (5 pts) → total 9
+    mockResilientClaudeChat.mockResolvedValue({
+      content: JSON.stringify({ grade: 5, feedback: 'Good.' }),
+    });
+
+    const admin = makeGradeAdmin({
+      attempt: SUBMITTED,
+      sections: [SECTION],
+      questions: [MCQ_Q, SA_Q],
+      responses: [MCQ_RESP, SA_RESP],
+    });
+
+    await gradeChapterAttempt('attempt-1', admin as unknown as SupabaseClient);
+
+    expect(admin.attemptUpdates).toHaveLength(1);
+    expect(admin.attemptUpdates[0]).toMatchObject({
+      status: 'graded',
+      total_grade: 9,
+      total_max: 10,
+    });
+    expect(admin.responseUpserts).toHaveLength(2);
+  });
+
+  it('assigns grade=0 for a failing question and continues grading the rest', async () => {
+    // Claude throws → gradeOpenEnded catches + returns grade=0; MCQ still grades correctly
+    mockResilientClaudeChat.mockRejectedValue(new Error('Claude unavailable'));
+
+    const admin = makeGradeAdmin({
+      attempt: SUBMITTED,
+      sections: [SECTION],
+      questions: [MCQ_Q, SA_Q],
+      responses: [MCQ_RESP, SA_RESP],
+    });
+
+    await expect(
+      gradeChapterAttempt('attempt-1', admin as unknown as SupabaseClient),
+    ).resolves.toBeUndefined();
+
+    // MCQ correct (4) + SA failed (0) = 4
+    expect(admin.attemptUpdates[0]).toMatchObject({
+      status: 'graded',
+      total_grade: 4,
+      total_max: 10,
+    });
+    expect(admin.responseUpserts).toHaveLength(2);
+  });
+
+  it('skips grading with no DB writes when attempt is already graded', async () => {
+    const gradedAttempt: AttemptDbRow = { ...SUBMITTED, status: 'graded' };
+
+    const admin = makeGradeAdmin({
+      attempt: gradedAttempt,
+      sections: [SECTION],
+      questions: [MCQ_Q],
+      responses: [MCQ_RESP],
+    });
+
+    await gradeChapterAttempt('attempt-1', admin as unknown as SupabaseClient);
+
+    expect(admin.attemptUpdates).toHaveLength(0);
+    expect(admin.responseUpserts).toHaveLength(0);
+    expect(mockResilientClaudeChat).not.toHaveBeenCalled();
+  });
+
+  it('logs warning and returns without grading for a non-submitted, non-graded status', async () => {
+    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const inProgress: AttemptDbRow = { ...SUBMITTED, status: 'in_progress' };
+
+    const admin = makeGradeAdmin({
+      attempt: inProgress,
+      sections: [SECTION],
+      questions: [MCQ_Q],
+      responses: [],
+    });
+
+    await gradeChapterAttempt('attempt-1', admin as unknown as SupabaseClient);
+
+    expect(consoleSpy).toHaveBeenCalled();
+    expect(admin.attemptUpdates).toHaveLength(0);
+    consoleSpy.mockRestore();
+  });
+
+  it('grades a forfeit attempt (status=submitted) with only the responses that were saved', async () => {
+    // Forfeit: student quit early — SA has no response → gradeOpenEnded returns 0 without Claude
+    const admin = makeGradeAdmin({
+      attempt: SUBMITTED,
+      sections: [SECTION],
+      questions: [MCQ_Q, SA_Q],
+      responses: [MCQ_RESP], // only MCQ answered
+    });
+
+    await gradeChapterAttempt('attempt-1', admin as unknown as SupabaseClient);
+
+    // MCQ correct (4) + SA no response (0) = 4; Claude NOT called
+    expect(admin.attemptUpdates[0]).toMatchObject({
+      status: 'graded',
+      total_grade: 4,
+      total_max: 10,
+    });
+    expect(mockResilientClaudeChat).not.toHaveBeenCalled();
+  });
+
+  it('never throws when the DB load for attempt fails', async () => {
+    const admin = makeGradeAdmin({
+      attempt: null, // simulates DB failure
+      sections: [],
+      questions: [],
+    });
+
+    await expect(
+      gradeChapterAttempt('attempt-bad', admin as unknown as SupabaseClient),
+    ).resolves.toBeUndefined();
+
+    expect(admin.attemptUpdates).toHaveLength(0);
+  });
+
+  it('accumulates grade=0 for questions with no response (blank submission)', async () => {
+    const mcq2: QuestionRow = { ...MCQ_Q, id: 'q-mcq-2' };
+
+    const admin = makeGradeAdmin({
+      attempt: SUBMITTED,
+      sections: [SECTION],
+      questions: [MCQ_Q, mcq2],
+      responses: [],
+    });
+
+    await gradeChapterAttempt('attempt-1', admin as unknown as SupabaseClient);
+
+    expect(admin.attemptUpdates[0]).toMatchObject({
+      status: 'graded',
+      total_grade: 0,
+      total_max: 8,
+    });
+  });
+
+  it('total_grade reflects the sum of all individual question grades', async () => {
+    // MCQ correct (4) + MCQ wrong (0) = 4; total_max = 4+3 = 7
+    const mcq2: QuestionRow = {
+      ...MCQ_Q,
+      id: 'q-mcq-wrong',
+      points: 3,
+    };
+    const wrongResp: ResponseDbRow = {
+      question_id: 'q-mcq-wrong',
+      response_text: null,
+      response_payload: { selected_label: 'B' }, // wrong (correct is 'A')
+    };
+
+    const admin = makeGradeAdmin({
+      attempt: SUBMITTED,
+      sections: [SECTION],
+      questions: [MCQ_Q, mcq2],
+      responses: [MCQ_RESP, wrongResp],
+    });
+
+    await gradeChapterAttempt('attempt-1', admin as unknown as SupabaseClient);
+
+    expect(admin.attemptUpdates[0]).toMatchObject({
+      status: 'graded',
+      total_grade: 4,
+      total_max: 7,
+    });
+  });
+});

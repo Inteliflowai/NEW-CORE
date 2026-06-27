@@ -199,13 +199,187 @@ export async function gradeOpenEnded(
   }
 }
 
-// ── T3 stub (implemented in next commit) ─────────────────────────────────────
+// ── T3: Orchestrator ──────────────────────────────────────────────────────────
 
-/** Stub — implemented in Seg5 T3 */
+/**
+ * Grade all questions in a submitted chapter test attempt.
+ *
+ * Algorithm:
+ *  1. Load attempt — skip if already graded; warn if not 'submitted'
+ *  2. Load sections → questions for this student (personalized per student)
+ *  3. Load existing responses
+ *  4. For each question (serially): grade + upsert — fail-soft (grade=0 on error)
+ *  5. Sum total_grade + total_max → update attempt to 'graded'
+ *
+ * Forfeit attempts (forfeit_reason set, status='submitted') are graded the same
+ * way as normal submissions — blank questions get grade=0.
+ *
+ * Never throws — outer try/catch ensures this (caller is after()).
+ */
 export async function gradeChapterAttempt(
   attemptId: string,
   admin: SupabaseClient,
 ): Promise<void> {
-  void attemptId;
-  void admin;
+  try {
+    // Step 1: Load attempt
+    const { data: attemptRaw, error: attemptError } = await admin
+      .from('chapter_test_attempts')
+      .select('id, student_id, chapter_test_id, status')
+      .eq('id', attemptId)
+      .single();
+
+    if (attemptError || !attemptRaw) {
+      console.error(
+        '[gradeChapterAttempt] Failed to load attempt:',
+        attemptId,
+        attemptError,
+      );
+      return;
+    }
+
+    const attempt = attemptRaw as {
+      id: string;
+      student_id: string;
+      chapter_test_id: string;
+      status: string;
+    };
+
+    // Idempotency: skip if already graded
+    if (attempt.status === 'graded') {
+      return;
+    }
+
+    // Only grade submitted attempts (includes forfeit — status stays 'submitted')
+    if (attempt.status !== 'submitted') {
+      console.warn(
+        '[gradeChapterAttempt] Attempt not in submitted state; skipping:',
+        attemptId,
+        'status:',
+        attempt.status,
+      );
+      return;
+    }
+
+    // Step 2: Load sections for this chapter test
+    const { data: sectionsRaw, error: sectionsError } = await admin
+      .from('chapter_test_sections')
+      .select('id')
+      .eq('chapter_test_id', attempt.chapter_test_id);
+
+    if (sectionsError || !sectionsRaw || (sectionsRaw as { id: string }[]).length === 0) {
+      console.error(
+        '[gradeChapterAttempt] Failed to load sections for test:',
+        attempt.chapter_test_id,
+        sectionsError,
+      );
+      return;
+    }
+
+    const sectionIds = (sectionsRaw as { id: string }[]).map((s) => s.id);
+
+    // Step 3: Load questions for this student (personalized — keyed by student_id)
+    const { data: questionsRaw, error: questionsError } = await admin
+      .from('chapter_test_questions')
+      .select('id, question_type, question_text, payload, points')
+      .in('section_id', sectionIds)
+      .eq('student_id', attempt.student_id);
+
+    if (questionsError) {
+      console.error('[gradeChapterAttempt] Failed to load questions:', questionsError);
+      return;
+    }
+
+    const questions = (questionsRaw ?? []) as QuestionRow[];
+
+    // Step 4: Load existing responses for this attempt
+    const { data: responsesRaw } = await admin
+      .from('chapter_test_responses')
+      .select('question_id, response_text, response_payload')
+      .eq('attempt_id', attemptId);
+
+    const responseMap = new Map<string, ResponseRow>();
+    for (const r of (responsesRaw ?? []) as Array<{ question_id: string } & ResponseRow>) {
+      responseMap.set(r.question_id, {
+        response_text: r.response_text,
+        response_payload: r.response_payload,
+      });
+    }
+
+    // Step 5: Grade each question serially — no Promise.all (pilot scale)
+    let totalGrade = 0;
+    let totalMax = 0;
+
+    for (const question of questions) {
+      const response = responseMap.get(question.id) ?? null;
+      let result: GradeResult = { grade: 0, ai_feedback: '' };
+
+      try {
+        if (question.question_type === 'mcq') {
+          result = gradeMcq(question, response);
+        } else if (question.question_type === 'matching') {
+          result = gradeMatching(question, response);
+        } else {
+          // All other types: short_answer, compare_contrast, data_interpretation,
+          // mini_essay, multi_step_problem
+          result = await gradeOpenEnded(question, response);
+        }
+      } catch (err) {
+        console.error(
+          '[gradeChapterAttempt] Error grading question:',
+          question.id,
+          err,
+        );
+        result = { grade: 0, ai_feedback: '' };
+      }
+
+      // Upsert response row with grade (fail-soft — log errors but keep going)
+      const { error: upsertError } = await admin
+        .from('chapter_test_responses')
+        .upsert(
+          {
+            attempt_id: attemptId,
+            question_id: question.id,
+            grade: result.grade,
+            ai_feedback: result.ai_feedback,
+            graded_at: new Date().toISOString(),
+          },
+          { onConflict: 'attempt_id,question_id' },
+        );
+
+      if (upsertError) {
+        console.error(
+          '[gradeChapterAttempt] Upsert error for question:',
+          question.id,
+          upsertError,
+        );
+      }
+
+      totalGrade += result.grade;
+      totalMax += question.points;
+    }
+
+    // Step 6: Update attempt to graded
+    const { error: updateError } = await admin
+      .from('chapter_test_attempts')
+      .update({
+        status: 'graded',
+        total_grade: totalGrade,
+        total_max: totalMax,
+      })
+      .eq('id', attemptId);
+
+    if (updateError) {
+      console.error(
+        '[gradeChapterAttempt] Failed to update attempt to graded:',
+        updateError,
+      );
+    }
+  } catch (err) {
+    // Outer catch — never re-throw (caller is after())
+    console.error(
+      '[gradeChapterAttempt] Unexpected fatal error for attempt:',
+      attemptId,
+      err,
+    );
+  }
 }
