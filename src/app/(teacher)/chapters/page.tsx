@@ -13,7 +13,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { EmptyState } from '@/components/core/EmptyState';
 import { PageHeader } from '../_components/PageHeader';
 import { ChapterList } from './_components/ChapterList';
-import type { ChapterRow, LessonRow } from './_components/ChapterList';
+import type { ChapterRow, LessonRow, ChapterTestRow } from './_components/ChapterList';
 
 const NO_CLASSES = (
   <EmptyState
@@ -90,6 +90,36 @@ export default async function ChaptersPage({
     lesson_count: lessonCounts[c.id] ?? 0,
   }));
 
+  // Most-recent non-archived chapter_test per chapter (keyed by chapter_id)
+  let chapterTests: Record<string, ChapterTestRow> = {};
+
+  if (chapterIds.length > 0) {
+    const { data: testsRaw } = await admin
+      .from('chapter_tests')
+      .select('id, chapter_id, title, status, generation_status')
+      .in('chapter_id', chapterIds)
+      .neq('status', 'archived')
+      .order('created_at', { ascending: false });
+
+    for (const t of ((testsRaw ?? []) as Array<{
+      id: string;
+      chapter_id: string;
+      title: string;
+      status: string;
+      generation_status: string;
+    }>)) {
+      // Take only the first (most recent) per chapter_id — ordered DESC above
+      if (!chapterTests[t.chapter_id]) {
+        chapterTests[t.chapter_id] = {
+          id: t.id,
+          title: t.title,
+          status: t.status as ChapterTestRow['status'],
+          generation_status: t.generation_status as ChapterTestRow['generation_status'],
+        };
+      }
+    }
+  }
+
   // Lessons for this class (with chapter_id for assignment state)
   const { data: lessonsRaw } = await admin
     .from('lessons')
@@ -115,7 +145,7 @@ export default async function ChaptersPage({
         kicker="Organise your lessons into units"
         accent="brand"
       />
-      <ChapterList classId={classId} chapters={chapters} lessons={lessons} />
+      <ChapterList classId={classId} chapters={chapters} lessons={lessons} chapterTests={chapterTests} />
     </div>
   );
 }

@@ -10,7 +10,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { ChapterList } from '../ChapterList';
-import type { ChapterRow, LessonRow } from '../ChapterList';
+import type { ChapterRow, LessonRow, ChapterTestRow } from '../ChapterList';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 const chapters: ChapterRow[] = [
@@ -175,5 +175,43 @@ describe('ChapterList', () => {
     render(<ChapterList classId="cl1" chapters={chapters} lessons={lessons} />);
     expect(screen.getByRole('button', { name: /move chapter 1.*up/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /move chapter 2.*down/i })).toBeDisabled();
+  });
+
+  it('when a chapter is expanded, ChapterTestGenerator renders inside it', () => {
+    render(
+      <ChapterList
+        classId="cl1"
+        chapters={chapters}
+        lessons={lessons}
+        chapterTests={{}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /expand chapter 1: the basics/i }));
+    // In idle phase (no existingTest), ChapterTestGenerator shows "Create Chapter Test" button
+    expect(
+      screen.getByRole('button', { name: /create chapter test/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('when chapterTests[id] has status "published", the generator shows the ✓ Published badge', () => {
+    const chapterTests: Record<string, ChapterTestRow> = {
+      ch1: {
+        id: 'ct1',
+        title: 'Chapter 1 Test',
+        status: 'published',
+        generation_status: 'ready',
+      },
+    };
+    render(
+      <ChapterList
+        classId="cl1"
+        chapters={chapters}
+        lessons={lessons}
+        chapterTests={chapterTests}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /expand chapter 1: the basics/i }));
+    // ChapterTestGenerator in published phase renders the badge
+    expect(screen.getByText('✓ Published')).toBeInTheDocument();
   });
 });

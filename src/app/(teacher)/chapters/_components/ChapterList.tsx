@@ -9,8 +9,16 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ChapterTestGenerator } from './ChapterTestGenerator';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface ChapterTestRow {
+  id: string;
+  title: string;
+  status: 'draft' | 'published' | 'archived';
+  generation_status: 'draft' | 'queued' | 'generating' | 'ready' | 'failed';
+}
 
 export interface ChapterRow {
   id: string;
@@ -33,11 +41,13 @@ export interface ChapterListProps {
   classId: string;
   chapters: ChapterRow[];
   lessons: LessonRow[];
+  /** Map of chapter_id → most-recent non-archived chapter_test row, loaded server-side. */
+  chapterTests?: Record<string, ChapterTestRow>;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function ChapterList({ classId, chapters, lessons }: ChapterListProps) {
+export function ChapterList({ classId, chapters, lessons, chapterTests = {} }: ChapterListProps) {
   const router = useRouter();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showAdd, setShowAdd] = useState(false);
@@ -298,16 +308,13 @@ export function ChapterList({ classId, chapters, lessons }: ChapterListProps) {
                   </div>
                 )}
 
-                {/* Create Test CTA (wired in Seg 2) */}
+                {/* Chapter Test Generator */}
                 <div className="mt-4">
-                  <button
-                    type="button"
-                    disabled
-                    className="rounded-lg border-2 border-sidebar-edge bg-surface px-3 py-1.5 text-xs font-bold text-fg-muted opacity-50"
-                    title="Create a chapter test — available after Seg 2"
-                  >
-                    Create Test
-                  </button>
+                  <ChapterTestGenerator
+                    chapterId={chapter.id}
+                    chapterTitle={chapter.title}
+                    existingTest={chapterTests[chapter.id] ?? null}
+                  />
                 </div>
               </div>
             )}
