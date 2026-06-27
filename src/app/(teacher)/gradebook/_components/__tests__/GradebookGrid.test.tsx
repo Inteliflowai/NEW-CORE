@@ -8,6 +8,24 @@ import type { Gradebook, GradebookCell } from '@/lib/gradebook/loadGradebook';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
+// Lightweight mock for ChapterTestDrillIn — the real component fetches on mount; the mock
+// renders a dialog immediately so we can assert the drill-in opens without async fetch issues.
+vi.mock('../ChapterTestDrillIn', () => ({
+  ChapterTestDrillIn: ({
+    studentName,
+    testTitle,
+    onClose,
+  }: {
+    studentName: string;
+    testTitle: string;
+    onClose: () => void;
+  }) => (
+    <aside role="dialog" aria-label={`${studentName} — ${testTitle}`}>
+      <button type="button" onClick={onClose}>Close chapter drill-in</button>
+    </aside>
+  ),
+}));
+
 const data: Gradebook = {
   class_id: 'c1',
   students: [{ student_id: 's1', name: 'Ana Diaz' }, { student_id: 's2', name: 'Ben Cole' }],
@@ -452,5 +470,80 @@ describe('GradebookGrid — cell tooltip a11y', () => {
     expect(screen.getByRole('tooltip')).toBeInTheDocument();
     fireEvent.keyDown(btn, { key: 'Escape' });
     expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+});
+
+// ─── Seg3 Task 4: chapter test column rendering ───────────────────────────────
+
+/** Gradebook with one published chapter test, student has a graded attempt. */
+const chapterTestGradebook: Gradebook = {
+  class_id: 'c1',
+  students: [{ student_id: 's1', name: 'Ana Diaz' }],
+  assignments: [],
+  cells: { s1: {} },
+  class_average: null,
+  column_averages: {},
+  missing_count: 0,
+  quizzes: [],
+  quiz_cells: { s1: {} },
+  chapter_test_columns: [
+    {
+      chapter_test_id: 'ct1',
+      chapter_title: 'Chapter 1',
+      test_title: 'Chapter 1 Test',
+      published_at: '2026-06-10T00:00:00Z',
+      total_points: 60,
+    },
+  ],
+  chapter_test_cells: {
+    s1: {
+      ct1: { attempt_id: 'a1', status: 'graded', total_grade: 47, total_max: 60 },
+    },
+  },
+};
+
+/** Same as above but student has no attempt yet (not_started). */
+const chapterTestNotStarted: Gradebook = {
+  ...chapterTestGradebook,
+  chapter_test_cells: {
+    s1: {
+      ct1: { attempt_id: null, status: 'not_started', total_grade: null, total_max: null },
+    },
+  },
+};
+
+describe('GradebookGrid — chapter test columns', () => {
+  it('renders chapter test column header (test_title) when chapter_test_columns is non-empty', () => {
+    render(<GradebookGrid data={chapterTestGradebook} />);
+    expect(screen.getByText('Chapter 1 Test')).toBeInTheDocument();
+  });
+
+  it('renders a graded chapter test cell showing total_grade/total_max (47/60)', () => {
+    render(<GradebookGrid data={chapterTestGradebook} />);
+    expect(screen.getByText('47/60')).toBeInTheDocument();
+  });
+
+  it('clicking a graded chapter test cell opens the ChapterTestDrillIn dialog', () => {
+    render(<GradebookGrid data={chapterTestGradebook} />);
+    // Button aria-label: "Ana Diaz — Chapter 1 — Chapter 1 Test — graded"
+    const btn = screen.getByRole('button', { name: /Ana Diaz.*Chapter 1 Test.*graded/i });
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    // ChapterTestDrillIn mock renders dialog with aria-label="${studentName} — ${testTitle}"
+    expect(screen.getByRole('dialog', { name: /Ana Diaz — Chapter 1 Test/i })).toBeInTheDocument();
+  });
+
+  it('a not-started chapter test cell is inert (rendered as a div, not a button)', () => {
+    render(<GradebookGrid data={chapterTestNotStarted} />);
+    // No interactive button for the not-started cell
+    expect(screen.queryByRole('button', { name: /Ana Diaz.*Chapter 1 Test/i })).toBeNull();
+    // The table itself still renders (cell is present but inert)
+    expect(screen.getByRole('table')).toBeInTheDocument();
+  });
+
+  it('does NOT render chapter test column headers when chapter_test_columns is empty', () => {
+    render(<GradebookGrid data={data} />); // data.chapter_test_columns = []
+    // No chapter test column titles should appear in the DOM
+    expect(screen.queryByText('Chapter 1 Test')).toBeNull();
   });
 });

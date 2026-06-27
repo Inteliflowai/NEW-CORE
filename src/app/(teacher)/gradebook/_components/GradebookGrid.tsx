@@ -22,10 +22,11 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { CellStatus, Gradebook, GradebookAssignmentCol, GradebookCell } from '@/lib/gradebook/loadGradebook';
+import type { CellStatus, Gradebook, GradebookAssignmentCol, GradebookCell, ChapterTestCell } from '@/lib/gradebook/loadGradebook';
 import { SectionLabel } from '../../_components/SectionLabel';
 import { SummaryCallout } from '../../_components/SummaryCallout';
 import { GradebookDrillIn, type DrillInCell } from './GradebookDrillIn';
+import { ChapterTestDrillIn } from './ChapterTestDrillIn';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function shortDate(iso: string): string {
@@ -148,6 +149,17 @@ interface Selection {
   cell: DrillInCell;
 }
 
+/** State for the ChapterTestDrillIn panel (opened by clicking a chapter test cell). */
+interface ChapterDrillInSelection {
+  chapterTestId: string;
+  chapterTitle: string;
+  testTitle: string;
+  studentId: string;
+  studentName: string;
+  classId: string;
+  cell: ChapterTestCell;
+}
+
 /** Per-column passback state — null = not sent yet; holds the last result or an error tag. */
 type PassbackState =
   | { status: 'sending' }
@@ -166,10 +178,11 @@ export interface GradebookGridProps {
 export function GradebookGrid({ data, googleCourseId, publishedLessonIds }: GradebookGridProps) {
   const router = useRouter();
   const [selected, setSelected] = useState<Selection | null>(null);
+  const [chapterDrillIn, setChapterDrillIn] = useState<ChapterDrillInSelection | null>(null);
   // Map of assignment_key → passback state for the per-column Send grades action.
   const [passbackState, setPassbackState] = useState<Record<string, PassbackState>>({});
 
-  const { students, assignments, cells, column_averages, class_average, missing_count } = data;
+  const { students, assignments, cells, column_averages, class_average, missing_count, chapter_test_columns, chapter_test_cells } = data;
 
   const publishedSet = new Set(publishedLessonIds ?? []);
 
@@ -311,6 +324,18 @@ export function GradebookGrid({ data, googleCourseId, publishedLessonIds }: Grad
                   </th>
                 );
               })}
+              {/* Chapter test columns (after all assignment columns; never included in class average). */}
+              {chapter_test_columns.map((col) => (
+                <th
+                  key={col.chapter_test_id}
+                  className="sticky top-0 z-20 bg-surface border-b-2 border-l-2 border-sidebar-edge p-2 text-center align-bottom"
+                >
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-[10px] text-fg-muted whitespace-nowrap">{col.chapter_title}</span>
+                    <SectionLabel tone="ok">{col.test_title}</SectionLabel>
+                  </div>
+                </th>
+              ))}
             </tr>
           </thead>
 
@@ -395,6 +420,55 @@ export function GradebookGrid({ data, googleCourseId, publishedLessonIds }: Grad
                     </td>
                   );
                 })}
+                {/* Chapter test cells — one per published chapter test column. */}
+                {chapter_test_columns.map((col) => {
+                  const cell: ChapterTestCell = chapter_test_cells[s.student_id]?.[col.chapter_test_id]
+                    ?? { attempt_id: null, status: 'not_started', total_grade: null, total_max: null };
+                  const ctStatus = cell.status;
+                  const isClickable = ctStatus === 'submitted' || ctStatus === 'graded';
+                  const ctTone = ctStatus === 'graded' ? 'bg-ok-surface'
+                    : ctStatus === 'submitted' ? 'bg-brand-surface'
+                    : 'bg-surface';
+                  const ctGlyph = ctStatus === 'graded' && cell.total_grade != null && cell.total_max != null
+                    ? `${cell.total_grade}/${cell.total_max}`
+                    : ctStatus === 'submitted' ? '⋯'
+                    : '·';
+                  const ctAriaLabel = `${s.name} — ${col.chapter_title} — ${col.test_title} — ${
+                    ctStatus === 'graded' ? 'graded' : ctStatus === 'submitted' ? 'submitted' : 'not started'
+                  }`;
+                  const ctInner = (
+                    <span aria-hidden="true" className="text-fg font-bold">{ctGlyph}</span>
+                  );
+                  return (
+                    <td
+                      key={col.chapter_test_id}
+                      className={`border-b-2 border-l-2 border-sidebar-edge p-1 text-center ${ctTone}`}
+                    >
+                      {isClickable ? (
+                        <button
+                          type="button"
+                          aria-label={ctAriaLabel}
+                          onClick={() => setChapterDrillIn({
+                            chapterTestId: col.chapter_test_id,
+                            chapterTitle: col.chapter_title,
+                            testTitle: col.test_title,
+                            studentId: s.student_id,
+                            studentName: s.name,
+                            classId: data.class_id,
+                            cell,
+                          })}
+                          className="flex w-full cursor-pointer items-center justify-center rounded-md p-1 text-fg ring-1 ring-sidebar-edge/40 hover:shadow-sticker focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                        >
+                          {ctInner}
+                        </button>
+                      ) : (
+                        <div className="flex w-full items-center justify-center p-1 text-fg-muted">
+                          {ctInner}
+                        </div>
+                      )}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>
@@ -420,6 +494,13 @@ export function GradebookGrid({ data, googleCourseId, publishedLessonIds }: Grad
                   </td>
                 );
               })}
+              {/* Chapter test columns are NOT included in the class average (inert footer cells for alignment). */}
+              {chapter_test_columns.map((col) => (
+                <td
+                  key={col.chapter_test_id}
+                  className="border-t-2 border-l-2 border-sidebar-edge bg-brand-surface p-2 text-center"
+                />
+              ))}
             </tr>
           </tfoot>
         </table>
@@ -445,6 +526,13 @@ export function GradebookGrid({ data, googleCourseId, publishedLessonIds }: Grad
             setSelected(null);
             router.refresh();
           }}
+        />
+      )}
+
+      {chapterDrillIn && (
+        <ChapterTestDrillIn
+          {...chapterDrillIn}
+          onClose={() => setChapterDrillIn(null)}
         />
       )}
     </div>
