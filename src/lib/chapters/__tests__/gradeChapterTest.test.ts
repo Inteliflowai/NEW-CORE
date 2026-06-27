@@ -22,7 +22,7 @@ vi.mock('@/lib/ai/models', () => ({
   CLAUDE_GRADING_MODEL: 'claude-sonnet-4-6',
 }));
 
-import { gradeMcq, gradeMatching } from '@/lib/chapters/gradeChapterTest';
+import { gradeMcq, gradeMatching, gradeOpenEnded } from '@/lib/chapters/gradeChapterTest';
 
 // ── Shared fixture types ──────────────────────────────────────────────────────
 
@@ -230,5 +230,133 @@ describe('gradeMatching', () => {
   });
 });
 
-// ── placeholder: T2 + T3 tests added in subsequent commits ───────────────────
-void beforeEach; // silence unused-import lint for subsequent commits
+// ═══════════════════════════════════════════════════════════════════════════════
+// T2: gradeOpenEnded
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('gradeOpenEnded', () => {
+  const question: QuestionRow = {
+    id: 'q-sa-1',
+    question_type: 'short_answer',
+    question_text: 'Explain the water cycle in your own words.',
+    payload: {
+      rubric: 'Award full credit for mentioning evaporation, condensation, and precipitation.',
+    },
+    points: 5,
+  };
+
+  beforeEach(() => {
+    mockResilientClaudeChat.mockReset();
+  });
+
+  it('calls resilientClaudeChat and returns parsed grade + feedback for a valid response', async () => {
+    mockResilientClaudeChat.mockResolvedValue({
+      content: JSON.stringify({ grade: 4, feedback: 'Good explanation.' }),
+    });
+
+    const response: ResponseRow = {
+      response_text: 'Water evaporates, forms clouds, then falls as rain.',
+      response_payload: null,
+    };
+    const result = await gradeOpenEnded(question, response);
+
+    expect(mockResilientClaudeChat).toHaveBeenCalledTimes(1);
+    expect(result.grade).toBe(4);
+    expect(result.ai_feedback).toBe('Good explanation.');
+  });
+
+  it('returns grade=0 and "No response." without calling Claude for null response', async () => {
+    const result = await gradeOpenEnded(question, null);
+
+    expect(mockResilientClaudeChat).not.toHaveBeenCalled();
+    expect(result.grade).toBe(0);
+    expect(result.ai_feedback).toBe('No response.');
+  });
+
+  it('returns grade=0 without calling Claude for empty string response_text', async () => {
+    const response: ResponseRow = { response_text: '', response_payload: null };
+    const result = await gradeOpenEnded(question, response);
+
+    expect(mockResilientClaudeChat).not.toHaveBeenCalled();
+    expect(result.grade).toBe(0);
+  });
+
+  it('returns grade=0 without calling Claude for whitespace-only response_text', async () => {
+    const response: ResponseRow = { response_text: '   \n  ', response_payload: null };
+    const result = await gradeOpenEnded(question, response);
+
+    expect(mockResilientClaudeChat).not.toHaveBeenCalled();
+    expect(result.grade).toBe(0);
+  });
+
+  it('passes CLAUDE_CHAPTER_MODEL, max_tokens:500, and NO temperature to resilientClaudeChat', async () => {
+    mockResilientClaudeChat.mockResolvedValue({
+      content: JSON.stringify({ grade: 3, feedback: 'Partial.' }),
+    });
+
+    const response: ResponseRow = {
+      response_text: 'Water falls from clouds.',
+      response_payload: null,
+    };
+    await gradeOpenEnded(question, response);
+
+    const [callArgs] = mockResilientClaudeChat.mock.calls[0] as [Record<string, unknown>];
+    expect(callArgs.model).toBe('claude-opus-4-8');
+    expect(callArgs.max_tokens).toBe(500);
+    expect('temperature' in callArgs).toBe(false);
+  });
+
+  it('returns grade=0 + ai_feedback="" + calls console.error when Claude returns invalid JSON', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockResilientClaudeChat.mockResolvedValue({ content: 'not valid json {{{{' });
+
+    const response: ResponseRow = { response_text: 'Some answer.', response_payload: null };
+    const result = await gradeOpenEnded(question, response);
+
+    expect(result.grade).toBe(0);
+    expect(result.ai_feedback).toBe('');
+    expect(consoleSpy).toHaveBeenCalled();
+    consoleSpy.mockRestore();
+  });
+
+  it('returns grade=0 without throwing when Claude returns null', async () => {
+    mockResilientClaudeChat.mockResolvedValue(null);
+
+    const response: ResponseRow = { response_text: 'Some answer.', response_payload: null };
+    await expect(gradeOpenEnded(question, response)).resolves.toMatchObject({
+      grade: 0,
+      ai_feedback: '',
+    });
+  });
+
+  it('clamps grade to question.points when Claude returns a higher value', async () => {
+    mockResilientClaudeChat.mockResolvedValue({
+      content: JSON.stringify({ grade: 99, feedback: 'Excellent!' }),
+    });
+
+    const response: ResponseRow = { response_text: 'Perfect answer.', response_payload: null };
+    const result = await gradeOpenEnded(question, response);
+
+    expect(result.grade).toBe(question.points); // 5, not 99
+  });
+
+  it('clamps grade to 0 when Claude returns a negative value', async () => {
+    mockResilientClaudeChat.mockResolvedValue({
+      content: JSON.stringify({ grade: -3, feedback: 'Wrong.' }),
+    });
+
+    const response: ResponseRow = { response_text: 'Some answer.', response_payload: null };
+    const result = await gradeOpenEnded(question, response);
+
+    expect(result.grade).toBe(0);
+  });
+
+  it('never throws when Claude throws an unexpected error', async () => {
+    mockResilientClaudeChat.mockRejectedValue(new Error('Network error'));
+
+    const response: ResponseRow = { response_text: 'Some answer.', response_payload: null };
+    await expect(gradeOpenEnded(question, response)).resolves.toMatchObject({ grade: 0 });
+  });
+});
+
+// ── placeholder: T3 tests added in next commit ────────────────────────────────
