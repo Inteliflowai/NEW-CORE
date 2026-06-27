@@ -124,8 +124,9 @@ function QuestionInput({ question, response, onChange, textId }: InputProps) {
 
   // ── Matching ───────────────────────────────────────────────────────────────
   if (question_type === 'matching') {
-    const leftItems = (payload.left_items as string[] | undefined) ?? [];
-    const rightItems = (payload.right_items as string[] | undefined) ?? [];
+    // I2: generation emits `left` / `right` (not `left_items` / `right_items`).
+    const leftItems = (payload.left as string[] | undefined) ?? [];
+    const rightItems = (payload.right as string[] | undefined) ?? [];
     const pairs = (response.response_payload?.pairs as MatchingPair[] | undefined) ?? [];
 
     function pairForLeft(leftIdx: number): MatchingPair | undefined {

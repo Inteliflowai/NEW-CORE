@@ -18,11 +18,53 @@
 //   8. Load existing responses (for resume)
 //   9. Return full response (sections+questions+responses)
 
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
+import { gradeChapterAttempt } from '@/lib/chapters/gradeChapterTest';
 
 /** Seconds before an in-progress attempt is auto-forfeited on next start call. */
 const FORFEIT_SECONDS = 44 * 60;
+
+/**
+ * Strip answer-key / grading material from a question payload before it is sent
+ * to the student. SECURITY (C1): the raw payload contains correct_answer (mcq),
+ * pairs (matching), and rubric / expected_signals / sample_answer (open types) —
+ * a student could read DevTools and score 100% trivially. Whitelist display-safe
+ * fields per question_type; deny the grading material for the open types.
+ */
+function sanitizePayload(
+  questionType: string,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  switch (questionType) {
+    case 'mcq': {
+      // Keep the choices' labels + display text only — drop correct_answer / rationale.
+      const choices = (payload.choices as { label: string; text: string }[] | undefined) ?? [];
+      return { choices: choices.map((c) => ({ label: c.label, text: c.text })) };
+    }
+    case 'matching': {
+      // Keep the left/right item arrays — drop pairs (the correct-answer map).
+      return { left: payload.left ?? [], right: payload.right ?? [] };
+    }
+    default: {
+      // Open types (short_answer, mini_essay, multi_step_problem, data_interpretation,
+      // compare_contrast): keep prompt/context/passage/mermaid, drop grading material.
+      const SENSITIVE = new Set([
+        'rubric',
+        'expected_signals',
+        'sample_answer',
+        'correct_answer',
+        'pairs',
+        'rationale',
+      ]);
+      const safe: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(payload)) {
+        if (!SENSITIVE.has(key)) safe[key] = value;
+      }
+      return safe;
+    }
+  }
+}
 
 type ChapterTestRow = {
   id: string;
@@ -182,6 +224,20 @@ export async function POST(req: Request): Promise<NextResponse> {
         .eq('id', existing.id)
         .eq('student_id', user.id);
 
+      // I1: trigger grading so the result screen doesn't poll "Grading…" forever.
+      // Fail-soft — never throw from after() (mirrors the submit route).
+      const forfeitedAttemptId = existing.id;
+      after(async () => {
+        try {
+          await gradeChapterAttempt(forfeitedAttemptId, admin);
+        } catch (err) {
+          console.warn(
+            '[chapter-test/start] forfeit gradeChapterAttempt failed (non-fatal):',
+            err,
+          );
+        }
+      });
+
       return NextResponse.json({ forfeited: true, attempt_id: existing.id });
     }
 
@@ -238,7 +294,7 @@ export async function POST(req: Request): Promise<NextResponse> {
         question_order: q.question_order,
         question_type: q.question_type,
         question_text: q.question_text,
-        payload: q.payload as Record<string, unknown>,
+        payload: sanitizePayload(q.question_type, q.payload as Record<string, unknown>),
         points: q.points,
       })),
     })),

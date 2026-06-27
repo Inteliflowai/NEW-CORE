@@ -52,9 +52,10 @@ const MATCHING_QUESTION: QuestionData = {
   question_order: 5,
   question_type: 'matching',
   question_text: 'Match each term to its definition.',
+  // I2: generation emits `left` / `right` (not `left_items` / `right_items`).
   payload: {
-    left_items: ['Protagonist', 'Antagonist'],
-    right_items: ['Main character', 'Opposing force'],
+    left: ['Protagonist', 'Antagonist'],
+    right: ['Main character', 'Opposing force'],
   },
   points: 4,
 };
@@ -177,6 +178,24 @@ describe('QuestionRenderer — matching', () => {
         }),
       }),
     );
+  });
+
+  // I2: the renderer must read the keys generation actually writes (`left`/`right`).
+  it('renders left and right items from payload.left / payload.right', () => {
+    const q: QuestionData = {
+      id: 'q-match-keys',
+      question_order: 1,
+      question_type: 'matching',
+      question_text: 'Match each term to its definition.',
+      payload: { left: ['Term A', 'Term B'], right: ['Def 1', 'Def 2'] },
+      points: 4,
+    };
+    render(<QuestionRenderer question={q} response={EMPTY} onChange={vi.fn()} />);
+    // Left items render as labels; right items render as <option>s.
+    expect(screen.getByText('Term A')).toBeTruthy();
+    expect(screen.getByText('Term B')).toBeTruthy();
+    expect(screen.getAllByText('Def 1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Def 2').length).toBeGreaterThan(0);
   });
 });
 

@@ -72,7 +72,9 @@ describe('ChapterTestTimer', () => {
     expect(screen.getByRole('timer').textContent).toContain('--:--');
   });
 
-  it('does NOT fire onTimeUp when prefers-reduced-motion (interval skipped)', () => {
+  // I3: enforcement must run regardless of motion preference — a reduced-motion
+  // user still gets a real time limit on a graded summative test.
+  it('fires onTimeUp under prefers-reduced-motion (enforcement is NOT disabled)', () => {
     setupMatchMedia(true);
     const onTimeUp = vi.fn();
     const now = new Date().toISOString();
@@ -82,7 +84,21 @@ describe('ChapterTestTimer', () => {
       vi.advanceTimersByTime(44 * 60 * 1000 + 2000);
     });
 
-    expect(onTimeUp).not.toHaveBeenCalled();
+    expect(onTimeUp).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onTimeUp under reduced motion for a nearly-elapsed timer (I3)', () => {
+    setupMatchMedia(true);
+    const onTimeUp = vi.fn();
+    // started (44min - 1s) ago → ~1s remaining
+    const startedAt = new Date(Date.now() - (44 * 60 - 1) * 1000).toISOString();
+    render(<ChapterTestTimer startedAt={startedAt} totalMinutes={44} onTimeUp={onTimeUp} />);
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(onTimeUp).toHaveBeenCalled();
   });
 
   it('applies urgency (risk) styling when less than 5 minutes remain', () => {

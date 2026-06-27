@@ -42,7 +42,10 @@ function prefersReducedMotionNow(): boolean {
  * - Recomputes remaining time from `Date.now() - startedAt` every second
  *   so it stays accurate across page reloads.
  * - Fires `onTimeUp()` exactly once when elapsed >= totalMinutes * 60 s.
- * - When `prefers-reduced-motion`: skips the interval and shows `--:--`.
+ *   I3: enforcement runs REGARDLESS of motion preference — a reduced-motion
+ *   user still gets a real time limit on a graded summative test.
+ * - When `prefers-reduced-motion`: suppresses the visible ticking display (shows
+ *   `--:--`) but keeps the enforcement interval running.
  * - When < 5 minutes remain: applies risk-tone border + text (WCAG: non-color cue + color together).
  */
 export function ChapterTestTimer({ startedAt, totalMinutes, onTimeUp }: ChapterTestTimerProps) {
@@ -55,19 +58,26 @@ export function ChapterTestTimer({ startedAt, totalMinutes, onTimeUp }: ChapterT
   const onTimeUpRef = useRef(onTimeUp);
   onTimeUpRef.current = onTimeUp;
 
+  // Reset the one-shot fired latch if the attempt identity changes.
   useEffect(() => {
-    if (prefersReducedMotionNow()) {
-      // Accessibility: skip interval entirely — the static display will show --:--
-      return;
-    }
+    firedRef.current = false;
+  }, [startedAt, totalSeconds]);
+
+  useEffect(() => {
+    // I3: enforcement ALWAYS runs. Under reduced motion we skip the visible
+    // ticking (the render shows --:--) but still fire onTimeUp at zero so a
+    // reduced-motion student is not granted unlimited time on a graded test.
+    const reduced = prefersReducedMotionNow();
 
     const id = setInterval(() => {
       const rem = computeRemaining(startedAt, totalSeconds);
-      setRemaining(rem);
-
+      if (!reduced) {
+        setRemaining(rem);
+      }
       if (rem <= 0 && !firedRef.current) {
         firedRef.current = true;
         onTimeUpRef.current();
+        clearInterval(id);
       }
     }, 1000);
 

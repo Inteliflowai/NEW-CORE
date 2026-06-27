@@ -13,6 +13,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const getUser = vi.fn();
 
+// ── Mock after() from next/server (capture callbacks) ─────────────────────────
+// The forfeit-via-start path (I1) fires grading through after(); preserve the
+// real NextResponse via importOriginal so the route's responses still work.
+const afterCallbacks: Array<() => Promise<void>> = [];
+vi.mock('next/server', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('next/server')>();
+  return {
+    ...mod,
+    after: (fn: () => Promise<void>) => {
+      afterCallbacks.push(fn);
+    },
+  };
+});
+
+// ── Mock gradeChapterAttempt (I1) ─────────────────────────────────────────────
+const gradeChapterAttemptMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/chapters/gradeChapterTest', () => ({
+  gradeChapterAttempt: (...args: unknown[]) => gradeChapterAttemptMock(...args),
+}));
+
 // Scriptable per-test state ─────────────────────────────────────────
 let USER_ROLE: string | null = 'student';
 let CHAPTER_TEST: Record<string, unknown> | null;
@@ -220,6 +240,8 @@ beforeEach(() => {
   getUser.mockReset();
   attemptInserts.length = 0;
   attemptUpdates.length = 0;
+  afterCallbacks.length = 0;
+  gradeChapterAttemptMock.mockReset().mockResolvedValue(undefined);
 
   USER_ROLE = 'student';
   CHAPTER_TEST = { ...FAKE_CHAPTER_TEST };
@@ -450,7 +472,122 @@ describe('POST /api/attempts/chapter-test/start', () => {
     expect(sec2.questions).toHaveLength(1);
     expect(sec2.questions[0].id).toBe('q2');
     expect(sec2.questions[0].question_type).toBe('short_answer');
-    expect(sec2.questions[0].payload).toEqual({ rubric: 'Must mention Z' });
+    // C1: the rubric is grading material and is stripped from the student-facing payload.
+    expect(sec2.questions[0].payload).toEqual({});
+  });
+
+  // ── C1: student-facing payload is sanitized (no answer key) ──────────────────
+
+  it('C1: MCQ payload sent to the student excludes correct_answer and rationale', async () => {
+    SECTIONS = [
+      { id: 'sec1', chapter_test_id: 'ct1', section_order: 1, section_kind: 'mcq', title: 'MCQ', time_minutes: 8, total_points: 10, power_skill: null },
+    ];
+    QUESTIONS = [
+      {
+        id: 'qm', section_id: 'sec1', student_id: 'stu1', question_order: 1, question_type: 'mcq',
+        question_text: 'Pick one', points: 2,
+        payload: {
+          choices: [{ label: 'A', text: 'Opt A' }, { label: 'B', text: 'Opt B' }],
+          correct_answer: 'B',
+          rationale: 'B is right because…',
+        },
+      },
+    ];
+    const POST = await load();
+    const res = await POST(makeReq());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const q = body.sections
+      .flatMap((s: { questions: Array<{ id: string }> }) => s.questions)
+      .find((qq: { id: string }) => qq.id === 'qm');
+    expect(q).toBeTruthy();
+    expect(q.payload).not.toHaveProperty('correct_answer');
+    expect(q.payload).not.toHaveProperty('rationale');
+    // Display-safe choices are retained.
+    expect(Array.isArray(q.payload.choices)).toBe(true);
+    expect(q.payload.choices).toHaveLength(2);
+  });
+
+  it('C1: matching payload sent to the student excludes pairs (the answer map)', async () => {
+    SECTIONS = [
+      { id: 'sec1', chapter_test_id: 'ct1', section_order: 1, section_kind: 'matching', title: 'Match', time_minutes: 8, total_points: 10, power_skill: null },
+    ];
+    QUESTIONS = [
+      {
+        id: 'qmatch', section_id: 'sec1', student_id: 'stu1', question_order: 1, question_type: 'matching',
+        question_text: 'Match them', points: 4,
+        payload: {
+          left: ['Term A', 'Term B'],
+          right: ['Def 1', 'Def 2'],
+          pairs: [{ left_idx: 0, right_idx: 1 }, { left_idx: 1, right_idx: 0 }],
+        },
+      },
+    ];
+    const POST = await load();
+    const res = await POST(makeReq());
+    const body = await res.json();
+    const q = body.sections
+      .flatMap((s: { questions: Array<{ id: string }> }) => s.questions)
+      .find((qq: { id: string }) => qq.id === 'qmatch');
+    expect(q.payload).not.toHaveProperty('pairs');
+    // Display-safe left/right arrays are retained.
+    expect(q.payload.left).toEqual(['Term A', 'Term B']);
+    expect(q.payload.right).toEqual(['Def 1', 'Def 2']);
+  });
+
+  it('C1: open-type payload sent to the student excludes rubric / expected_signals / sample_answer', async () => {
+    SECTIONS = [
+      { id: 'sec1', chapter_test_id: 'ct1', section_order: 1, section_kind: 'short_answer', title: 'SA', time_minutes: 8, total_points: 10, power_skill: null },
+    ];
+    QUESTIONS = [
+      {
+        id: 'qopen', section_id: 'sec1', student_id: 'stu1', question_order: 1, question_type: 'short_answer',
+        question_text: 'Explain', points: 5,
+        payload: {
+          prompt: 'Explain the theme',
+          rubric: 'Must mention Z',
+          expected_signals: ['Z', 'theme'],
+          sample_answer: 'The theme is Z',
+        },
+      },
+    ];
+    const POST = await load();
+    const res = await POST(makeReq());
+    const body = await res.json();
+    const q = body.sections
+      .flatMap((s: { questions: Array<{ id: string }> }) => s.questions)
+      .find((qq: { id: string }) => qq.id === 'qopen');
+    expect(q.payload).not.toHaveProperty('rubric');
+    expect(q.payload).not.toHaveProperty('expected_signals');
+    expect(q.payload).not.toHaveProperty('sample_answer');
+    // Display-safe prompt is retained.
+    expect(q.payload.prompt).toBe('Explain the theme');
+  });
+
+  // ── I1: forfeit-via-start triggers grading ──────────────────────────────────
+
+  it('I1: auto-forfeit registers an after() callback that grades the attempt', async () => {
+    EXISTING_ATTEMPT = { ...FAKE_EXISTING_ATTEMPT, started_at: PAST_44_MIN, status: 'in_progress' };
+    const POST = await load();
+    const res = await POST(makeReq());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.forfeited).toBe(true);
+    // A grading job is queued via after()…
+    expect(afterCallbacks).toHaveLength(1);
+    // …and running it grades the forfeited attempt.
+    await afterCallbacks[0]();
+    expect(gradeChapterAttemptMock).toHaveBeenCalledWith('att1', expect.anything());
+  });
+
+  it('I1: forfeit grading error does not propagate (non-fatal)', async () => {
+    gradeChapterAttemptMock.mockRejectedValue(new Error('grading boom'));
+    EXISTING_ATTEMPT = { ...FAKE_EXISTING_ATTEMPT, started_at: PAST_44_MIN, status: 'in_progress' };
+    const POST = await load();
+    const res = await POST(makeReq());
+    expect(res.status).toBe(200);
+    expect(afterCallbacks).toHaveLength(1);
+    await expect(afterCallbacks[0]()).resolves.not.toThrow();
   });
 
   // ── elapsed_seconds computed from started_at ──────────────────────────────
