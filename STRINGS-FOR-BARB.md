@@ -1355,3 +1355,56 @@ Teacher-facing strings in the URL import tab and route error responses. All DRAF
 | `drive_unsupported_type` | "This file type can't be imported as a lesson. Try exporting it as a PDF first." |
 | `drive_empty` | "No readable text in that Drive file." |
 | `connected: false` (not error string — CTA in component) | "Connect your Google account to import Drive files." → links to `/settings/google` |
+
+---
+
+## §Chapter Eval
+
+> All strings below are DRAFT. Barb gates all copy before production.
+
+### Chapter management (teacher)
+- "Add chapter"
+- "Archive chapter"
+- "Create Chapter Test"
+- "Humanities" (template selector option)
+- "STEM" (template selector option)
+- "Building your test…" (generation in progress)
+- "Test ready" (generation complete)
+- "Something went wrong — try again" (generation failed)
+- "Publish test"
+- "✓ Published"
+- "✓ Questions ready" (generation ready, not yet published)
+- Chapter test accordion expanded label
+
+### Student player
+- "Chapter Test" (page/section heading)
+- "Submit test"
+- "Are you sure? You won't be able to change your answers." (confirmation dialog)
+- "Time's up — your test has been submitted" (forfeit_reason=time_up)
+- "Grading your test…" (polling spinner)
+- "You're continuing your test" (resume banner)
+- Section tab labels (1–5): [Barb to review based on section_kind names]
+
+### Result screen (student)
+- "You scored [N] out of [M]" — [N] and [M] are the only digits; no band/CL/risk words
+- "Time was up" (forfeit note)
+- "Back to assignments" (link label)
+- Section-level heading: "[Section title] — [section_grade] / [section_max] points"
+- Per-question ai_feedback: Barb reviews all Claude-drafted feedback strings; see Four-Audience rule
+- Leaked-feedback fallback: "Keep working on this — your teacher will share more feedback soon."
+
+### Teacher gradebook
+- Chapter test column header: "[Chapter title] · [Test title]"
+- ChapterTestDrillIn panel: "[Test title] — [Student name]"
+- Cell statuses: "·" (not started), "⋯" (submitted), "[N]/[M]" (graded — numbers allowed, teacher surface)
+
+### MCQ/matching feedback (teacher-only context)
+> These appear in ChapterTestDrillIn only (teacher-only surface). Still Barb-reviewed.
+- "Correct."
+- "The correct answer was [term]."
+- "You matched [X] out of [Y] correctly."
+- "No response."
+
+### Section headings (teacher drill-in)
+- vocabulary, short_answer, compare_contrast, data_interpretation, mini_essay, multi_step_problem
+- [Section kind display names: Barb to finalize — current code uses raw section_kind values]
