@@ -29,6 +29,20 @@ export interface GradebookQuizCell {
   quiz_attempt_id: string | null; is_complete: boolean; score_pct: number | null;
   mastery_band: 'reteach' | 'grade_level' | 'advanced' | null;
 }
+export interface ChapterTestCol {
+  chapter_test_id: string;
+  chapter_title: string;    // chapters.title — the chapter's name
+  test_title: string;       // chapter_tests.title
+  published_at: string | null;
+  total_points: number;     // always 60
+}
+export type ChapterTestCellStatus = 'not_started' | 'in_progress' | 'submitted' | 'graded';
+export interface ChapterTestCell {
+  attempt_id: string | null;
+  status: ChapterTestCellStatus;
+  total_grade: number | null;   // summative grade (not score_pct)
+  total_max: number | null;     // always 60 when set
+}
 export interface Gradebook {
   class_id: string;
   students: GradebookStudent[];
@@ -39,16 +53,21 @@ export interface Gradebook {
   missing_count: number;
   quizzes: GradebookQuizCol[];
   quiz_cells: Record<string, Record<string, GradebookQuizCell>>;
+  chapter_test_columns: ChapterTestCol[];
+  chapter_test_cells: Record<string, Record<string, ChapterTestCell>>; // [studentId][chapter_test_id]
 }
 
 const NONE = ['__none__'];
 const MAX_ASSIGNMENT_COLS = 60; // per-day columns produce many; keep the most-recent ~term (grid windows to ~12). Truncation past this is LOGGED, never silent (spec §4.3).
 const MAX_QUIZ_COLS = 8;
+const MAX_CHAPTER_COLS = 8; // one per chapter/unit; a year-long course rarely exceeds this. Truncation is LOGGED, never silent.
 
 type AsgRow = { id: string; lesson_id: string | null; due_at: string | null; assigned_at: string | null; created_at: string | null; student_id: string };
 type HwRow = { id: string; assignment_id: string; student_id: string; status: string; score_pct: number | null; teacher_score: number | null; effort_label: EffortLabel | null; teli_hint_count: number | null; teacher_notes: string | null; allow_redo: boolean | null; is_redo: boolean | null; attempt_no: number | null; submitted_on_time: boolean | null; submitted_at: string | null; graded_at: string | null };
 type QzRow = { id: string; title: string | null; created_at: string | null };
 type QaRow = { id: string; quiz_id: string; student_id: string; score_pct: number | null; mastery_band: GradebookQuizCell['mastery_band']; is_complete: boolean | null; submitted_at: string | null };
+type CtRow = { id: string; title: string | null; published_at: string | null; total_points: number | null; chapters: { title: string | null } | null };
+type CtaRow = { id: string; chapter_test_id: string; student_id: string; status: string; total_grade: number | null; total_max: number | null };
 
 /** UTC calendar day ('YYYY-MM-DD') of the assigned date (assigned_at, falling back to created_at). */
 function assignedDay(a: AsgRow): string {
@@ -274,5 +293,51 @@ export async function loadGradebook(admin: SupabaseClient, args: { classId: stri
     quiz_cells[qa.student_id][qa.quiz_id] = { quiz_attempt_id: qa.id, is_complete: !!qa.is_complete, score_pct: qa.score_pct ?? null, mastery_band: qa.mastery_band ?? null };
   }
 
-  return { class_id: classId, students, assignments, cells, class_average, column_averages, missing_count, quizzes, quiz_cells };
+  // 6. Chapter test columns (published, not archived, ordered by published_at ASC).
+  const { data: ctData } = await admin.from('chapter_tests')
+    .select('id, title, published_at, total_points, chapters:chapter_id(title)')
+    .eq('class_id', classId)
+    .eq('status', 'published')
+    .is('archived_at', null)
+    .order('published_at', { ascending: true });
+  const allCtRows = (ctData ?? []) as unknown as CtRow[];
+  if (allCtRows.length > MAX_CHAPTER_COLS) {
+    console.warn(
+      `[loadGradebook] class ${classId}: ${allCtRows.length} chapter test columns exceed the ` +
+      `${MAX_CHAPTER_COLS}-column cap — showing the first ${MAX_CHAPTER_COLS}, ` +
+      `hiding the oldest-extra ${allCtRows.length - MAX_CHAPTER_COLS}.`,
+    );
+  }
+  const ctRows = allCtRows.slice(0, MAX_CHAPTER_COLS);
+  const chapter_test_columns: ChapterTestCol[] = ctRows.map(r => ({
+    chapter_test_id: r.id,
+    chapter_title: r.chapters?.title ?? '',
+    test_title: r.title ?? '',
+    published_at: r.published_at,
+    total_points: r.total_points ?? 60,
+  }));
+  const chapterTestIds = chapter_test_columns.map(c => c.chapter_test_id);
+
+  // 7. Chapter test attempts — skip entirely when no chapter test columns (never pass empty .in()).
+  const chapter_test_cells: Gradebook['chapter_test_cells'] = {};
+  for (const s of students) chapter_test_cells[s.student_id] = {};
+  if (chapterTestIds.length > 0) {
+    const { data: ctaData } = await admin.from('chapter_test_attempts')
+      .select('id, chapter_test_id, student_id, status, total_grade, total_max')
+      .in('chapter_test_id', chapterTestIds)
+      .in('student_id', studentIds.length ? studentIds : NONE);
+    const ctaRows = (ctaData ?? []) as CtaRow[];
+    const ctaByKey = new Map<string, CtaRow>();
+    for (const cta of ctaRows) ctaByKey.set(`${cta.student_id}__${cta.chapter_test_id}`, cta);
+    for (const s of students) {
+      for (const col of chapter_test_columns) {
+        const cta = ctaByKey.get(`${s.student_id}__${col.chapter_test_id}`);
+        chapter_test_cells[s.student_id][col.chapter_test_id] = cta
+          ? { attempt_id: cta.id, status: cta.status as ChapterTestCellStatus, total_grade: cta.total_grade, total_max: cta.total_max }
+          : { attempt_id: null, status: 'not_started', total_grade: null, total_max: null };
+      }
+    }
+  }
+
+  return { class_id: classId, students, assignments, cells, class_average, column_averages, missing_count, quizzes, quiz_cells, chapter_test_columns, chapter_test_cells };
 }

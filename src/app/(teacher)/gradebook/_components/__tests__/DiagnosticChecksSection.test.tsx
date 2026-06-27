@@ -11,6 +11,7 @@ const data: Gradebook = {
   assignments: [], cells: {}, class_average: null, column_averages: {}, missing_count: 0,
   quizzes: [{ quiz_id: 'q1', label: 'Demo Quiz' }],
   quiz_cells: { s1: { q1: { quiz_attempt_id: 'qa1', is_complete: true, score_pct: 88, mastery_band: 'grade_level' } } },
+  chapter_test_columns: [], chapter_test_cells: { s1: {} },
 };
 
 describe('DiagnosticChecksSection', () => {

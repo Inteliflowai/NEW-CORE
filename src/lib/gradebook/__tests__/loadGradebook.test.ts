@@ -1,15 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { loadGradebook } from '@/lib/gradebook/loadGradebook';
 
 // Scriptable tables.
 let ENROLLMENTS: unknown[]; let ASSIGNMENTS: unknown[]; let HW: unknown[];
 let QUIZZES: unknown[]; let QUIZ_ATTEMPTS: unknown[]; let LESSONS: unknown[];
+let CHAPTER_TESTS: unknown[]; let CHAPTER_TEST_ATTEMPTS: unknown[];
 
 // Minimal chainable query stub: every filter returns `this`; awaiting yields { data }.
 function table(rows: () => unknown[]) {
   const q: Record<string, unknown> = {};
   const chain = () => q;
-  for (const m of ['select', 'eq', 'in', 'order']) q[m] = chain;
+  for (const m of ['select', 'eq', 'in', 'is', 'order']) q[m] = chain;
   (q as { then: unknown }).then = (resolve: (v: { data: unknown[]; error: null }) => void) =>
     resolve({ data: rows(), error: null });
   return q;
@@ -22,6 +23,8 @@ const admin = {
     if (t === 'quizzes') return table(() => QUIZZES);
     if (t === 'quiz_attempts') return table(() => QUIZ_ATTEMPTS);
     if (t === 'lessons') return table(() => LESSONS);
+    if (t === 'chapter_tests') return table(() => CHAPTER_TESTS);
+    if (t === 'chapter_test_attempts') return table(() => CHAPTER_TEST_ATTEMPTS);
     return table(() => []);
   },
 } as unknown as Parameters<typeof loadGradebook>[0];
@@ -40,6 +43,8 @@ beforeEach(() => {
   HW = [];
   QUIZZES = [{ id: 'q1', title: 'Demo Quiz' }];
   QUIZ_ATTEMPTS = [];
+  CHAPTER_TESTS = [];
+  CHAPTER_TEST_ATTEMPTS = [];
 });
 
 describe('loadGradebook', () => {
@@ -313,5 +318,89 @@ describe('loadGradebook', () => {
     const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
     expect(gb.assignments[0].title).toBe('Fractions');
     expect(gb.assignments[0].assigned_at).toBe('2026-06-01T00:00:00Z');
+  });
+});
+
+// ─── Chapter test columns + cells (Seg3 Task 1) ──────────────────────────────
+describe('loadGradebook — chapter_test_columns + chapter_test_cells', () => {
+  it('returns chapter_test_columns: [] when no published chapter tests', async () => {
+    CHAPTER_TESTS = [];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.chapter_test_columns).toEqual([]);
+    // Cells are initialized per-student but empty (no columns → no cell entries).
+    expect(gb.chapter_test_cells['s1']).toEqual({});
+    expect(gb.chapter_test_cells['s2']).toEqual({});
+  });
+
+  it('returns one column per published test (chapter_title, test_title, total_points)', async () => {
+    CHAPTER_TESTS = [
+      { id: 'ct1', title: 'Chapter 1 Test', published_at: '2026-06-15T00:00:00Z', total_points: 60, chapters: { title: 'Chapter 1' } },
+    ];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.chapter_test_columns).toHaveLength(1);
+    expect(gb.chapter_test_columns[0].chapter_test_id).toBe('ct1');
+    expect(gb.chapter_test_columns[0].chapter_title).toBe('Chapter 1');
+    expect(gb.chapter_test_columns[0].test_title).toBe('Chapter 1 Test');
+    expect(gb.chapter_test_columns[0].total_points).toBe(60);
+    expect(gb.chapter_test_columns[0].published_at).toBe('2026-06-15T00:00:00Z');
+  });
+
+  it('cell status not_started when student has no attempt', async () => {
+    CHAPTER_TESTS = [
+      { id: 'ct1', title: 'Ch1 Test', published_at: '2026-06-15T00:00:00Z', total_points: 60, chapters: { title: 'Chapter 1' } },
+    ];
+    CHAPTER_TEST_ATTEMPTS = [];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.chapter_test_cells['s1']['ct1']).toMatchObject({
+      attempt_id: null, status: 'not_started', total_grade: null, total_max: null,
+    });
+    // Both enrolled students get a not_started cell.
+    expect(gb.chapter_test_cells['s2']['ct1']).toMatchObject({
+      attempt_id: null, status: 'not_started', total_grade: null,
+    });
+  });
+
+  it('cell status graded with total_grade when attempt is graded', async () => {
+    CHAPTER_TESTS = [
+      { id: 'ct1', title: 'Ch1 Test', published_at: '2026-06-15T00:00:00Z', total_points: 60, chapters: { title: 'Chapter 1' } },
+    ];
+    CHAPTER_TEST_ATTEMPTS = [
+      { id: 'cta1', chapter_test_id: 'ct1', student_id: 's1', status: 'graded', total_grade: 47, total_max: 60 },
+    ];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.chapter_test_cells['s1']['ct1']).toMatchObject({
+      attempt_id: 'cta1', status: 'graded', total_grade: 47, total_max: 60,
+    });
+    // s2 has no attempt → not_started.
+    expect(gb.chapter_test_cells['s2']['ct1']).toMatchObject({ status: 'not_started' });
+  });
+
+  it('cell status submitted when attempt is submitted but not yet graded', async () => {
+    CHAPTER_TESTS = [
+      { id: 'ct1', title: 'Ch1 Test', published_at: '2026-06-15T00:00:00Z', total_points: 60, chapters: { title: 'Chapter 1' } },
+    ];
+    CHAPTER_TEST_ATTEMPTS = [
+      { id: 'cta2', chapter_test_id: 'ct1', student_id: 's1', status: 'submitted', total_grade: null, total_max: null },
+    ];
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.chapter_test_cells['s1']['ct1']).toMatchObject({
+      attempt_id: 'cta2', status: 'submitted', total_grade: null,
+    });
+  });
+
+  it('respects MAX_CHAPTER_COLS cap of 8 — console.warn called when >8 chapter tests exist', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    CHAPTER_TESTS = Array.from({ length: 9 }, (_, i) => ({
+      id: `ct${i}`,
+      title: `Chapter ${i + 1} Test`,
+      published_at: `2026-06-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+      total_points: 60,
+      chapters: { title: `Chapter ${i + 1}` },
+    }));
+    const gb = await loadGradebook(admin, { classId: 'c1', teacherId: 't1' });
+    expect(gb.chapter_test_columns).toHaveLength(8);
+    expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy.mock.calls[0][0]).toMatch(/chapter test columns exceed/i);
+    warnSpy.mockRestore();
   });
 });
