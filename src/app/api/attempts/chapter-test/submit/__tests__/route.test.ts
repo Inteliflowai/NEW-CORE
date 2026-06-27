@@ -29,11 +29,19 @@ vi.mock('@/lib/chapters/gradeChapterTest', () => ({
   gradeChapterAttempt: (...args: unknown[]) => gradeChapterAttemptMock(...args),
 }));
 
+// ── Mock logAudit ─────────────────────────────────────────────────────────────
+
+const logAuditMock = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/audit/logAudit', () => ({
+  logAudit: (...args: unknown[]) => logAuditMock(...args),
+}));
+
 // ── Scriptable per-test state ─────────────────────────────────────────────────
 
 const getUser = vi.fn();
 
 let USER_ROLE: string | null = 'student';
+let USER_SCHOOL_ID: string | null = 'school1';
 let ATTEMPT: Record<string, unknown> | null;
 
 const attemptUpdates: Array<Record<string, unknown>> = [];
@@ -47,7 +55,7 @@ vi.mock('@/lib/supabase/server', () => ({
           select: () => ({
             eq: () => ({
               maybeSingle: async () => ({
-                data: USER_ROLE ? { role: USER_ROLE } : null,
+                data: USER_ROLE ? { role: USER_ROLE, school_id: USER_SCHOOL_ID } : null,
                 error: null,
               }),
             }),
@@ -114,10 +122,12 @@ const FAKE_ATTEMPT = {
 beforeEach(() => {
   getUser.mockReset();
   gradeChapterAttemptMock.mockReset().mockResolvedValue(undefined);
+  logAuditMock.mockReset().mockResolvedValue(undefined);
   attemptUpdates.length = 0;
   afterCallbacks.length = 0;
 
   USER_ROLE = 'student';
+  USER_SCHOOL_ID = 'school1';
   ATTEMPT = { ...FAKE_ATTEMPT };
 
   getUser.mockResolvedValue({ data: { user: { id: 'stu1' } }, error: null });
@@ -254,5 +264,44 @@ describe('POST /api/attempts/chapter-test/submit', () => {
     if (afterCallbacks.length > 0) {
       await expect(afterCallbacks[0]()).resolves.not.toThrow();
     }
+  });
+
+  // ── audit log ─────────────────────────────────────────────────────────────
+
+  it('calls logAudit with chapter_test.submit action and correct resourceId on success', async () => {
+    const POST = await load();
+    await POST(makeReq({ attemptId: 'att1' }));
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.anything(), // admin client
+      expect.objectContaining({
+        action: 'chapter_test.submit',
+        resourceType: 'chapter_test_attempt',
+        resourceId: 'att1',
+      }),
+    );
+  });
+
+  it('includes chapter_test_id and forfeit_reason in audit metadata', async () => {
+    const POST = await load();
+    await POST(makeReq({ attemptId: 'att1', forfeit_reason: 'time_up' }));
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          chapter_test_id: 'ct1',
+          forfeit_reason: 'time_up',
+        }),
+      }),
+    );
+  });
+
+  it('audit schoolId is sourced from the user row', async () => {
+    USER_SCHOOL_ID = 'school-xyz';
+    const POST = await load();
+    await POST(makeReq({ attemptId: 'att1' }));
+    expect(logAuditMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ schoolId: 'school-xyz' }),
+    );
   });
 });

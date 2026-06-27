@@ -3,7 +3,7 @@
 //
 // Auth chain:
 //   createServerSupabaseClient() → auth.getUser() → 401 if no user
-//   admin.from('users').select('role')           → 403 if not student
+//   admin.from('users').select('role, school_id')  → 403 if not student
 //   admin client (service-role) — bypasses RLS; student_id check IS the IDOR backstop
 //
 // Algorithm:
@@ -11,17 +11,20 @@
 //   2. Parse body: { attemptId, forfeit_reason? }
 //   3. Load attempt → 404 if missing, 403 if wrong student, 409 if not in_progress
 //   4. Update attempt: status='submitted', submitted_at=now(), forfeit_reason
-//   5. after(): gradeChapterAttempt(attemptId, admin) — async, non-fatal
-//   6. Return { ok: true, attempt_id }
+//   5. logAudit: chapter_test.submit (best-effort — logAudit is internally fail-soft)
+//   6. after(): gradeChapterAttempt(attemptId, admin) — async, non-fatal
+//   7. Return { ok: true, attempt_id }
 
 import { NextResponse, after } from 'next/server';
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server';
 import { gradeChapterAttempt } from '@/lib/chapters/gradeChapterTest';
+import { logAudit } from '@/lib/audit/logAudit';
 
 type AttemptRow = {
   id: string;
   student_id: string;
   status: string;
+  chapter_test_id: string;
 };
 
 export async function POST(req: Request): Promise<NextResponse> {
@@ -35,12 +38,13 @@ export async function POST(req: Request): Promise<NextResponse> {
   // ── 2. Role check: student only ────────────────────────────────────────────
   const { data: userRow } = await admin
     .from('users')
-    .select('role')
+    .select('role, school_id')
     .eq('id', user.id)
     .maybeSingle();
   if ((userRow as { role?: string } | null)?.role !== 'student') {
     return NextResponse.json({ error: 'Forbidden: student access only' }, { status: 403 });
   }
+  const schoolId = (userRow as { school_id?: string | null } | null)?.school_id ?? null;
 
   // ── 3. Parse body ──────────────────────────────────────────────────────────
   let body: {
@@ -59,7 +63,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   // ── 4. Load attempt ────────────────────────────────────────────────────────
   const { data: attemptData } = await admin
     .from('chapter_test_attempts')
-    .select('id, student_id, status')
+    .select('id, student_id, status, chapter_test_id')
     .eq('id', attemptId)
     .single();
   const attempt = attemptData as AttemptRow | null;
@@ -87,7 +91,20 @@ export async function POST(req: Request): Promise<NextResponse> {
     .eq('id', attemptId)
     .eq('student_id', user.id);
 
-  // ── 8. Trigger async grading (non-fatal) ──────────────────────────────────
+  // ── 8. Audit log (best-effort — logAudit is internally fail-soft) ─────────
+  await logAudit(admin, {
+    actorId: user.id,
+    schoolId,
+    action: 'chapter_test.submit',
+    resourceType: 'chapter_test_attempt',
+    resourceId: attemptId,
+    metadata: {
+      chapter_test_id: attempt.chapter_test_id,
+      forfeit_reason: forfeit_reason ?? null,
+    },
+  });
+
+  // ── 9. Trigger async grading (non-fatal) ──────────────────────────────────
   after(async () => {
     try {
       await gradeChapterAttempt(attemptId, admin);
@@ -96,6 +113,6 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
   });
 
-  // ── 9. Return ok ───────────────────────────────────────────────────────────
+  // ── 10. Return ok ──────────────────────────────────────────────────────────
   return NextResponse.json({ ok: true, attempt_id: attemptId });
 }
