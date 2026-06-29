@@ -125,9 +125,11 @@ export function TicketInbox({ initialTickets, adminId }: TicketInboxProps) {
           {TABS.map((t) => (
             <button
               key={t.value}
+              id={`tab-${t.value}`}
               type="button"
               role="tab"
               aria-selected={tab === t.value}
+              aria-controls={`panel-${t.value}`}
               onClick={() => changeTab(t.value)}
               className={[
                 'flex-1 px-2 py-2.5 text-xs font-semibold transition-colors',
@@ -143,7 +145,12 @@ export function TicketInbox({ initialTickets, adminId }: TicketInboxProps) {
         </div>
 
         {/* Ticket list */}
-        <div className="flex-1 overflow-y-auto" role="tabpanel">
+        <div
+          id={`panel-${tab}`}
+          role="tabpanel"
+          aria-labelledby={`tab-${tab}`}
+          className="flex-1 overflow-y-auto"
+        >
           {loading && (
             <p className="p-4 text-sm text-fg-muted" aria-live="polite">
               Loading…

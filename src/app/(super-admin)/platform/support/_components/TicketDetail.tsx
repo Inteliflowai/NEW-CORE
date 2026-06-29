@@ -68,6 +68,7 @@ export function TicketDetail({ ticket, adminId, onStatusChange }: TicketDetailPr
   // localStatus tracks optimistic status updates
   const [localStatus, setLocalStatus] = useState(ticket.status);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   // Re-sync localStatus when a different ticket is passed
   useEffect(() => {
@@ -75,28 +76,36 @@ export function TicketDetail({ ticket, adminId, onStatusChange }: TicketDetailPr
   }, [ticket.id, ticket.status]);
 
   // ── Fetch messages ──────────────────────────────────────────────────────────
-  const loadMessages = async () => {
+  const loadMessages = async (signal?: AbortSignal) => {
     setMsgLoading(true);
     setMsgError(null);
     try {
-      const res = await fetch(`/api/support/tickets/${ticket.id}/messages`);
+      const res = await fetch(`/api/support/tickets/${ticket.id}/messages`, { signal });
       if (!res.ok) throw new Error('Could not load messages');
       const data = (await res.json()) as { messages: Message[] };
       setMessages(data.messages);
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
       setMsgError((e as Error).message || 'Could not load messages');
     } finally {
-      setMsgLoading(false);
+      // Skip the loading-clear if this request was aborted so a concurrent
+      // in-flight load for the new ticket keeps its own loading state.
+      if (!signal?.aborted) {
+        setMsgLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    void loadMessages();
+    const ac = new AbortController();
+    void loadMessages(ac.signal);
+    return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticket.id]);
 
   // ── Status change ───────────────────────────────────────────────────────────
   async function changeStatus(newStatus: string) {
+    setStatusError(null);
     setStatusLoading(true);
     try {
       const res = await fetch(`/api/support/tickets/${ticket.id}`, {
@@ -108,7 +117,7 @@ export function TicketDetail({ ticket, adminId, onStatusChange }: TicketDetailPr
       setLocalStatus(newStatus);
       onStatusChange?.();
     } catch {
-      // Non-fatal: the button un-disables; admin can retry
+      setStatusError('Could not update status — please try again.');
     } finally {
       setStatusLoading(false);
     }
@@ -240,7 +249,14 @@ export function TicketDetail({ ticket, adminId, onStatusChange }: TicketDetailPr
             )}
           </div>
         </div>
-        <StatusButtons />
+        <div className="flex flex-col items-end gap-1">
+          <StatusButtons />
+          {statusError && (
+            <p role="alert" className="text-risk-fg text-sm mt-1">
+              {statusError}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Description */}
@@ -298,7 +314,11 @@ export function TicketDetail({ ticket, adminId, onStatusChange }: TicketDetailPr
           <div className="flex flex-col gap-2 overflow-y-auto">
             {messages.map((msg) => {
               const isFromAdmin = msg.sender_id === adminId;
-              const senderLabel = isFromAdmin ? 'You' : ticket.submitted_by_role;
+              // Internal notes can only come from admins (enforced at the route layer).
+              // For non-internal messages from a non-current-admin sender, use the
+              // submitter's role — exact name would require a join that's deferred.
+              const senderLabel = isFromAdmin ? 'You' :
+                msg.is_internal ? 'Admin' : ticket.submitted_by_role;
 
               return (
                 <div
