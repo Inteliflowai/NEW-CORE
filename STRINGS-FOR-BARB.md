@@ -1408,3 +1408,33 @@ Teacher-facing strings in the URL import tab and route error responses. All DRAF
 ### Section headings (teacher drill-in)
 - vocabulary, short_answer, compare_contrast, data_interpretation, mini_essay, multi_step_problem
 - [Section kind display names: Barb to finalize — current code uses raw section_kind values]
+
+## §Support Tickets
+
+> All strings below are DRAFT. Barb gates all copy before production.
+
+### HelpButton
+- Floating button aria-label: "Get help or report an issue"
+
+### HelpTicketModal
+- Modal title: "Get help" or "Report an issue" [Barb to choose]
+- Subject label: "Subject"
+- Description label: "Describe your issue"
+- Category label: "Category"
+- Category options: "General inquiry" · "Bug report" · "Feature request" · "Account issue" · "Data question" · "Other"
+- Priority label: "Priority"
+- Priority options: "Low" · "Normal" · "High" · "Urgent"
+- Screenshot label: "Attach a screenshot (optional, max 5 MB)"
+- Submit button: "Send" / "Sending…" [during submission]
+- Success message: "Your message has been sent. We'll be in touch soon."
+- Close button (success): "Close"
+- Error message: "Something went wrong — please try again."
+- Screenshot error: "Failed to upload screenshot. Please try again or submit without it."
+
+### Admin inbox (platform-admin only)
+- Page title: "Support Inbox"
+- Status tabs: "Open" · "In Progress" · "Resolved"
+- Priority badges: "Urgent" · "High" · "Normal" · "Low"
+- Internal note label: "Internal note — not visible to submitter"
+- Reply button: "Send reply"
+- Status buttons: "Mark in progress" · "Resolve" · "Reopen"

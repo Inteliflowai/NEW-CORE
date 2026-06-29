@@ -1,5 +1,7 @@
 // src/app/(school-admin)/__tests__/layout.guard.test.tsx
 import { it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { SCHOOL_ADMIN_ROLES } from '@/lib/auth/roles';
 
 const requireRole = vi.hoisted(() => vi.fn());
@@ -22,6 +24,7 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/app/(school-admin)/_components/AdminShell', () => ({
   AdminShell: ({ children }: { children: React.ReactNode }) => children,
 }));
+vi.mock('@/components/core/HelpButton', () => ({ HelpButton: () => null }));
 
 import SchoolAdminLayout from '../layout';
 beforeEach(() => vi.clearAllMocks());
@@ -30,4 +33,9 @@ it('guards the school-admin group with SCHOOL_ADMIN_ROLES (catches a hardcoded d
   requireRole.mockResolvedValue({ userId: 'u1', role: 'school_admin', schoolId: 's1', fullName: 'Sam' });
   await SchoolAdminLayout({ children: null });
   expect(requireRole).toHaveBeenCalledWith(SCHOOL_ADMIN_ROLES);
+});
+it('wires HelpButton into the school-admin layout', () => {
+  const src = readFileSync(resolve(__dirname, '../layout.tsx'), 'utf-8');
+  expect(src).toContain("from '@/components/core/HelpButton'");
+  expect(src).toContain('<HelpButton />');
 });

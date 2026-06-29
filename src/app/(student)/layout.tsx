@@ -4,6 +4,7 @@
 
 import { RoleLayout } from '@/components/core/RoleLayout';
 import { requireRole } from '@/lib/auth/requireRole';
+import { HelpButton } from '@/components/core/HelpButton';
 
 export default async function StudentLayout({
   children,
@@ -20,8 +21,11 @@ export default async function StudentLayout({
   );
 
   return (
-    <RoleLayout role="student" nav={nav}>
-      {children}
-    </RoleLayout>
+    <>
+      <RoleLayout role="student" nav={nav}>
+        {children}
+      </RoleLayout>
+      <HelpButton />
+    </>
   );
 }

@@ -7,6 +7,7 @@ import { TeacherShell } from './_components/TeacherShell';
 import { requireRole } from '@/lib/auth/requireRole';
 import { createAdminSupabaseClient } from '@/lib/supabase/server';
 import { openAlertCountForTeacher } from '@/lib/alerts/openAlertCount';
+import { HelpButton } from '@/components/core/HelpButton';
 
 export default async function TeacherLayout({
   children,
@@ -21,8 +22,11 @@ export default async function TeacherLayout({
   ]);
   const avatarUrl = (avatarRow.data?.avatar_url ?? null) as string | null;
   return (
-    <TeacherShell userName={fullName} alertCount={alertCount} avatarUrl={avatarUrl}>
-      {children}
-    </TeacherShell>
+    <>
+      <TeacherShell userName={fullName} alertCount={alertCount} avatarUrl={avatarUrl}>
+        {children}
+      </TeacherShell>
+      <HelpButton />
+    </>
   );
 }
