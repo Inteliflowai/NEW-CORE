@@ -137,7 +137,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     let query = admin
       .from('support_tickets')
       .select(
-        'id, subject, category, priority, status, submitted_by_role, school_id, created_at, assigned_to',
+        'id, subject, category, priority, status, submitted_by_role, school_id, created_at, assigned_to, description, screenshot_path',
       )
       .order('created_at', { ascending: false });
 

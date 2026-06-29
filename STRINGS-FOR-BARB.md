@@ -1438,3 +1438,23 @@ Teacher-facing strings in the URL import tab and route error responses. All DRAF
 - Internal note label: "Internal note — not visible to submitter"
 - Reply button: "Send reply"
 - Status buttons: "Mark in progress" · "Resolve" · "Reopen"
+
+### Admin inbox — TicketDetail panel (Task 7)
+- Detail panel page heading: "Support Inbox"
+- Description section label: "Description"
+- Screenshot section label: "Screenshot"
+- Screenshot link aria-label: "View screenshot full size (opens in new tab)"
+- Messages section label: "Messages"
+- Loading state: "Loading messages…"
+- Error state: "Could not load messages"
+- Empty thread state: "No messages yet."
+- Reply textarea label: "Reply"
+- Reply textarea placeholder: "Write a reply…"
+- Internal note checkbox label: "Mark as internal — not visible to submitter"
+- Send reply button: "Send reply" / "Sending…" [during submission]
+- Reply error: "Something went wrong — please try again."
+- Ticket list empty state: "No tickets in this category."
+- Ticket list placeholder (no selection): "Select a ticket to view details."
+- Load more button: "Load more"
+- Status badge labels: "Open" · "In Progress" · "Resolved"
+- Assigned-to display prefix: "Assigned:" (followed by UUID — no name lookup this epic)
