@@ -850,3 +850,70 @@ describe('0030 chapter_eval', () => {
     }
   });
 });
+
+describe('0031 support_tickets', () => {
+  const s = () => sql('0031_support_tickets.sql');
+
+  it('creates support_tickets + support_ticket_messages', () => {
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.support_tickets/);
+    expect(s()).toMatch(/CREATE TABLE IF NOT EXISTS public\.support_ticket_messages/);
+  });
+
+  it('support_tickets has required columns + category/priority/status CHECKs', () => {
+    expect(s()).toMatch(/submitted_by\s+uuid\s+NOT NULL REFERENCES public\.users\(id\)/);
+    expect(s()).toMatch(/submitted_by_role\s+text\s+NOT NULL/);
+    expect(s()).toMatch(/screenshot_path\s+text/);
+    expect(s()).toMatch(/category.*CHECK \(category IN \('general','bug','feature','account','data','other'\)\)/);
+    expect(s()).toMatch(/priority.*CHECK \(priority IN \('low','normal','high','urgent'\)\)/);
+    expect(s()).toMatch(/status.*CHECK \(status IN \('open','in_progress','resolved'\)\)/);
+  });
+
+  it('support_tickets.school_id is nullable (parent without school affiliation)', () => {
+    // school_id must NOT have NOT NULL
+    expect(s()).toMatch(/school_id\s+uuid\s+REFERENCES public\.schools\(id\)/);
+    expect(s()).not.toMatch(/school_id\s+uuid\s+NOT NULL REFERENCES public\.schools/);
+  });
+
+  it('support_ticket_messages cascades on ticket delete + has is_internal NOT NULL', () => {
+    expect(s()).toMatch(
+      /ticket_id\s+uuid\s+NOT NULL REFERENCES public\.support_tickets\(id\) ON DELETE CASCADE/
+    );
+    expect(s()).toMatch(/is_internal\s+boolean\s+NOT NULL DEFAULT false/);
+  });
+
+  it('enables RLS on both tables', () => {
+    expect(s()).toMatch(/ALTER TABLE public\.support_tickets\s+ENABLE ROW LEVEL SECURITY/);
+    expect(s()).toMatch(/ALTER TABLE public\.support_ticket_messages\s+ENABLE ROW LEVEL SECURITY/);
+  });
+
+  it('has service_role_all + platform_admin_read + submitter_read on support_tickets', () => {
+    expect(s()).toMatch(/st_service_role_all/);
+    expect(s()).toMatch(/st_platform_admin_read/);
+    expect(s()).toMatch(/st_submitter_read[\s\S]*submitted_by = auth\.uid\(\)/);
+  });
+
+  it('stm_submitter_read filters is_internal = false (non-admin never sees internal notes)', () => {
+    expect(s()).toMatch(/stm_submitter_read/);
+    expect(s()).toMatch(/is_internal = false/);
+  });
+
+  it('provisions the private support-uploads bucket (public = false)', () => {
+    expect(s()).toMatch(/INSERT INTO storage\.buckets[\s\S]*'support-uploads'[\s\S]*false/i);
+  });
+
+  it('uses DROP POLICY IF EXISTS before CREATE POLICY (re-runnable)', () => {
+    expect(s()).toMatch(/DROP POLICY IF EXISTS/);
+    expect(s()).toMatch(/CREATE POLICY/);
+  });
+
+  it('grants SELECT to authenticated + ALL to service_role on both tables (house pattern)', () => {
+    expect(s()).toMatch(/GRANT SELECT ON public\.support_tickets\s+TO authenticated/);
+    expect(s()).toMatch(/GRANT ALL\s+ON public\.support_tickets\s+TO service_role/);
+    expect(s()).toMatch(/GRANT SELECT ON public\.support_ticket_messages\s+TO authenticated/);
+    expect(s()).toMatch(/GRANT ALL\s+ON public\.support_ticket_messages\s+TO service_role/);
+  });
+
+  it('no anon grant (deny-by-default house pattern — mirrors 0026/0027)', () => {
+    expect(s()).not.toMatch(/TO authenticated, anon, service_role/);
+  });
+});
