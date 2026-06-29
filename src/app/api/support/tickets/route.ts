@@ -64,14 +64,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     priority = body.priority;
   }
 
-  // Optional: screenshotPath — MUST start with 'support-uploads/' to prevent cross-bucket exfil.
-  // A malicious client could pass a path to a private bucket (avatars/, student-drawings/, etc.)
-  // that the teacher's authenticated browser would then fetch. Validate the prefix here.
+  // Optional: screenshotPath — must be under the caller's own subfolder to prevent cross-user exfil.
+  // A malicious client could pass another user's path (same bucket) and hijack their screenshot.
   let screenshotPath: string | null = null;
   if (body.screenshotPath != null) {
+    const expectedPrefix = `support-uploads/${user.id}/`;
     if (
       typeof body.screenshotPath !== 'string' ||
-      !body.screenshotPath.startsWith('support-uploads/')
+      !body.screenshotPath.startsWith(expectedPrefix)
     ) {
       return NextResponse.json({ error: 'Invalid screenshotPath' }, { status: 400 });
     }
@@ -131,7 +131,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   // ── platform_admin: all tickets, paginated, optional status filter ────────
   if (role === 'platform_admin') {
-    const page = parseInt(searchParams.get('page') ?? '0', 10) || 0;
+    const page = Math.max(0, parseInt(searchParams.get('page') ?? '0', 10) || 0);
     const statusFilter = searchParams.get('status');
 
     let query = admin
