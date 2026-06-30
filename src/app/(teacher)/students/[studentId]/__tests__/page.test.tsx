@@ -20,6 +20,9 @@ vi.mock('@/lib/signals/loadStudentIdentity', () => ({ loadStudentIdentity: vi.fn
 vi.mock('@/lib/gradebook/loadStudentGradeTrend', () => ({
   loadStudentGradeTrend: vi.fn().mockResolvedValue({ points: [], direction: null, latest: null, average: null }),
 }));
+vi.mock('@/lib/signals/loadStudentQuizDetails', () => ({
+  loadStudentQuizDetails: vi.fn().mockResolvedValue([]),
+}));
 
 import { loadStudentSignals } from '@/lib/signals/loadStudentSignals';
 import { loadStudentIdentity } from '@/lib/signals/loadStudentIdentity';
