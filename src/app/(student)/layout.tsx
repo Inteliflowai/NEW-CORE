@@ -12,11 +12,12 @@ export default async function StudentLayout({
   children: React.ReactNode;
 }) {
   await requireRole(['student']);
-  // /student/growth has no page yet — omit it rather than ship a dead link.
   const nav = (
     <>
       <a href="/student/dashboard" className="text-fg hover:text-brand px-3 py-1">Dashboard</a>
       <a href="/student/assignments" className="text-fg hover:text-brand px-3 py-1">Assignments</a>
+      <a href="/student/notes" className="text-fg hover:text-brand px-3 py-1">My Notes</a>
+      <a href="/student/growth" className="text-fg hover:text-brand px-3 py-1">How I&apos;m doing</a>
     </>
   );
 
