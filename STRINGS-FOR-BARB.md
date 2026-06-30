@@ -1457,6 +1457,7 @@ Teacher-facing strings in the URL import tab and route error responses. All DRAF
 - Ticket list placeholder (no selection): "Select a ticket to view details."
 - Load more button: "Load more"
 - Status badge labels: "Open" · "In Progress" · "Resolved"
+- Assigned-to display prefix: "Assigned:" (followed by UUID — no name lookup this epic)
 
 ## §Student Improvements (B)
 
@@ -1502,4 +1503,3 @@ Teacher-facing strings in the URL import tab and route error responses. All DRAF
 - Steady: "Holding steady."
 - Sliding: "A little uneven lately — you have got this."
 - Cold-start: "Not enough graded work yet to show a trend."
-- Assigned-to display prefix: "Assigned:" (followed by UUID — no name lookup this epic)
