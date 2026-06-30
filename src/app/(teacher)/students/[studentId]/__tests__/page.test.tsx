@@ -135,7 +135,7 @@ describe('One-Student page', () => {
       }),
     );
     const { container } = await renderPage();
-    expect(container.innerHTML).toContain('Flag Long Division for reteach');
+    expect(container.innerHTML).toContain('Reinforce Long Division — see Gradebook');
   });
 
   it('falls back to Open Assignments CTA when nothing is flagged', async () => {

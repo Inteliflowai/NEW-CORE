@@ -23,8 +23,10 @@ describe('priorityCta precedence', () => {
       divergenceFlagged: true,
     });
     expect(out.kind).toBe('flag-reteach');
+    expect(out.label).toContain('Reinforce');
     expect(out.label).toContain('Fractions');
     expect(out.skillName).toBe('Fractions');
+    expect(out.anchor).toBe('/gradebook');
   });
 
   it('3. divergence flagged wins when no risk + no reinforce skill', () => {
