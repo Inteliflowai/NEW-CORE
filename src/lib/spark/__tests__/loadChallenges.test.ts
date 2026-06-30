@@ -36,4 +36,26 @@ describe('loadChallenges', () => {
     expect(byId['a1']).toMatchObject({ status: 'completed', transferScore: 88, contentQuality: 'engaged', studentName: 'Alex', title: 'Ecosystems', completedAt: '2026-06-22T10:00:00Z', effortLabel: 'persistent', revisionCount: 2, teliHintCount: 1 });
     expect(byId['a2']).toMatchObject({ status: 'assigned', transferScore: null, studentName: 'Sofia' });
   });
+
+  it('falls back to lessons.title when content.title is absent', async () => {
+    const assignments = [
+      {
+        id: 'a1', student_id: 's1', lesson_id: 'l1', spark_status: 'created',
+        content: null, users: { full_name: 'Alex' }, lessons: { title: 'Ocean Ecosystems' },
+      },
+    ];
+    const data = await loadChallenges(admin(assignments, []), 'cls-1');
+    expect(data.challenges[0]?.title).toBe('Ocean Ecosystems');
+  });
+
+  it('falls back to "Spark Challenge" when both content and lessons title are absent', async () => {
+    const assignments = [
+      {
+        id: 'a1', student_id: 's1', lesson_id: null, spark_status: 'created',
+        content: null, users: { full_name: 'Alex' }, lessons: null,
+      },
+    ];
+    const data = await loadChallenges(admin(assignments, []), 'cls-1');
+    expect(data.challenges[0]?.title).toBe('Spark Challenge');
+  });
 });

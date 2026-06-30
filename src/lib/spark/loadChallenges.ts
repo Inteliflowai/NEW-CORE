@@ -26,9 +26,11 @@ export interface ChallengesData {
 interface AssignmentRow {
   id: string;
   student_id: string;
+  lesson_id: string | null;
   spark_status: string;
   content: { title?: string } | null;
   users: { full_name?: string } | null;
+  lessons: { title?: string | null } | null;
 }
 interface CompletionRow {
   assignment_id: string;
@@ -44,7 +46,7 @@ interface CompletionRow {
 export async function loadChallenges(admin: SupabaseClient, classId: string): Promise<ChallengesData> {
   const { data: aData } = await admin
     .from('assignments')
-    .select('id, student_id, spark_status, content, users:student_id(full_name)')
+    .select('id, student_id, lesson_id, spark_status, content, users:student_id(full_name), lessons:lesson_id(title)')
     .eq('class_id', classId)
     .neq('spark_status', 'none')
     .limit(500);
@@ -67,7 +69,7 @@ export async function loadChallenges(admin: SupabaseClient, classId: string): Pr
       studentId: a.student_id,
       studentName: a.users?.full_name ?? 'Student',
       assignmentId: a.id,
-      title: a.content?.title ?? 'Spark Challenge',
+      title: a.content?.title ?? a.lessons?.title ?? 'Spark Challenge',
       status,
       transferScore: c?.transfer_score ?? null,
       contentQuality: c?.content_quality ?? null,
