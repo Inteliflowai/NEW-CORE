@@ -110,6 +110,8 @@ export default async function StudentPage({
         classLabel={null}
         backHref={backHref}
         backLabel={backLabel}
+        studentId={studentId}
+        classId={classId ?? null}
       />
 
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
