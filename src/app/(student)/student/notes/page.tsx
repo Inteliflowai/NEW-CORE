@@ -16,7 +16,8 @@ export default async function StudentNotesPage({
   const { userId } = await requireRole(['student']);
   const admin = createAdminSupabaseClient();
   const sp = await searchParams;
-  const page = Math.max(1, parseInt(sp.page ?? '1', 10));
+  const parsed = parseInt(sp.page ?? '1', 10);
+  const page = Math.max(1, Number.isNaN(parsed) ? 1 : parsed);
   const { notes, totalCount } = await loadStudentNotesPaged(admin, userId, page, PAGE_SIZE);
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
