@@ -1457,4 +1457,49 @@ Teacher-facing strings in the URL import tab and route error responses. All DRAF
 - Ticket list placeholder (no selection): "Select a ticket to view details."
 - Load more button: "Load more"
 - Status badge labels: "Open" · "In Progress" · "Resolved"
+
+## §Student Improvements (B)
+
+*DRAFT — all copy below needs Barb's sign-off before GA.*
+
+### Student nav links
+- Notes link: "My Notes"
+- Growth link: "How I'm doing"
+
+### Student Notes Wall (`/student/notes`)
+- Page heading: "Notes from your teacher"
+- Empty state title: "No notes yet"
+- Empty state body: "Your teacher hasn't sent a note yet — keep up the great work!"
+- Pagination: "Previous" · "Next" · "Page X of Y"
+
+### Student dashboard
+- "See all" link: "See all X notes →"
+- "Next up" label: "Next up"
+- "Next up" CTA button: "Start"
+- Notes section label: "A note from your teacher"
+
+### Student Growth Page (`/student/growth`)
+- Page heading: "How I'm doing"
+- Skills section label: "Your skills"
+- Grades section label: "Grades over time"
+- Notes teaser section label: "A note from your teacher"
+- See-all link: "See all X notes →"
+- Cold-start sparkline: "Not enough graded work yet to show a trend."
+
+#### Skill labels (student-facing translations of CL states — must NEVER show CL verb):
+- Building strength (for: needs_different_instruction, needs_more_time)
+- Solid (for: on_track)
+- Excelling (for: ready_to_extend)
+
+#### Lead sentences (deterministic, by grade trend direction):
+- Climbing: "You have been putting in real effort lately — it shows."
+- Steady: "You are making progress. Here is where you stand."
+- Sliding: "Things feel a little tricky right now — that is okay."
+- Cold-start: "Here is how you are doing."
+
+#### Direction sentences (below sparkline):
+- Climbing: "Your grades have been climbing."
+- Steady: "Holding steady."
+- Sliding: "A little uneven lately — you have got this."
+- Cold-start: "Not enough graded work yet to show a trend."
 - Assigned-to display prefix: "Assigned:" (followed by UUID — no name lookup this epic)
