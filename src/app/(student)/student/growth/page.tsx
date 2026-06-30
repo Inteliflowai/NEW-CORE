@@ -36,7 +36,7 @@ export default async function StudentGrowthPage(): Promise<React.JSX.Element> {
             ariaLabel="Your grade trend over time"
             coldStartLabel="Not enough graded work yet to show a trend."
           />
-          {data.trendPoints.length >= 2 && (
+          {data.gradeDirection !== null && (
             <p className="text-fg-muted text-sm">{dirSentence}</p>
           )}
         </div>
