@@ -37,6 +37,7 @@ export interface QuizQuestionLite {
   question_type: string;
   question_text: string;
   choices: string[] | null;
+  correct_answer: string | null;
   rubric: string | null;
 }
 
@@ -416,6 +417,11 @@ function QuizEditPanel({ quiz, classId, questions, onClose }: QuizEditPanelProps
                 {q.choices && q.choices.length > 0 && (
                   <p className="text-xs text-fg-muted">
                     Choices: {q.choices.join(' · ')}
+                  </p>
+                )}
+                {q.correct_answer && (
+                  <p className="text-xs font-bold text-fg">
+                    Correct answer: {q.correct_answer}
                   </p>
                 )}
                 <label htmlFor={`q-rubric-${q.id}`} className="text-sm font-bold text-fg">

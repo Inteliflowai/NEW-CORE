@@ -27,7 +27,7 @@ const CLASS_UNAVAILABLE = (
     bodyOverride="Use the class selector to pick one of your classes." />
 );
 
-type QqRow = { id: string; quiz_id: string; position: number | null; question_type: string; question_text: string; choices: string[] | null; rubric: string | null };
+type QqRow = { id: string; quiz_id: string; position: number | null; question_type: string; question_text: string; choices: string[] | null; correct_answer: string | null; rubric: string | null };
 
 export default async function QuizLibraryPage({
   searchParams,
@@ -73,7 +73,7 @@ export default async function QuizLibraryPage({
   const questions: Record<string, QuizQuestionLite[]> = {};
   if (quizIds.length > 0) {
     const { data: qqData } = await admin.from('quiz_questions')
-      .select('id, quiz_id, position, question_type, question_text, choices, rubric')
+      .select('id, quiz_id, position, question_type, question_text, choices, correct_answer, rubric')
       .in('quiz_id', quizIds)
       .order('position', { ascending: true });
     for (const r of ((qqData ?? []) as QqRow[])) {
@@ -83,6 +83,7 @@ export default async function QuizLibraryPage({
         question_type: r.question_type,
         question_text: r.question_text,
         choices: Array.isArray(r.choices) ? r.choices : null,
+        correct_answer: r.correct_answer ?? null,
         rubric: r.rubric ?? null,
       });
     }

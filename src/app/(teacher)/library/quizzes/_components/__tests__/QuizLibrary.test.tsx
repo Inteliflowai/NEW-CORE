@@ -89,7 +89,7 @@ describe('QuizLibrary', () => {
   it('Save edit posts action=edit with the title + per-question fields', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal('fetch', fetchMock);
-    render(<QuizLibrary data={data()} classId="c1" now={FIXED_NOW} questions={{ q2: [{ id: 'qq1', position: 1, question_type: 'open', question_text: 'Why?', choices: null, rubric: 'Explain.' }] }} />);
+    render(<QuizLibrary data={data()} classId="c1" now={FIXED_NOW} questions={{ q2: [{ id: 'qq1', position: 1, question_type: 'open', question_text: 'Why?', choices: null, correct_answer: null, rubric: 'Explain.' }] }} />);
     fireEvent.click(screen.getByRole('button', { name: /Cells — Check/i }));
     const dialog = within(screen.getByRole('dialog'));
     fireEvent.change(dialog.getByLabelText(/title/i), { target: { value: 'Cells v2' } });

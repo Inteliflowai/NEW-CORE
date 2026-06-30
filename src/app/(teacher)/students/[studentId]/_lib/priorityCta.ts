@@ -3,7 +3,7 @@
 // Deterministic ONE priority recommendation for the whole-child rail.
 // Precedence (first match wins):
 //   1. roster risk high/critical          → "Review what's going on"
-//   2. a top Reinforce skill exists        → "Flag {skill} for reteach"
+//   2. a top Reinforce skill exists        → "Reinforce {skill} — see Gradebook"
 //   3. divergence flagged                  → "Leave a note"
 //   4. else                                → "Open Assignments"
 //
@@ -39,8 +39,8 @@ export function priorityCta(input: PriorityCtaInput): PriorityCta {
   if (topReinforce) {
     return {
       kind: 'flag-reteach',
-      label: `Flag ${topReinforce.skill_name} for reteach`,
-      anchor: '#skill-map',
+      label: `Reinforce ${topReinforce.skill_name} — see Gradebook`,
+      anchor: '/gradebook',
       skillName: topReinforce.skill_name,
     };
   }

@@ -20,6 +20,9 @@ vi.mock('@/lib/signals/loadStudentIdentity', () => ({ loadStudentIdentity: vi.fn
 vi.mock('@/lib/gradebook/loadStudentGradeTrend', () => ({
   loadStudentGradeTrend: vi.fn().mockResolvedValue({ points: [], direction: null, latest: null, average: null }),
 }));
+vi.mock('@/lib/signals/loadStudentQuizDetails', () => ({
+  loadStudentQuizDetails: vi.fn().mockResolvedValue([]),
+}));
 
 import { loadStudentSignals } from '@/lib/signals/loadStudentSignals';
 import { loadStudentIdentity } from '@/lib/signals/loadStudentIdentity';
@@ -135,7 +138,7 @@ describe('One-Student page', () => {
       }),
     );
     const { container } = await renderPage();
-    expect(container.innerHTML).toContain('Flag Long Division for reteach');
+    expect(container.innerHTML).toContain('Reinforce Long Division — see Gradebook');
   });
 
   it('falls back to Open Assignments CTA when nothing is flagged', async () => {
