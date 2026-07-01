@@ -1099,7 +1099,7 @@ Teacher-only surface (scores/dates allowed). The page now groups challenges unde
 - In-progress: **"In progress — not submitted yet"**. Not-started: **"Not started yet"**.
 - Hover/focus tooltip (gradebook pattern): line 1 = challenge name, line 2 = **"Submitted {Mon DD}"** (or the state).
 - Empty state (unchanged): "No Spark Challenges yet" / "Generate a SPARK-enabled assignment to start a challenge for this class."
-  (NOTE: "Open in SPARK" deferred — needs a net-new SPARK-side teacher-review build.)
+  (superseded — student work is now reviewed inside CORE; see §Student's work panel below.)
 
 ## Parent Dashboard (Epic 4) — DRAFT, Barb gates all copy
 
@@ -1527,3 +1527,33 @@ Four-audience: parent surfaces show NO numbers, grades, band labels, CL verbs, o
 - Contact Teacher label: "Reach out to the teacher"; row action: "Send an email →" (mailto)
 - Help at Home label: "Questions to start a conversation tonight"; per-starter button: "Copy" / "Copied"
 - Celebrate label: "Something your teacher wanted you to know" (shows the latest high-five note verbatim)
+
+## Student's work panel (challenges drill-in — the "Open in SPARK" item, now rendered in CORE) — 2026-07-01
+
+Teacher-only panel. Coach posture: observational; no raw-stat dumps beyond what the row already shows.
+
+| Where | Draft string |
+|---|---|
+| Toggle (closed) | View student's work |
+| Toggle (open) | Hide student's work |
+| Loading | Loading student's work… |
+| No work in SPARK (quiet state) | We don't see this student's work in SPARK yet. |
+| SPARK unreachable / generic failure | We couldn't reach SPARK right now — the work is safe there; try again in a moment. |
+| Challenge context summary | The challenge this student saw |
+| Answers heading | Student's answers |
+| No answers | No written answers yet. |
+| AI section heading | What the AI shared with the student |
+| Extension answer label | Extension problem |
+| Unlabeled-step fallback | Step {n} |
+| Drawing alt text | Student's drawing |
+| Drawing failed guard | (drawing could not be displayed) |
+| Unrecognized answer | (unrecognized answer format) |
+
+**Per-answer labels emitted by the formatter** (each renders as `Label: <student's words>`):
+Prediction · Confidence (format: `{n} / 100`) · Observation · Chose · Why · Claim · Evidence · Reasoning · Side A · Side B · Synthesis · Sensor data · Code ({language}) · Answer. `data_entry` answers render the student's own field keys verbatim as labels. Rubric-dimension observations are prefixed with the SAME friendly dimension labels already gated in §Spark Challenges (Problem / Reasoning / Evidence / Creativity / Communication / Reflection / Collaboration).
+
+**Voice context for Barb:** `key_observations` under "What the AI shared with the student" are SPARK-authored prose written TO the student (students saw the first one as "Teli says"; second-person redirects like "Ready for another try — …" occur on minimal-effort work). Dimension observations are one-liners never previously surfaced anywhere. Barb picks the framing with that context.
+
+**Reteach-verbatim flag (Barb/Marvin call):** on attempts projected without a mastery band (older rows), SPARK-authored step text and the student's tier answer can contain the word "Reteach" verbatim (e.g. `Chose: Reteach`). [[v2-reteach-is-reinforce]] binds CORE-authored teacher copy, but this is quoted student-seen content — shipped verbatim for fidelity pending Barb/Marvin's decision on display-mapping.
+
+NOTE (binding): no string may imply Teli conversation content is viewable — transcripts are never stored (student privacy promise); only the hint count exists.
