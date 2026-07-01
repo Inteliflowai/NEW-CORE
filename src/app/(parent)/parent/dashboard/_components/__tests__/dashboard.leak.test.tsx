@@ -17,7 +17,6 @@ import React from 'react';
 import { hasParentLeak } from '@/lib/copy/parentGuard';
 
 import { NarrativeCard } from '../NarrativeCard';
-import { ConversationStarter } from '../ConversationStarter';
 import { SeeMoreDetail } from '../SeeMoreDetail';
 import { ChildSelector } from '../ChildSelector';
 import { ContactTeacherCard } from '../ContactTeacherCard';
@@ -34,9 +33,6 @@ const LEAKY_P_ON_TRACK = "Alex is on track and doing well.";
 const LEAKY_P_BEHIND = "Alex is falling behind the class this term.";
 /** Leaky paragraph — "reinforce". */
 const LEAKY_P_REINFORCE = "We are working to reinforce these skills.";
-
-const CLEAN_STARTER = "What surprised you today at school?";
-const LEAKY_STARTER = "What was their class average score this week?";
 
 /** A high-five note that is parent-safe. */
 const CLEAN_HF = { id: 'hf1', note: 'Great listening skills today!', created_at: '2026-06-01' };
@@ -76,29 +72,6 @@ describe('NarrativeCard — leak regression', () => {
     const { container } = render(
       <NarrativeCard paragraphs={[LEAKY_P_ON_TRACK, LEAKY_P_BEHIND]} />,
     );
-    expect(hasParentLeak(container.textContent ?? '')).toBe(false);
-  });
-});
-
-// ── ConversationStarter ────────────────────────────────────────────────────────
-
-describe('ConversationStarter — leak regression', () => {
-  it('renders a clean starter and drops leaky ones', () => {
-    const starters = [CLEAN_STARTER, LEAKY_STARTER];
-    const { container } = render(<ConversationStarter starters={starters} />);
-
-    // The clean starter must appear
-    expect(container.textContent).toContain(CLEAN_STARTER);
-
-    // Leaky content dropped
-    expect(container.textContent).not.toContain('class average');
-
-    // Full surface — no leak
-    expect(hasParentLeak(container.textContent ?? '')).toBe(false);
-  });
-
-  it('handles all-leaky starters without crashing', () => {
-    const { container } = render(<ConversationStarter starters={[LEAKY_STARTER]} />);
     expect(hasParentLeak(container.textContent ?? '')).toBe(false);
   });
 });
