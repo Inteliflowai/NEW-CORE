@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CORE — Teacher</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Inter:wght@400;450;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16130F;
+    --bg:#F6F5F1;
+    --card:#FFFFFF;
+    --line:#E7E3DA;
+    --line-soft:#F1EEE7;
+    --muted:#6F685D;
+    --muted-2:#9C9588;
+    --act:#5B3FE0;          /* single action accent (intelligence/violet family) */
+    --act-bg:#EFEBFD;
+    --reinforce:#F0466A;
+    --reinforce-bg:#FDEBEF;
+    --ontrack:#15A86A;
+    --ontrack-bg:#E5F6EE;
+    --enrich:#6B4DF6;
+    --enrich-bg:#EEEAFD;
+    --display:"Bricolage Grotesque", system-ui, sans-serif;
+    --body:"Inter", system-ui, sans-serif;
+    --mono:"Space Mono", ui-monospace, monospace;
+    --sh:0 1px 2px rgba(20,19,15,.05), 0 4px 16px rgba(20,19,15,.045);
+    --sh-sm:0 1px 2px rgba(20,19,15,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--body);color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:15px}
+
+  /* ---------- top bar ---------- */
+  .bar{position:sticky;top:0;z-index:10;background:rgba(246,245,241,.86);backdrop-filter:saturate(1.2) blur(8px);
+    border-bottom:1px solid var(--line);display:flex;align-items:center;gap:18px;padding:12px 22px}
+  .logo{font-family:var(--display);font-weight:800;font-size:21px;letter-spacing:-.6px;line-height:1}
+  .logo i{color:var(--reinforce);font-style:normal}
+  .by{font-size:10.5px;font-weight:600;color:var(--muted-2);margin-left:7px}
+  .switch{margin-left:8px;display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
+    background:var(--card);border-radius:10px;padding:8px 12px;font-weight:600;font-size:13.5px;cursor:pointer;box-shadow:var(--sh-sm)}
+  .switch .car{color:var(--muted-2);font-size:11px}
+  .spacer{flex:1}
+  .date{font-family:var(--mono);font-size:12px;color:var(--muted);letter-spacing:.3px}
+  .tavi{width:30px;height:30px;border-radius:999px;background:var(--ink);color:#fff;display:grid;place-items:center;
+    font-family:var(--display);font-weight:700;font-size:13px}
+
+  .wrap{max-width:880px;margin:0 auto;padding:26px 22px 64px}
+  .eyebrow{font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;
+    color:var(--muted-2);margin-bottom:12px}
+
+  /* ---------- priority notice (signature) ---------- */
+  .notice{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);
+    display:flex;overflow:hidden;margin-bottom:34px}
+  .accent{flex:0 0 5px;background:var(--reinforce)}
+  .notice-in{padding:20px 22px;flex:1}
+  .src{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-weight:700;font-size:11px;
+    letter-spacing:1px;text-transform:uppercase;color:var(--act);margin-bottom:10px}
+  .src .glyph{width:16px;height:16px;border-radius:5px;background:var(--act);display:grid;place-items:center}
+  .src .glyph::after{content:"";width:6px;height:6px;background:#fff;border-radius:1px}
+  .n-head{font-family:var(--display);font-weight:700;font-size:21px;letter-spacing:-.3px;line-height:1.25}
+  .n-body{color:var(--muted);margin-top:7px;font-size:14.5px;line-height:1.5;max-width:60ch}
+  .n-signal{display:inline-flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;font-weight:500;
+    background:var(--ontrack-bg);color:#0c7a4c;border-radius:8px;padding:6px 11px}
+  .n-signal b{font-weight:700}
+  .n-actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  .btn{font-family:var(--body);font-weight:600;font-size:14px;border-radius:11px;padding:10px 16px;cursor:pointer;
+    border:1px solid var(--line);background:var(--card);color:var(--ink);transition:.12s}
+  .btn:hover{border-color:var(--ink)}
+  .btn.primary{background:var(--act);border-color:var(--act);color:#fff}
+  .btn.primary:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--line)}
+
+  /* confirm + done states */
+  .confirm{margin-top:16px;border:1px dashed var(--act);background:var(--act-bg);border-radius:12px;padding:14px 16px;
+    display:none}
+  .confirm.show{display:block}
+  .confirm p{margin:0 0 12px;font-size:14px;line-height:1.5}
+  .confirm p b{font-weight:700}
+  .done{display:none;align-items:center;gap:10px;margin-top:16px;font-size:14px;color:#0c7a4c;font-weight:500}
+  .done.show{display:flex}
+  .done .tick{width:20px;height:20px;border-radius:999px;background:var(--ontrack);color:#fff;display:grid;
+    place-items:center;font-size:12px}
+
+  /* ---------- class table ---------- */
+  .sec-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px}
+  .sec-title{font-family:var(--display);font-weight:700;font-size:18px}
+  .sec-meta{font-size:12.5px;color:var(--muted-2)}
+  .sort{font-family:var(--mono);font-size:11px;color:var(--muted-2);letter-spacing:.5px}
+  .table{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);overflow:hidden}
+  .thead,.row{display:grid;grid-template-columns:1.5fr 1.7fr 1fr .9fr 28px;align-items:center;gap:12px;
+    padding:13px 18px}
+  .thead{font-family:var(--mono);font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted-2);
+    border-bottom:1px solid var(--line);background:#FBFAF7}
+  .row{border-top:1px solid var(--line-soft);cursor:pointer;transition:background .12s}
+  .row:hover{background:#FBFAF7}
+  .stu{display:flex;align-items:center;gap:11px;min-width:0}
+  .savi{width:30px;height:30px;border-radius:999px;display:grid;place-items:center;font-weight:700;font-size:12px;
+    color:#fff;flex:0 0 auto}
+  .sname{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .focus{font-size:13.5px;color:var(--muted);display:flex;align-items:center;gap:9px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:11.5px;border-radius:999px;
+    padding:4px 10px;white-space:nowrap}
+  .chip .d{width:7px;height:7px;border-radius:999px;flex:0 0 auto}
+  .chip.reinforce{background:var(--reinforce-bg);color:#c12649}.chip.reinforce .d{background:var(--reinforce)}
+  .chip.ontrack{background:var(--ontrack-bg);color:#0c7a4c}.chip.ontrack .d{background:var(--ontrack)}
+  .chip.enrich{background:var(--enrich-bg);color:#4a31c4}.chip.enrich .d{background:var(--enrich)}
+  .signal{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500}
+  .signal .d{width:8px;height:8px;border-radius:999px}
+  .sig-att .d{background:var(--reinforce)} .sig-att{color:#c12649}
+  .sig-watch .d{background:#E8A317} .sig-watch{color:#9a6c00}
+  .sig-ok .d{background:var(--ontrack)} .sig-ok{color:var(--muted)}
+  .seen{font-family:var(--mono);font-size:12px;color:var(--muted-2)}
+  .car{justify-self:end;color:var(--muted-2);transition:transform .2s;font-size:13px}
+  .row.open .car{transform:rotate(90deg)}
+
+  /* detail drawer */
+  .drawer{display:none;border-top:1px solid var(--line-soft);background:#FCFBF8;padding:18px 18px 20px}
+  .drawer.show{display:block}
+  .dgrid{display:grid;grid-template-columns:1.3fr 1fr;gap:22px}
+  .dlabel{font-family:var(--mono);font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted-2);margin-bottom:9px}
+  .skline{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+  .skline:last-child{border-bottom:0}
+  .skline .nm{font-weight:500}
+  .tags{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+  .tag{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;border-radius:999px;padding:5px 11px}
+  .tag.power{background:var(--enrich-bg);color:#4a31c4}
+  .tag.attr{background:var(--ontrack-bg);color:#0c7a4c}
+  .insight{font-size:13.5px;line-height:1.5;color:#3c362d;background:#fff;border:1px solid var(--line);
+    border-radius:10px;padding:12px 13px;margin-top:14px}
+  .insight b{font-weight:700}
+  .note{margin-top:14px}
+  .note textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-family:var(--body);
+    font-size:13.5px;min-height:60px;resize:vertical;background:#fff}
+  .note textarea:focus{outline:2px solid var(--act);outline-offset:1px}
+  .dactions{display:flex;gap:9px;margin-top:12px}
+  .btn.sm{padding:8px 13px;font-size:13px}
+
+  .foot{text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;
+    color:var(--muted-2);opacity:.7;margin-top:26px}
+  :focus-visible{outline:2px solid var(--act);outline-offset:2px}
+
+  @media (max-width:680px){
+    .thead{display:none}
+    .row{grid-template-columns:1fr auto;gap:8px;row-gap:8px}
+    .focus,.signal,.seen{grid-column:1 / -1;padding-left:41px}
+    .dgrid{grid-template-columns:1fr;gap:18px}
+    .n-head{font-size:19px}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="logo">C<i>O</i>RE</div><span class="by">by Inteliflow</span>
+  <div class="switch">Period 1 · Math 8 <span class="car">▾</span></div>
+  <div class="spacer"></div>
+  <div class="date">TUE · 9:14 AM</div>
+  <div class="tavi">A</div>
+</div>
+
+<div class="wrap">
+
+  <!-- NOTICE -->
+  <div class="eyebrow">Today</div>
+  <div class="notice" id="notice">
+    <div class="accent"></div>
+    <div class="notice-in">
+      <div class="src"><span class="glyph"></span> CORE noticed</div>
+      <div class="n-head">3 students need a second pass on Solving for x.</div>
+      <div class="n-body">Maria, James, and Olivia were on track last week. This reads as a dip, not a wall — they're still trying, just slipping on one step.</div>
+      <div class="n-signal">↩ <span><b>Last reteach recovered 4 of 5</b> students in a similar dip.</span></div>
+
+      <div class="n-actions" id="actions">
+        <button class="btn primary" id="sendBtn">Send reteach</button>
+        <button class="btn ghost" id="laterBtn">Not now</button>
+      </div>
+
+      <div class="confirm" id="confirm">
+        <p>Reteach <b>Solving for x</b> goes to <b>Maria, James, Olivia</b>. CORE reshapes their next Assignment around the step they missed and tells you who recovers.</p>
+        <div class="n-actions" style="margin-top:0">
+          <button class="btn primary" id="confirmBtn">Confirm reteach</button>
+          <button class="btn ghost" id="cancelBtn">Cancel</button>
+        </div>
+      </div>
+
+      <div class="done" id="done"><span class="tick">✓</span> Sent. I'll report back after their next attempt.</div>
+    </div>
+  </div>
+
+  <!-- CLASS -->
+  <div class="sec-head">
+    <div class="sec-title">Class</div>
+    <div class="sec-meta">24 students · <span class="sort">sorted by who needs you first</span></div>
+  </div>
+
+  <div class="table">
+    <div class="thead">
+      <div>Student</div><div>Focus now</div><div>Signal</div><div>Last seen</div><div></div>
+    </div>
+
+    <!-- expandable row -->
+    <div class="row" id="r-maria" tabindex="0" role="button" aria-expanded="false">
+      <div class="stu"><div class="savi" style="background:#C12649">MS</div><div class="sname">Maria Santos</div></div>
+      <div class="focus"><span class="chip reinforce"><span class="d"></span> Reinforce</span> Solving for x</div>
+      <div class="signal sig-att"><span class="d"></span> Attention</div>
+      <div class="seen">1d ago</div>
+      <div class="car">›</div>
+    </div>
+    <div class="drawer" id="d-maria">
+      <div class="dgrid">
+        <div>
+          <div class="dlabel">Skills · Linear Equations</div>
+          <div class="skline"><span class="nm">Plotting points</span><span class="chip ontrack"><span class="d"></span> On Track</span></div>
+          <div class="skline"><span class="nm">Solving for x</span><span class="chip reinforce"><span class="d"></span> Reinforce</span></div>
+          <div class="skline"><span class="nm">Slope</span><span class="chip ontrack"><span class="d"></span> On Track</span></div>
+          <div class="insight">⚡ <b>This is a dip, not a wall.</b> Maria asks for hints and keeps going — effortful, but stalling on the same step. A short reteach usually clears it.</div>
+        </div>
+        <div>
+          <div class="dlabel">What she brings</div>
+          <div class="tags">
+            <span class="tag power">⚡ Perseverance</span>
+            <span class="tag attr">⚡ Curiosity</span>
+          </div>
+          <div class="note">
+            <div class="dlabel" style="margin-top:16px">Your note</div>
+            <textarea placeholder="Add a private note about Maria…"></textarea>
+          </div>
+          <div class="dactions">
+            <button class="btn primary sm">Send reteach</button>
+            <button class="btn sm">Add a SPARK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" tabindex="0">
+      <div class="stu"><div class="savi" style="background:#C12649">JC</div><div class="sname">James Chen</div></div>
+      <div class="focus"><span class="chip reinforce"><span class="d"></span> Reinforce</span> Solving for x</div>
+      <div class="signal sig-watch"><span class="d"></span> Watch</div>
+      <div class="seen">3h ago</div>
+      <div class="car">›</div>
+    </div>
+
+    <div class="row" tabindex="0">
+      <div class="stu"><div class="savi" style="background:#C12649">OW</div><div class="sname">Olivia Wilson</div></div>
+      <div class="focus"><span class="chip reinforce"><span class="d"></span> Reinforce</span> Solving for x</div>
+      <div class="signal sig-watch"><span class="d"></span> Watch</div>
+      <div class="seen">2h ago</div>
+      <div class="car">›</div>
+    </div>
+
+    <div class="row" tabindex="0">
+      <div class="stu"><div class="savi" style="background:#6B4DF6">LK</div><div class="sname">Leila Kassab</div></div>
+      <div class="focus"><span class="chip enrich"><span class="d"></span> Enrich</span> Slope</div>
+      <div class="signal sig-ok"><span class="d"></span> Thriving</div>
+      <div class="seen">22m ago</div>
+      <div class="car">›</div>
+    </div>
+
+    <div class="row" tabindex="0">
+      <div class="stu"><div class="savi" style="background:#15A86A">LM</div><div class="sname">Lucy Moreno</div></div>
+      <div class="focus"><span class="chip ontrack"><span class="d"></span> On Track</span> Plotting points</div>
+      <div class="signal sig-ok"><span class="d"></span> On track</div>
+      <div class="seen">Today</div>
+      <div class="car">›</div>
+    </div>
+
+    <div class="row" tabindex="0">
+      <div class="stu"><div class="savi" style="background:#15A86A">AR</div><div class="sname">Alex Rivera</div></div>
+      <div class="focus"><span class="chip ontrack"><span class="d"></span> On Track</span> Linear Equations</div>
+      <div class="signal sig-ok"><span class="d"></span> On track</div>
+      <div class="seen">Today</div>
+      <div class="car">›</div>
+    </div>
+  </div>
+
+  <div class="foot">CORE surfaces what matters · You decide · It reports back</div>
+</div>
+
+<script>
+(function(){
+  var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // notice flow: Send → Confirm → Done (quiet)
+  var actions=document.getElementById('actions'),
+      confirm=document.getElementById('confirm'),
+      done=document.getElementById('done'),
+      accent=document.querySelector('.accent');
+  document.getElementById('sendBtn').addEventListener('click',function(){
+    confirm.classList.add('show'); actions.style.display='none';
+  });
+  document.getElementById('cancelBtn').addEventListener('click',function(){
+    confirm.classList.remove('show'); actions.style.display='flex';
+  });
+  document.getElementById('confirmBtn').addEventListener('click',function(){
+    confirm.classList.remove('show'); done.classList.add('show'); accent.style.background='var(--ontrack)';
+  });
+  document.getElementById('laterBtn').addEventListener('click',function(){
+    done.textContent="Okay — I'll keep an eye on them."; done.classList.add('show');
+    done.querySelector && null; actions.style.display='none'; accent.style.background='#9C9588';
+  });
+
+  // expandable student row
+  var row=document.getElementById('r-maria'), drawer=document.getElementById('d-maria');
+  function toggle(){
+    var open=row.classList.toggle('open'); drawer.classList.toggle('show',open);
+    row.setAttribute('aria-expanded',open);
+  }
+  row.addEventListener('click',toggle);
+  row.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle();} });
+})();
+</script>
+</body>
+</html>

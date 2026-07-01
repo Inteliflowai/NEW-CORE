@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CORE — Student</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#16130F;
+    --paper:#FBF6EC;
+    --card:#FFFFFF;
+    --punch:#FF4D6D;   /* coral — coach + revisit  */
+    --zap:#6B4DF6;     /* violet — power skills + enrich + spark */
+    --go:#18B877;      /* green — core attributes + on track */
+    --sun:#FFC23B;     /* yellow — highlight + streak */
+    --sky:#2BB3FF;     /* blue — STEM spark */
+    --display:"Bricolage Grotesque", system-ui, sans-serif;
+    --body:"Inter", system-ui, sans-serif;
+    --mono:"Space Mono", ui-monospace, monospace;
+    --r:20px;
+    --bd:3px solid var(--ink);
+    --sh:6px 6px 0 var(--ink);
+    --sh-lg:9px 9px 0 var(--ink);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:var(--body);
+    color:var(--ink);
+    background:
+      radial-gradient(circle at 82% 12%, rgba(255,194,59,.6), transparent 46%),
+      radial-gradient(circle at 8% 92%, rgba(107,77,246,.2), transparent 42%),
+      radial-gradient(var(--zap) 1px, transparent 1.2px) 0 0/14px 14px,
+      #FFF3DD;
+    background-attachment:fixed;
+    -webkit-font-smoothing:antialiased;
+    padding:22px 16px 60px;
+  }
+  .stage{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+
+  /* ---------- header ---------- */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .brand{display:flex;align-items:baseline;gap:8px}
+  .logo{font-family:var(--display);font-weight:800;font-size:30px;letter-spacing:-1px;line-height:1}
+  .logo b{color:var(--punch)}
+  .by{font-size:11px;font-weight:600;opacity:.55;letter-spacing:.5px}
+  .chips{display:flex;gap:8px;align-items:center}
+  .chip{display:flex;align-items:center;gap:6px;background:var(--card);border:var(--bd);border-radius:999px;
+    padding:7px 12px;font-weight:700;font-size:13px;box-shadow:3px 3px 0 var(--ink)}
+  .chip.sun{background:var(--sun)}
+  .avi{width:30px;height:30px;border-radius:999px;border:var(--bd);display:grid;place-items:center;
+    font-family:var(--display);font-weight:800;background:var(--go);color:#fff;font-size:14px}
+
+  /* ---------- zone label ---------- */
+  .eyebrow{font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:2px;
+    text-transform:uppercase;display:inline-flex;align-items:center;gap:8px;margin:2px 0 -4px 4px}
+  .eyebrow::before{content:"";width:14px;height:14px;background:var(--ink);border-radius:3px;transform:rotate(45deg)}
+
+  /* ---------- coach (NOTICE) ---------- */
+  .coach{display:flex;gap:14px;align-items:flex-start}
+  .teli{flex:0 0 auto;width:74px;height:74px}
+  .teli svg{display:block;width:100%;height:100%;filter:drop-shadow(4px 4px 0 var(--ink))}
+  .bubble{position:relative;flex:1;background:var(--card);border:var(--bd);border-radius:var(--r);
+    box-shadow:var(--sh-lg);padding:18px 18px 16px;
+    background-image:radial-gradient(var(--zap) .9px, transparent 1px);
+    background-size:12px 12px;background-position:6px 6px}
+  .bubble::after{content:"";position:absolute;left:-13px;top:26px;width:18px;height:18px;background:var(--card);
+    border-left:var(--bd);border-bottom:var(--bd);transform:rotate(45deg)}
+  .bubble .inner{background:var(--card);border:2px solid var(--ink);border-radius:14px;padding:14px 15px}
+  .who{font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:1.5px;color:var(--zap);
+    text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .who .dot{width:8px;height:8px;border-radius:999px;background:var(--go);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .beat{font-family:var(--display);font-weight:700;font-size:19px;line-height:1.3;
+    opacity:0;transform:translateY(6px);transition:.4s}
+  .beat.b2{font-weight:600;font-size:16px;color:#3a342c;margin-top:6px}
+  .beat.show{opacity:1;transform:none}
+  .invite{margin-top:14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    opacity:0;transform:translateY(6px);transition:.4s}
+  .invite.show{opacity:1;transform:none}
+  .defer{font-size:13px;opacity:0;color:#6b655b;font-weight:500;transition:.5s}
+  .defer.show{opacity:.85}
+  .btn{font-family:var(--display);font-weight:700;font-size:15px;border:var(--bd);border-radius:14px;
+    padding:11px 18px;cursor:pointer;box-shadow:var(--sh);background:var(--card);color:var(--ink);
+    transition:transform .08s, box-shadow .08s}
+  .btn:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 var(--ink)}
+  .btn:active{transform:translate(3px,3px);box-shadow:2px 2px 0 var(--ink)}
+  .btn.punch{background:var(--punch);color:#fff}
+  .btn.zap{background:var(--zap);color:#fff}
+
+  /* ---------- today (ACT) ---------- */
+  .panel{background:var(--card);border:var(--bd);border-radius:var(--r);box-shadow:var(--sh);padding:18px}
+  .hw-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .hw-title{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.5px}
+  .tag{font-family:var(--mono);font-weight:700;font-size:11px;letter-spacing:1px;border:2px solid var(--ink);
+    border-radius:999px;padding:4px 10px;text-transform:uppercase}
+  .skill{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:2px dashed #e3ddcf}
+  .skill:first-of-type{border-top:0}
+  .skill .name{font-weight:600;font-size:15px;flex:1}
+  .skill .sub{font-size:12.5px;color:#7a7367;font-weight:500;margin-top:2px}
+  .state{font-family:var(--display);font-weight:700;font-size:12.5px;border:2px solid var(--ink);
+    border-radius:999px;padding:6px 12px;white-space:nowrap;box-shadow:2px 2px 0 var(--ink)}
+  .state.reinforce{background:var(--punch);color:#fff}
+  .state.ontrack{background:var(--go);color:#fff}
+  .state.enrich{background:var(--zap);color:#fff;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .pills{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .pill{display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:13px;
+    border:2px solid var(--ink);border-radius:999px;padding:7px 13px;box-shadow:2px 2px 0 var(--ink)}
+  .pill.power{background:#efeaff;color:var(--zap)}
+  .pill.attr{background:#e6faf1;color:#0d8f5b}
+  .bolt{font-size:13px}
+
+  /* ---------- spark (CONFIRM / bloom) ---------- */
+  .spark{opacity:0;max-height:0;transform:scale(.92) rotate(-1.2deg);transform-origin:top center;
+    pointer-events:none;transition:opacity .45s, transform .45s, max-height .55s}
+  .spark.open{opacity:1;max-height:1400px;transform:none;pointer-events:auto}
+  .spark-card{border:var(--bd);border-radius:var(--r);box-shadow:var(--sh-lg);overflow:hidden;background:var(--card)}
+  .spark-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;
+    border-bottom:var(--bd)}
+  .spark-badge{font-family:var(--display);font-weight:800;font-size:15px;letter-spacing:.5px;
+    display:flex;align-items:center;gap:8px}
+  .spark-badge .fire{display:grid;place-items:center;width:30px;height:30px;border:2px solid var(--ink);
+    border-radius:9px;background:var(--sun);box-shadow:2px 2px 0 var(--ink)}
+  .toggle{display:flex;border:2px solid var(--ink);border-radius:999px;overflow:hidden;
+    font-family:var(--mono);font-weight:700;font-size:11px}
+  .toggle button{border:0;background:var(--card);padding:7px 12px;cursor:pointer;font:inherit;color:var(--ink)}
+  .toggle button.on{background:var(--ink);color:var(--paper)}
+  .spark-body{padding:18px}
+  .obj{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;
+    color:var(--sky);margin-bottom:6px}
+  .spark.hum .obj{color:var(--punch)}
+  .prompt{font-family:var(--display);font-weight:700;font-size:18px;line-height:1.35;margin-bottom:16px}
+
+  /* STEM lab */
+  .lab{display:grid;grid-template-columns:1fr;gap:16px}
+  .scope{border:2px solid var(--ink);border-radius:14px;background:#0f1c2e;padding:10px;position:relative}
+  .scope svg{display:block;width:100%;height:auto}
+  .readout{position:absolute;top:10px;left:12px;font-family:var(--mono);font-size:11px;color:var(--sky);
+    font-weight:700;letter-spacing:1px}
+  .matched{position:absolute;inset:0;display:grid;place-items:center;opacity:0;pointer-events:none;
+    transition:.3s}
+  .matched.go{opacity:1}
+  .matched span{font-family:var(--display);font-weight:800;font-size:26px;color:var(--ink);
+    background:var(--sun);border:3px solid var(--ink);border-radius:14px;padding:8px 18px;
+    box-shadow:4px 4px 0 var(--ink);transform:rotate(-4deg)}
+  .control{display:flex;align-items:center;gap:12px}
+  .control label{font-family:var(--mono);font-weight:700;font-size:12px;letter-spacing:1px;width:54px}
+  input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:14px;border:2px solid var(--ink);
+    border-radius:999px;background:var(--sky);box-shadow:inset 2px 2px 0 rgba(0,0,0,.12)}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;border-radius:8px;
+    background:var(--sun);border:3px solid var(--ink);box-shadow:2px 2px 0 var(--ink);cursor:grab}
+  input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:8px;background:var(--sun);
+    border:3px solid var(--ink);cursor:grab}
+  .val{font-family:var(--mono);font-weight:700;font-size:13px;width:46px;text-align:right}
+
+  /* Humanities dossier */
+  .dossier{border:2px solid var(--ink);border-radius:14px;background:#fff;padding:16px;position:relative;
+    background-image:linear-gradient(#f0ebdd 1px, transparent 1px);background-size:100% 28px}
+  .stamp{position:absolute;top:10px;right:12px;font-family:var(--display);font-weight:800;font-size:12px;
+    color:var(--punch);border:3px solid var(--punch);border-radius:8px;padding:4px 8px;transform:rotate(8deg);
+    letter-spacing:1px}
+  .memo-line{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.5px;margin-bottom:2px}
+  .memo-body{font-size:14.5px;line-height:28px;margin-top:6px;max-width:46ch}
+
+  textarea{width:100%;border:2px solid var(--ink);border-radius:14px;padding:13px 14px;font-family:var(--body);
+    font-size:14px;min-height:84px;resize:vertical;margin-top:14px;box-shadow:inset 2px 2px 0 rgba(0,0,0,.06)}
+  textarea:focus{outline:3px solid var(--zap);outline-offset:1px}
+  .spark-foot{display:flex;justify-content:flex-end;margin-top:14px}
+
+  .hide{display:none}
+  .foot-note{text-align:center;font-family:var(--mono);font-size:11px;letter-spacing:1.5px;
+    text-transform:uppercase;opacity:.45;margin-top:6px}
+
+  :focus-visible{outline:3px solid var(--zap);outline-offset:2px}
+  @media (max-width:480px){
+    .logo{font-size:24px}.hw-title{font-size:19px}.teli{width:60px;height:60px}
+    .beat{font-size:17px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important;animation:none!important}
+    .spark{transform:none}
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- HEADER -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">C<b>O</b>RE</div>
+      <div class="by">by Inteliflow</div>
+    </div>
+    <div class="chips">
+      <div class="chip sun">🔥 Day 4</div>
+      <div class="chip"><div class="avi">A</div> Alex</div>
+    </div>
+  </div>
+
+  <!-- ZONE 1 — NOTICE -->
+  <span class="eyebrow">Notice</span>
+  <div class="coach">
+    <div class="teli" aria-hidden="true">
+      <svg viewBox="0 0 100 100">
+        <rect x="14" y="16" width="72" height="68" rx="20" fill="#6B4DF6" stroke="#16130F" stroke-width="4"/>
+        <circle cx="38" cy="46" r="9" fill="#fff" stroke="#16130F" stroke-width="3.5"/>
+        <circle cx="63" cy="46" r="9" fill="#fff" stroke="#16130F" stroke-width="3.5"/>
+        <circle cx="40" cy="48" r="3.6" fill="#16130F"/>
+        <circle cx="65" cy="48" r="3.6" fill="#16130F"/>
+        <path d="M37 66 Q50 76 63 66" fill="none" stroke="#16130F" stroke-width="4" stroke-linecap="round"/>
+        <path d="M50 4 L57 18 L43 18 Z" fill="#FFC23B" stroke="#16130F" stroke-width="3.5" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="bubble">
+      <div class="inner">
+        <div class="who"><span class="dot"></span> Teli</div>
+        <div class="beat b1">You nailed every slope question yesterday. 🎯</div>
+        <div class="beat b2">That means you're ready to push further on linear equations.</div>
+        <div class="invite" id="invite">
+          <button class="btn zap" id="showBtn">Show me →</button>
+        </div>
+        <div class="defer" id="defer">No rush though — I'll be right here when you need me.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONE 2 — ACT -->
+  <span class="eyebrow">Today</span>
+  <div class="panel">
+    <div class="hw-head">
+      <div class="hw-title">Linear Equations</div>
+      <div class="tag">Assignment</div>
+    </div>
+
+    <div class="skill">
+      <div>
+        <div class="name">Plotting points</div>
+        <div class="sub">You've got this down.</div>
+      </div>
+      <div class="state ontrack">On Track</div>
+    </div>
+
+    <div class="skill">
+      <div>
+        <div class="name">Solving for x</div>
+        <div class="sub">Let's revisit this one together — no stress.</div>
+      </div>
+      <div class="state reinforce">Reinforce</div>
+    </div>
+
+    <div class="skill">
+      <div>
+        <div class="name">Slope</div>
+        <div class="sub">Mastered. There's something cool waiting.</div>
+      </div>
+      <button class="state enrich" id="enrichBtn">⚡ Enrich</button>
+    </div>
+
+    <div class="pills">
+      <div class="pill power"><span class="bolt">⚡</span> Perseverance</div>
+      <div class="pill attr"><span class="bolt">⚡</span> Curiosity</div>
+    </div>
+  </div>
+
+  <!-- ZONE 3 — SPARK -->
+  <div class="spark" id="spark">
+    <span class="eyebrow" style="margin-bottom:8px;display:block">Spark · Earned</span>
+    <div class="spark-card">
+      <div class="spark-top">
+        <div class="spark-badge"><span class="fire">🔥</span> SPARK UNLOCKED</div>
+        <div class="toggle" role="group" aria-label="Preview track">
+          <button id="tStem" class="on">STEM</button>
+          <button id="tHum">HUMANITIES</button>
+        </div>
+      </div>
+
+      <!-- STEM -->
+      <div class="spark-body" id="stemBody">
+        <div class="obj">Objective · Build it yourself</div>
+        <div class="prompt">Tilt the line until it matches the target slope. Feel how the number changes the angle.</div>
+        <div class="lab">
+          <div class="scope">
+            <div class="readout" id="readout">SLOPE = 0.0</div>
+            <svg viewBox="0 0 320 200" id="grid">
+              <defs></defs>
+              <g stroke="#1c3454" stroke-width="1">
+                <line x1="0" y1="100" x2="320" y2="100"/>
+                <line x1="160" y1="0" x2="160" y2="200"/>
+              </g>
+              <line id="target" x1="20" y1="160" x2="300" y2="40" stroke="#FFC23B" stroke-width="4"
+                stroke-dasharray="9 8" stroke-linecap="round"/>
+              <line id="live" x1="20" y1="100" x2="300" y2="100" stroke="#2BB3FF" stroke-width="5"
+                stroke-linecap="round"/>
+            </svg>
+            <div class="matched" id="matched"><span>Matched!</span></div>
+          </div>
+          <div class="control">
+            <label>SLOPE</label>
+            <input type="range" id="slope" min="-2.5" max="2.5" step="0.1" value="0">
+            <div class="val" id="slopeVal">0.0</div>
+          </div>
+        </div>
+        <textarea placeholder="In your own words: how does a bigger number change the line?"></textarea>
+        <div class="spark-foot"><button class="btn punch">Save my answer</button></div>
+      </div>
+
+      <!-- HUMANITIES -->
+      <div class="spark-body hide" id="humBody">
+        <div class="obj">The decision · Boston, December 1773</div>
+        <div class="prompt">You're the harbormaster. Three ships of taxed tea sit in the harbor and a crowd is gathering at the wharf.</div>
+        <div class="dossier">
+          <div class="stamp">URGENT</div>
+          <div class="memo-line">TO: HARBORMASTER, GRIFFIN'S WHARF</div>
+          <div class="memo-line">RE: DARTMOUTH · ELEANOR · BEAVER</div>
+          <div class="memo-body">The Governor refuses to let the ships leave without paying the duty. The Sons of Liberty have until midnight before the tax is collected by force. The townspeople are looking to you.</div>
+        </div>
+        <textarea placeholder="Make your call and defend it — what do you do before midnight, and why?"></textarea>
+        <div class="spark-foot"><button class="btn punch">Submit my call</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot-note">CORE notices · You act · Together you confirm</div>
+</div>
+
+<script>
+(function(){
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- coach 4-beat reveal: Notice → Speak → Invite → Defer ---- */
+  function reveal(sel,d){ var el=document.querySelector(sel); setTimeout(function(){ el.classList.add('show'); }, reduce?0:d); }
+  reveal('.b1', 250);
+  reveal('.b2', 1100);
+  reveal('#invite', 2000);
+  setTimeout(function(){ document.getElementById('defer').classList.add('show'); }, reduce?0:2900);
+
+  /* ---- open SPARK ---- */
+  var spark = document.getElementById('spark');
+  function openSpark(){
+    spark.classList.add('open');
+    // coach goes quiet (not a chatbot — it steps back once you're acting)
+    var d=document.getElementById('defer'); d.textContent="Go for it. I'll stay out of your way.";
+    setTimeout(function(){ spark.scrollIntoView({behavior:reduce?'auto':'smooth', block:'center'}); }, 120);
+  }
+  document.getElementById('showBtn').addEventListener('click', openSpark);
+  document.getElementById('enrichBtn').addEventListener('click', openSpark);
+
+  /* ---- STEM / Humanities toggle ---- */
+  var tStem=document.getElementById('tStem'), tHum=document.getElementById('tHum');
+  var stemBody=document.getElementById('stemBody'), humBody=document.getElementById('humBody');
+  tStem.addEventListener('click', function(){
+    tStem.classList.add('on'); tHum.classList.remove('on');
+    stemBody.classList.remove('hide'); humBody.classList.add('hide');
+    spark.classList.remove('hum');
+  });
+  tHum.addEventListener('click', function(){
+    tHum.classList.add('on'); tStem.classList.remove('on');
+    humBody.classList.remove('hide'); stemBody.classList.add('hide');
+    spark.classList.add('hum');
+  });
+
+  /* ---- slope mini-build ---- */
+  var slope=document.getElementById('slope'), live=document.getElementById('live');
+  var slopeVal=document.getElementById('slopeVal'), readout=document.getElementById('readout');
+  var matched=document.getElementById('matched');
+  var TARGET=0.85; // matches the dashed target line angle
+  function draw(){
+    var m=parseFloat(slope.value);
+    var cx=160, cy=100, half=140, k=46; // visual scale
+    var x1=cx-half, x2=cx+half;
+    var y1=cy + m*half*0.33; // invert: positive slope rises to the right
+    var y2=cy - m*half*0.33;
+    // clamp into view
+    y1=Math.max(10,Math.min(190,y1)); y2=Math.max(10,Math.min(190,y2));
+    live.setAttribute('x1',cx-half); live.setAttribute('y1', cy + m*half*0.33);
+    live.setAttribute('x2',cx+half); live.setAttribute('y2', cy - m*half*0.33);
+    slopeVal.textContent=m.toFixed(1);
+    readout.textContent='SLOPE = '+m.toFixed(1);
+    var hit=Math.abs(m-TARGET)<0.18;
+    matched.classList.toggle('go', hit);
+    live.setAttribute('stroke', hit ? '#18B877' : '#2BB3FF');
+  }
+  slope.addEventListener('input', draw);
+  draw();
+})();
+</script>
+</body>
+</html>
