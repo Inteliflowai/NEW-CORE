@@ -17,6 +17,9 @@ export default async function ParentLayout({
       <a href="/parent/dashboard" className="text-fg hover:text-brand px-3 py-1">
         Dashboard
       </a>
+      <a href="/parent/progress" className="text-fg hover:text-brand px-3 py-1">
+        Progress
+      </a>
       <a href="/parent/reports" className="text-fg hover:text-brand px-3 py-1">
         Reports
       </a>
