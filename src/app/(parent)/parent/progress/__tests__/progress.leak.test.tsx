@@ -5,6 +5,7 @@ import { render } from '@testing-library/react';
 import { hasDiagnosticVocab, hasLeak } from '@/lib/copy/leakGuard';
 import { hasParentLeak } from '@/lib/copy/parentGuard';
 import { loadParentProgress } from '@/lib/parent/loadParentProgress';
+import { guardStudentAccess } from '@/lib/auth/guards';
 
 // Convention: page-level Server Component tests mock next/navigation so a deny-path
 // redirect() is a controllable throw, not the opaque NEXT_REDIRECT (see student.leak.test).
@@ -91,5 +92,21 @@ describe('ParentProgressPage — four-audience leak gate', () => {
       document.querySelectorAll('p, h1, h2, span:not([data-verbatim])'),
     ).map((el) => el.textContent ?? '');
     for (const text of nodes) expect(hasLeak(text)).toBe(false);
+  });
+
+  it('redirects (deny path) when guardStudentAccess returns a truthy response', async () => {
+    // Any truthy value from guardStudentAccess means access was denied → redirect fires.
+    vi.mocked(guardStudentAccess).mockResolvedValueOnce({} as never);
+    await expect(
+      ParentProgressPage({ searchParams: Promise.resolve({}) }),
+    ).rejects.toThrow('REDIRECT');
+  });
+
+  it('falls back to children[0] when ?child= param does not match any owned child', async () => {
+    render(await ParentProgressPage({ searchParams: Promise.resolve({ child: 'not-mine' }) }));
+    // Unrecognised child param → fallback to children[0] (Alex / s1).
+    expect(document.body.textContent).toContain('Alex');
+    // guardStudentAccess must be called with the real child id, NOT the foreign param.
+    expect(guardStudentAccess).toHaveBeenCalledWith('s1');
   });
 });

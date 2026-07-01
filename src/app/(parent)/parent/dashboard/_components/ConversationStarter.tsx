@@ -1,3 +1,6 @@
+// NOTE: This component is intentionally retained but is no longer rendered on any
+// route. The Parent Shell (C) spec swapped the dashboard's conversation-starter slot
+// for HelpAtHomeCard; ConversationStarter is kept here for potential future reuse.
 'use client';
 /**
  * ConversationStarter — shows one conversation starter + a "more" affordance.
