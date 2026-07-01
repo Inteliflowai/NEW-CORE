@@ -22,9 +22,13 @@ import { loadStudentHighFivesReadonly } from '@/lib/parent/loadStudentHighFivesR
 import { getParentNarrative } from '@/lib/parent/getParentNarrative';
 import { checkRateLimit, aiRateLimit } from '@/lib/rateLimit';
 
+import { loadChildTeachers } from '@/lib/parent/loadChildTeachers';
+
 import { ChildSelector } from './_components/ChildSelector';
 import { NarrativeCard } from './_components/NarrativeCard';
-import { ConversationStarter } from './_components/ConversationStarter';
+import { ContactTeacherCard } from './_components/ContactTeacherCard';
+import { HelpAtHomeCard } from './_components/HelpAtHomeCard';
+import { CelebrateCard } from './_components/CelebrateCard';
 import { SeeMoreDetail } from './_components/SeeMoreDetail';
 import type { DigitFreeSparklinePoint } from './_components/SeeMoreDetail';
 
@@ -91,7 +95,7 @@ export default async function ParentDashboardPage({
   }
 
   // ── Parallel data load ────────────────────────────────────────────────────────
-  const [narrative, highFives, snapshotResult] = await Promise.all([
+  const [narrative, highFives, snapshotResult, teachers] = await Promise.all([
     // I6: use getParentNarrative (shared cache layer), never the engine directly
     getParentNarrative(admin, childId, { force: forceRefresh }),
     loadStudentHighFivesReadonly(admin, childId),
@@ -103,7 +107,13 @@ export default async function ParentDashboardPage({
       .eq('student_id', childId)
       .order('snapshot_date', { ascending: false })
       .limit(20),
+    loadChildTeachers(admin, childId),
   ]);
+
+  // Celebrate surfaces the newest note prominently; hand the REST to SeeMoreDetail
+  // so the same note isn't shown twice on the calm dashboard.
+  const latestNote = highFives[0]?.note ?? null;
+  const restHighFives = latestNote ? highFives.slice(1) : highFives;
 
   // ── Build digit-free growth data ──────────────────────────────────────────────
   // M4: reverse the DESC fetch back to chronological ASC order so the chart
@@ -167,12 +177,18 @@ export default async function ParentDashboardPage({
       {/* Centerpiece: AI narrative */}
       <NarrativeCard paragraphs={narrative.paragraphs} />
 
-      {/* Conversation starter */}
-      <ConversationStarter starters={narrative.conversation_starters} />
+      {/* Warm highlight: the latest high-five */}
+      <CelebrateCard note={latestNote} />
 
-      {/* Collapsible: digit-free growth + high-fives */}
+      {/* Conversation starters with copy buttons */}
+      <HelpAtHomeCard starters={narrative.conversation_starters} />
+
+      {/* Reach the teacher (mailto) */}
+      <ContactTeacherCard teachers={teachers} />
+
+      {/* Collapsible: digit-free growth + the remaining high-fives (newest is in CelebrateCard) */}
       <SeeMoreDetail
-        highFives={highFives}
+        highFives={restHighFives}
         growthHistory={growthHistory}
         sparklinePoints={sparklinePoints}
         gradeTrendDirection={gradeTrendDirection}
