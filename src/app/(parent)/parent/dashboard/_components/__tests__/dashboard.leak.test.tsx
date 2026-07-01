@@ -191,3 +191,28 @@ describe('ChildSelector — leak regression', () => {
     expect(hasParentLeak(container.textContent ?? '')).toBe(false);
   });
 });
+
+import { ContactTeacherCard } from '../ContactTeacherCard';
+import { HelpAtHomeCard } from '../HelpAtHomeCard';
+import { CelebrateCard } from '../CelebrateCard';
+
+describe('Parent Shell cards — composed surface leak regression', () => {
+  it('renders all three cards together with no parent leak', () => {
+    const { container } = render(
+      <div>
+        <CelebrateCard note="You showed real focus today!" />
+        <HelpAtHomeCard starters={['What surprised you today?', 'What was their class average?']} />
+        <ContactTeacherCard
+          teachers={[{ teacherId: 't1', name: 'Ms. Whitfield', email: 'w@x.edu', classLabel: 'English Literature' }]}
+        />
+      </div>,
+    );
+    // leaky starter dropped
+    expect(container.textContent).not.toContain('class average');
+    // clean content present
+    expect(container.textContent).toContain('You showed real focus today!');
+    expect(container.textContent).toContain('Ms. Whitfield');
+    // full surface clean
+    expect(hasParentLeak(container.textContent ?? '')).toBe(false);
+  });
+});

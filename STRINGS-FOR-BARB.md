@@ -1502,4 +1502,28 @@ Teacher-facing strings in the URL import tab and route error responses. All DRAF
 - Climbing: "Your grades have been climbing."
 - Steady: "Holding steady."
 - Sliding: "A little uneven lately — you have got this."
+
+## Parent Shell (C) — DRAFT (Barb sign-off required, 2026-06-29)
+
+Four-audience: parent surfaces show NO numbers, grades, band labels, CL verbs, or comparisons. All strings below are drafts.
+
+### Progress page (`/parent/progress`)
+- Page heading: "How {firstName} is doing"
+- Trend card label: "Grades over time"
+- Trend lead — climbing: "There is real momentum here lately."
+- Trend lead — steady: "Things are holding a steady pace."
+- Trend lead — sliding: "It has been a little uneven lately — a good moment to check in."
+- Trend lead — cold-start (null): "We are still building a learning history — keep checking back."
+- Trend sparkline aria-label: "How grades have moved over time"
+- Trend sparkline cold-start: "We are still building a learning history — keep checking back."
+- Strengths card label: "Areas where {firstName} is doing well" (each row: skill name + "Solid" / "Excelling")
+- Upcoming card label: "Coming up"
+- Upcoming empty: "No assignments coming up right now — a good place to be."
+- Due labels (digit-free): "Due today" / "Due tomorrow" / "Due {Weekday}" / "Due next week" / "Due in a few weeks"
+- Children-not-connected empty: "Your child's progress will appear here once they are connected to your account."
+
+### Dashboard cards
+- Contact Teacher label: "Reach out to the teacher"; row action: "Send an email →" (mailto)
+- Help at Home label: "Questions to start a conversation tonight"; per-starter button: "Copy" / "Copied"
+- Celebrate label: "Something your teacher wanted you to know" (shows the latest high-five note verbatim)
 - Cold-start: "Not enough graded work yet to show a trend."
