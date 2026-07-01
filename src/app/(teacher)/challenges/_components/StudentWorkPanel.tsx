@@ -79,6 +79,7 @@ export default function StudentWorkPanel({ assignmentId }: { assignmentId: strin
 
   const { review, responseIndexes, segmentsByStep } = state.data;
   const steps = review.steps ?? [];
+  const orderedIndexes = [...new Set(responseIndexes)].sort((a, b) => a - b);
 
   const stepLabel = (idx: number): StepInfo | null =>
     idx === EXTENSION_INDEX ? { order: 0, title: 'Extension problem', type: 'claim_evidence', description: '' }
@@ -111,10 +112,10 @@ export default function StudentWorkPanel({ assignmentId }: { assignmentId: strin
 
       <div className="space-y-3">
         <p className="text-sm font-semibold text-fg">Student’s answers</p>
-        {responseIndexes.filter((i) => (segmentsByStep[String(i)] ?? []).length > 0).length === 0 ? (
+        {orderedIndexes.filter((i) => (segmentsByStep[String(i)] ?? []).length > 0).length === 0 ? (
           <p className="text-sm text-fg">No written answers yet.</p>
         ) : (
-          [...responseIndexes].sort((a, b) => a - b).map((idx) => {
+          orderedIndexes.map((idx) => {
             const segs = segmentsByStep[String(idx)] ?? [];
             if (segs.length === 0) return null;
             const info = stepLabel(idx);

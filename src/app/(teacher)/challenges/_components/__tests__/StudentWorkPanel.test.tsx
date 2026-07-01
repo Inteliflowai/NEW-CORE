@@ -128,4 +128,14 @@ describe('StudentWorkPanel', () => {
     render(<StudentWorkPanel assignmentId="a1" />);
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
   });
+
+  it('dedupes responseIndexes before rendering (duplicate step_index tolerance)', async () => {
+    const body = structuredClone(OK_BODY);
+    body.responseIndexes = [1, 1]; // duplicate index
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Response(JSON.stringify(body), { status: 200 }));
+    render(<StudentWorkPanel assignmentId="a1" />);
+    await waitFor(() => expect(screen.getByText('It floats')).toBeInTheDocument());
+    expect(screen.getAllByText('It floats')).toHaveLength(1);
+  });
 });
