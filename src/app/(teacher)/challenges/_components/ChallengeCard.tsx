@@ -3,16 +3,19 @@
 // rubric + date for scored ones; soft state for the rest. The title is the hover-tooltip trigger
 // (name + submission date), mirroring the gradebook cell. Tokens only; deep-ink text.
 'use client';
-import React from 'react';
+import React, { useState } from 'react';
 import type { ChallengeRow } from '@/lib/spark/loadChallenges';
 import { transferWord } from '@/lib/spark/contract';
 import { challengeTooltipLines, shortDate } from '@/lib/spark/groupChallenges';
+import StudentWorkPanel from './StudentWorkPanel';
 
 const STATE_GLYPH: Record<ChallengeRow['status'], string> = { completed: '✓', in_progress: '◷', assigned: '○' };
 const QUALITY_LABEL: Record<NonNullable<ChallengeRow['contentQuality']>, string> = {
   engaged: 'engaged deeply', minimal: 'engaged lightly', non_engaged: 'did not engage',
 };
-const RUBRIC_LABEL: Record<string, string> = {
+// Exported so StudentWorkPanel's rubricLabel() reuses this single source
+// of truth instead of duplicating it.
+export const RUBRIC_LABEL: Record<string, string> = {
   problem_understanding: 'Problem', reasoning_strategy: 'Reasoning', use_of_evidence: 'Evidence',
   creativity_application: 'Creativity', communication: 'Communication',
   reflection_metacognition: 'Reflection', collaboration: 'Collaboration',
@@ -41,6 +44,7 @@ export function ChallengeCard({
   if (row.revisionCount != null) effortBits.push(`${row.revisionCount} ${row.revisionCount === 1 ? 'revision' : 'revisions'}`);
   if (row.teliHintCount != null) effortBits.push(`${row.teliHintCount} ${row.teliHintCount === 1 ? 'hint' : 'hints'}`);
   const rubric = rubricParts(row.rubric);
+  const [showWork, setShowWork] = useState(false);
 
   return (
     <div className="flex flex-col gap-1 rounded-md border-2 border-sidebar-edge bg-surface px-3 py-2">
@@ -74,6 +78,19 @@ export function ChallengeCard({
         <span className="pl-6 text-xs text-fg-muted">
           {row.status === 'in_progress' ? 'In progress — not submitted yet' : 'Not started yet'}
         </span>
+      )}
+      {row.status !== 'assigned' && (
+        <>
+          <button
+            type="button"
+            onClick={() => setShowWork((v) => !v)}
+            aria-expanded={showWork}
+            className="mt-1 text-xs font-semibold text-brand hover:underline"
+          >
+            {showWork ? 'Hide student’s work' : 'View student’s work'}
+          </button>
+          {showWork && <StudentWorkPanel assignmentId={row.assignmentId} />}
+        </>
       )}
     </div>
   );

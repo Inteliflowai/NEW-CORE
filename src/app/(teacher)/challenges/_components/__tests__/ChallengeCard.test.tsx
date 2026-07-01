@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@/test/setup-dom';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ChallengeCard } from '../ChallengeCard';
 import type { ChallengeRow } from '@/lib/spark/loadChallenges';
 
@@ -44,5 +44,29 @@ describe('ChallengeCard', () => {
     render(<ChallengeCard row={base} onTip={vi.fn()} onHideTip={onHideTip} />);
     fireEvent.keyDown(screen.getByText('Photosynthesis'), { key: 'Escape' });
     expect(onHideTip).toHaveBeenCalled();
+  });
+
+  describe('"View student’s work" toggle', () => {
+    afterEach(() => { vi.unstubAllGlobals(); });
+
+    it('shows the toggle for a completed row', () => {
+      render(<ChallengeCard row={base} onTip={vi.fn()} onHideTip={vi.fn()} />);
+      expect(screen.getByRole('button', { name: /view student’s work/i })).toBeInTheDocument();
+    });
+
+    it('does not show the toggle for an assigned row', () => {
+      render(<ChallengeCard row={{ ...base, status: 'assigned' }} onTip={vi.fn()} onHideTip={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: /view student’s work/i })).toBeNull();
+    });
+
+    it('clicking the toggle fetches with THIS row’s assignmentId, never studentId', async () => {
+      vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})));
+      render(<ChallengeCard row={base} onTip={vi.fn()} onHideTip={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: /view student’s work/i }));
+      await waitFor(() => expect(fetch).toHaveBeenCalled());
+      const calledUrl = String((fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]);
+      expect(calledUrl).toContain(`assignmentId=${base.assignmentId}`);
+      expect(calledUrl).not.toContain(`assignmentId=${base.studentId}`);
+    });
   });
 });
