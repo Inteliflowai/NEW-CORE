@@ -20,6 +20,9 @@ import { NarrativeCard } from '../NarrativeCard';
 import { ConversationStarter } from '../ConversationStarter';
 import { SeeMoreDetail } from '../SeeMoreDetail';
 import { ChildSelector } from '../ChildSelector';
+import { ContactTeacherCard } from '../ContactTeacherCard';
+import { HelpAtHomeCard } from '../HelpAtHomeCard';
+import { CelebrateCard } from '../CelebrateCard';
 
 // ── Adversarial fixtures ────────────────────────────────────────────────────────
 
@@ -191,10 +194,6 @@ describe('ChildSelector — leak regression', () => {
     expect(hasParentLeak(container.textContent ?? '')).toBe(false);
   });
 });
-
-import { ContactTeacherCard } from '../ContactTeacherCard';
-import { HelpAtHomeCard } from '../HelpAtHomeCard';
-import { CelebrateCard } from '../CelebrateCard';
 
 describe('Parent Shell cards — composed surface leak regression', () => {
   it('renders all three cards together with no parent leak', () => {

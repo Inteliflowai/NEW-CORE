@@ -1502,6 +1502,7 @@ Teacher-facing strings in the URL import tab and route error responses. All DRAF
 - Climbing: "Your grades have been climbing."
 - Steady: "Holding steady."
 - Sliding: "A little uneven lately — you have got this."
+- Cold-start: "Not enough graded work yet to show a trend."
 
 ## Parent Shell (C) — DRAFT (Barb sign-off required, 2026-06-29)
 
@@ -1526,4 +1527,3 @@ Four-audience: parent surfaces show NO numbers, grades, band labels, CL verbs, o
 - Contact Teacher label: "Reach out to the teacher"; row action: "Send an email →" (mailto)
 - Help at Home label: "Questions to start a conversation tonight"; per-starter button: "Copy" / "Copied"
 - Celebrate label: "Something your teacher wanted you to know" (shows the latest high-five note verbatim)
-- Cold-start: "Not enough graded work yet to show a trend."
