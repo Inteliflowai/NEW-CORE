@@ -111,7 +111,9 @@ export interface AdminContext {
 export async function resolveAdminContext(searchParams?: { school?: string }): Promise<AdminContext> {
   const ctx = await requireRole(SCHOOL_ADMIN_ROLES);
   const isPlatform = ctx.role === 'platform_admin';
-  const schoolId = isPlatform ? (searchParams?.school ?? ctx.schoolId ?? null) : ctx.schoolId;
+  // CRITICAL FIX (pre-code review): isPlatform with no ?school= MUST yield null,
+  // not fall back to the platform admin's own (Inteliflow) schoolId.
+  const schoolId = isPlatform ? (searchParams?.school ?? null) : ctx.schoolId;
   return { userId: ctx.userId, role: ctx.role, fullName: ctx.fullName, schoolId, isPlatform, caps: adminCapabilities(ctx.role) };
 }
 ```
@@ -422,7 +424,7 @@ export interface SchoolOverview {
 **Files:** `src/lib/school/loadSchoolAnalytics.ts`, `admin/analytics/page.tsx` + `_components/AnalyticsView.tsx`, test.
 
 **Interfaces:** `loadSchoolAnalytics(admin, schoolId): Promise<SchoolAnalytics>` —
-`{ weeks: { weekStart: string; assignmentsSubmitted: number; quizzesPublished: number }[]; classes: { name: string; completionPct: number; activity: number }[]; adoption: { teachersActive: number; studentsActive: number } }`. Reuse `isoWeekMonday` (`src/lib/utils/isoWeekMonday`) for week bucketing. **AGGREGATE ONLY — no per-student rows, no risk.**
+`{ weeks: { weekStart: string; assignmentsSubmitted: number; quizzesPublished: number }[]; classes: { name: string; completionPct: number; activity: number }[]; adoption: { teachersActive: number; studentsActive: number } }`. Reuse `isoWeekMonday` from `@/lib/dates/isoWeekMonday` (NOT `@/lib/utils/` — that path is wrong) for week bucketing. **AGGREGATE ONLY — no per-student rows, no risk.**
 
 - [ ] **Steps:** TDD the loader (windowed weekly activity counts; per-class completion = graded/submitted ratio over the school's classes; adoption = distinct teachers/students active in the last 7d via `last_active_at` or activity). Page: a calm trend (reuse `GradeTrendSparkline` or a token line) + a class-comparison list + the two adoption numbers. tsc + commit.
 
@@ -465,7 +467,85 @@ export default async function StudentAttentionPage({ searchParams }: { searchPar
 }
 ```
 
-- [ ] **Step 5: `AttentionRollup.tsx`** — grade/class rollup ("Algebra I — 3 students to check"), each student row a `Link` to the EXISTING teacher view `/students/<studentId>`. Band-level/soft copy only; quiet-when-empty. NO raw risk numbers.
+- [ ] **Step 5: `AttentionRollup.tsx`** — grade/class rollup ("Algebra I — 3 students to check"), each student row a `Link` to `/admin/students/<studentId>` (the admin-scoped drill-in built in Step 7 below — NOT the teacher's `/students/<studentId>` which lives in the (teacher) route group whose layout runs `requireRole(['teacher'])` and would redirect school_admin and platform_admin). Band-level/soft copy only; quiet-when-empty. NO raw risk numbers.
+
+- [ ] **Step 6 (CRITICAL): Admin-scoped student drill-in page** — `src/app/(school-admin)/admin/students/[studentId]/page.tsx`
+
+This page provides school_admin + platform_admin a read-only look at a student without crossing into the teacher route group. It is **capability-gated** (sysadmin → redirect) and shows **band-level only** — same restraint as the rollup.
+
+```tsx
+// src/app/(school-admin)/admin/students/[studentId]/page.tsx
+import { redirect } from 'next/navigation';
+import { resolveAdminContext } from '@/lib/school/resolveAdminContext';
+import { createAdminSupabaseClient } from '@/lib/supabase/server';
+import { masteryLabel } from '@/lib/utils/masteryLabel'; // existing soft-label helper
+import { Card } from '@/components/core/Card';
+
+export default async function AdminStudentDrillIn({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ studentId: string }>;
+  searchParams: Promise<{ school?: string }>;
+}) {
+  const [{ studentId }, sp] = await Promise.all([params, searchParams]);
+  const ctx = await resolveAdminContext(sp);
+  // URL re-guard: IT cannot reach the pedagogy layer
+  if (!ctx.caps.canSeeStudentAttention) redirect('/admin/overview');
+  if (!ctx.schoolId) redirect('/admin/students');
+
+  const admin = createAdminSupabaseClient();
+
+  // IDOR: verify the student belongs to this school
+  const { data: student } = await admin
+    .from('users')
+    .select('id, full_name, grade_level, school_id')
+    .eq('id', studentId)
+    .eq('school_id', ctx.schoolId)
+    .maybeSingle();
+  if (!student) redirect('/admin/students');
+
+  // Band-level per-skill state: ONLY select band-safe columns — NEVER risk_score or divergence
+  const { data: snapshots } = await admin
+    .from('student_model_snapshots')
+    .select('mastery_band, skill_id, snapshot_date')
+    .eq('student_id', studentId)
+    .order('snapshot_date', { ascending: false })
+    .limit(20);
+
+  // Dedupe to latest per skill
+  const latestBands = new Map<string, string>();
+  for (const s of snapshots ?? []) {
+    if (s.skill_id && !latestBands.has(s.skill_id)) latestBands.set(s.skill_id, s.mastery_band);
+  }
+
+  return (
+    <main className="p-6 max-w-2xl mx-auto">
+      <div className="mb-4">
+        <a href="/admin/students" className="text-fg-muted text-sm hover:text-fg">← Back to Student Attention</a>
+      </div>
+      <Card className="p-6">
+        <h1 className="text-fg text-xl font-semibold mb-1">{student.full_name ?? 'Student'}</h1>
+        {student.grade_level && <p className="text-fg-muted text-sm mb-4">Grade {student.grade_level}</p>}
+        {latestBands.size === 0 ? (
+          <p className="text-fg-muted text-sm">No skill data yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {Array.from(latestBands.entries()).map(([skillId, band]) => (
+              <li key={skillId} className="flex items-center justify-between py-1 border-b border-border-subtle last:border-0">
+                <span className="text-fg text-sm">Skill {skillId.slice(0, 8)}</span>
+                <span className="text-fg-muted text-sm">{masteryLabel(band)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </main>
+  );
+}
+```
+
+Write a test: mock `resolveAdminContext` returning `caps.canSeeStudentAttention=false` → verify `redirect('/admin/overview')` is called. With `true` and a valid student result → renders the student name. With student not in school (empty admin query) → verify `redirect('/admin/students')`.
 
 - [ ] **Step 6: Run tests + tsc; Step 7: Commit** (`feat(school-admin): Student Attention rollup (academic-head-gated, drills into teacher views)`).
 
