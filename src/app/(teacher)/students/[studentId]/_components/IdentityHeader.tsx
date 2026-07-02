@@ -1,12 +1,13 @@
 'use client';
 // src/app/(teacher)/students/[studentId]/_components/IdentityHeader.tsx
 // TEACHER-ONLY. Full-width identity header: breadcrumb, avatar, name, grade, and
-// action buttons. High Five is now wired via QuickHighFiveModal.
-// "Add note" and "Open Assignments" remain deferred (no backing store / no route).
+// action buttons. High Five is wired via QuickHighFiveModal; Add note is wired
+// via AddNoteModal. "Open Assignments" remains deferred (no route) — Task 3's job.
 // Tokens only.
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { QuickHighFiveModal } from './QuickHighFiveModal';
+import { AddNoteModal } from './AddNoteModal';
 
 interface IdentityHeaderProps {
   fullName: string;
@@ -35,6 +36,7 @@ export function IdentityHeader({
   classId,
 }: IdentityHeaderProps): React.JSX.Element {
   const [hfOpen, setHfOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
 
   const sub = [gradeLevel ? `Grade ${gradeLevel}` : null, classLabel]
     .filter(Boolean)
@@ -75,10 +77,8 @@ export function IdentityHeader({
             </button>
             <button
               type="button"
-              disabled
-              aria-disabled="true"
-              title="Coming soon"
-              className="rounded-md border-2 border-sidebar-edge px-3 py-1.5 text-sm font-bold text-fg-muted opacity-50"
+              onClick={() => setNoteOpen(true)}
+              className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1.5 text-sm font-bold text-fg shadow-sticker hover:bg-brand hover:text-fg-on-brand transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               Add note
             </button>
@@ -101,6 +101,14 @@ export function IdentityHeader({
         studentName={fullName}
         isOpen={hfOpen}
         onClose={() => setHfOpen(false)}
+      />
+
+      <AddNoteModal
+        studentId={studentId}
+        classId={classId}
+        studentName={fullName}
+        isOpen={noteOpen}
+        onClose={() => setNoteOpen(false)}
       />
     </>
   );
