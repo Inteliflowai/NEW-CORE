@@ -2,7 +2,7 @@
 // src/app/(teacher)/students/[studentId]/_components/IdentityHeader.tsx
 // TEACHER-ONLY. Full-width identity header: breadcrumb, avatar, name, grade, and
 // action buttons. High Five is wired via QuickHighFiveModal; Add note is wired
-// via AddNoteModal. "Open Assignments" remains deferred (no route) — Task 3's job.
+// via AddNoteModal; Open Assignments links to the Gradebook.
 // Tokens only.
 import React, { useState } from 'react';
 import Link from 'next/link';
@@ -82,15 +82,12 @@ export function IdentityHeader({
             >
               Add note
             </button>
-            <button
-              type="button"
-              disabled
-              aria-disabled="true"
-              title="Coming soon"
-              className="rounded-md border-2 border-sidebar-edge px-3 py-1.5 text-sm font-bold text-fg-muted opacity-50"
+            <Link
+              href={classId ? `/gradebook?class=${classId}` : '/gradebook'}
+              className="rounded-md border-2 border-sidebar-edge bg-surface px-3 py-1.5 text-sm font-bold text-fg shadow-sticker hover:bg-brand hover:text-fg-on-brand transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               Open Assignments ›
-            </button>
+            </Link>
           </div>
         </div>
       </div>

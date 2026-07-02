@@ -5,7 +5,7 @@
 //   1. roster risk high/critical          → "Review what's going on"
 //   2. a top Reinforce skill exists        → "Reinforce {skill} — see Gradebook"
 //   3. divergence flagged                  → "Leave a note"
-//   4. else                                → "Open Assignments"
+//   4. else                                → "Open Assignments" (→ /gradebook)
 //
 // The recommendation is text + an optional anchor/href. The WRITE is deferred —
 // the page renders it as a suggestion, it does not perform a mutation.
@@ -49,5 +49,5 @@ export function priorityCta(input: PriorityCtaInput): PriorityCta {
     return { kind: 'leave-note', label: 'Leave a note', anchor: '#pattern' };
   }
 
-  return { kind: 'open-assignments', label: 'Open Assignments' };
+  return { kind: 'open-assignments', label: 'Open Assignments', anchor: '/gradebook' };
 }

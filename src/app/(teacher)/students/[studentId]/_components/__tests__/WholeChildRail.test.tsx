@@ -38,7 +38,7 @@ function signalsWith(coach_read: CoachObservation): StudentSignals {
     growth_history: [], coach_read,
   };
 }
-const cta = { kind: 'open-assignments', label: 'Open Assignments' } as const;
+const cta = { kind: 'open-assignments', label: 'Open Assignments', anchor: '/gradebook' } as const;
 
 describe('WholeChildRail — Worth a look? (coach_read)', () => {
   it('renders a watch observation with its suggestion (no number/banned word in DOM)', () => {
@@ -59,5 +59,23 @@ describe('WholeChildRail — Worth a look? (coach_read)', () => {
     const { container } = render(<WholeChildRail signals={signalsWith({ state: 'quiet', eyebrow: 'Still settling in', line: 'Still getting to know how Maya works.', suggestion: null, tone: 'ok' })} storyLine="x" cta={cta} />);
     expect(container.querySelector('#at-risk')).not.toBeNull();
     expectCleanDom(container.textContent ?? '');
+  });
+
+  it('renders the open-assignments priority CTA as a real link to /gradebook (no more "Coming soon" span)', () => {
+    const { container } = render(<WholeChildRail signals={signalsWith({ state: 'quiet', eyebrow: 'Still settling in', line: 'Still getting to know how Maya works.', suggestion: null, tone: 'ok' })} storyLine="x" cta={cta} />);
+    const link = screen.getByRole('link', { name: /open assignments/i });
+    expect(link).toHaveAttribute('href', '/gradebook');
+    expect(container.querySelector('[title="Coming soon"]')).toBeNull();
+  });
+
+  it('passes evidenceHref through to the Worth-a-look card', () => {
+    render(<WholeChildRail signals={signalsWith({ state: 'watch', eyebrow: 'Worth a look', line: "Maya's been rushing lately.", suggestion: 'A quick check-in might help.', tone: 'risk' })} storyLine="x" cta={cta} evidenceHref="#quiz-detail" />);
+    const link = screen.getByRole('link', { name: /see what's behind this/i });
+    expect(link).toHaveAttribute('href', '#quiz-detail');
+  });
+
+  it('omits the evidence link on the rail when evidenceHref is not provided', () => {
+    render(<WholeChildRail signals={signalsWith({ state: 'watch', eyebrow: 'Worth a look', line: "Maya's been rushing lately.", suggestion: 'A quick check-in might help.', tone: 'risk' })} storyLine="x" cta={cta} />);
+    expect(screen.queryByText(/see what's behind this/i)).toBeNull();
   });
 });

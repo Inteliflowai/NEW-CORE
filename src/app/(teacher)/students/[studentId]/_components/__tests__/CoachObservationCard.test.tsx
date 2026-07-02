@@ -30,4 +30,20 @@ describe('CoachObservationCard', () => {
     render(<CoachObservationCard coach={{ ...coach, suggestion: null }} />);
     expect(screen.queryByText(/short check-in/i)).toBeNull();
   });
+
+  it('renders a quiet "See what\'s behind this" link when evidenceHref is provided', () => {
+    render(<CoachObservationCard coach={coach} evidenceHref="#quiz-detail" />);
+    const link = screen.getByRole('link', { name: /see what's behind this/i });
+    expect(link).toHaveAttribute('href', '#quiz-detail');
+  });
+
+  it('omits the evidence link when evidenceHref is null (quiet default preserved)', () => {
+    render(<CoachObservationCard coach={coach} evidenceHref={null} />);
+    expect(screen.queryByRole('link')).toBeNull();
+  });
+
+  it('omits the evidence link when evidenceHref is not passed at all', () => {
+    render(<CoachObservationCard coach={coach} />);
+    expect(screen.queryByRole('link')).toBeNull();
+  });
 });

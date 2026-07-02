@@ -85,6 +85,16 @@ export default async function StudentPage({
     divergenceFlagged: signals.divergence.divergence_flagged,
   });
 
+  // ── Evidence link for the "Worth a look?" card — cold-start-safe NULL fallback.
+  // #skill-map only exists in the DOM once SkillMapMatrix has rows to render (it
+  // early-returns without the id when empty — see SkillMapMatrix.tsx), so a
+  // dangling href here would rebuild the exact dead-click bug this task kills.
+  const evidenceHref = quizAttempts.length > 0
+    ? '#quiz-detail'
+    : signals.per_skill_cl.length > 0
+      ? '#skill-map'
+      : null; // cold-start: the coach just said there's nothing behind this yet — no link (posture)
+
   // ── Skill Map rows: join misconceptions to skills by skill_id ────────────────
   // (the skill_id is the join key only — it is NEVER rendered.)
   const misconceptionBySkill = new Map<string, string>();
@@ -121,6 +131,7 @@ export default async function StudentPage({
             signals={signals}
             storyLine={line}
             cta={cta}
+            evidenceHref={evidenceHref}
           />
         </aside>
 

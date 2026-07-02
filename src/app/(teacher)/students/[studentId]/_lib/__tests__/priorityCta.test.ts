@@ -45,6 +45,7 @@ describe('priorityCta precedence', () => {
       divergenceFlagged: false,
     });
     expect(out.kind).toBe('open-assignments');
+    expect(out.anchor).toBe('/gradebook');
   });
 
   it('medium risk does NOT trigger review-risk (only high/critical)', () => {

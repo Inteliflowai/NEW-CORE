@@ -26,12 +26,15 @@ vi.mock('@/lib/signals/loadStudentQuizDetails', () => ({
 
 import { loadStudentSignals } from '@/lib/signals/loadStudentSignals';
 import { loadStudentIdentity } from '@/lib/signals/loadStudentIdentity';
+import { loadStudentQuizDetails } from '@/lib/signals/loadStudentQuizDetails';
 import { guardStudentAccess } from '@/lib/auth/guards';
 import { redirect } from 'next/navigation';
 import type { StudentSignals } from '@/lib/signals/loadStudentSignals';
+import type { QuizAttemptDetail } from '@/lib/signals/loadStudentQuizDetails';
 
 const mockSignals = vi.mocked(loadStudentSignals);
 const mockIdentity = vi.mocked(loadStudentIdentity);
+const mockQuizDetails = vi.mocked(loadStudentQuizDetails);
 const mockGuard = vi.mocked(guardStudentAccess);
 const mockRedirect = vi.mocked(redirect);
 
@@ -83,6 +86,7 @@ describe('One-Student page', () => {
       display_name: null,
       grade_level: '6',
     });
+    mockQuizDetails.mockResolvedValue([]);
   });
 
   it('redirects to /roster when guardStudentAccess fails', async () => {
@@ -182,5 +186,79 @@ describe('One-Student page', () => {
   it('renders the Skill Map heading', async () => {
     const { container } = await renderPage();
     expect(container.innerHTML).toContain('Skill Map');
+  });
+
+  it('renders the Open Assignments fallback CTA as a real link, not a disabled button', async () => {
+    const { container } = await renderPage();
+    const link = container.querySelector('a[href="/gradebook"]');
+    expect(link).not.toBeNull();
+    expect(link?.textContent).toContain('Open Assignments');
+    expect(container.querySelector('[title="Coming soon"]')).toBeNull();
+  });
+
+  it('the header\'s Open Assignments button navigates to /gradebook when no class is in context', async () => {
+    const { container } = await renderPage();
+    const links = Array.from(container.querySelectorAll('a')).filter((a) =>
+      a.textContent?.includes('Open Assignments'),
+    );
+    expect(links.some((a) => a.getAttribute('href') === '/gradebook')).toBe(true);
+  });
+
+  it('the header\'s Open Assignments button navigates to /gradebook?class=… when a class is in context', async () => {
+    const { container } = await renderPage({ class: 'c1' });
+    const links = Array.from(container.querySelectorAll('a')).filter((a) =>
+      a.textContent?.includes('Open Assignments'),
+    );
+    expect(links.some((a) => a.getAttribute('href') === '/gradebook?class=c1')).toBe(true);
+  });
+
+  describe('evidenceHref — "Worth a look?" evidence link (cold-start-safe)', () => {
+    it('renders NO evidence link on cold-start (no quiz attempts, empty per_skill_cl)', async () => {
+      const { container } = await renderPage();
+      expect(container.innerHTML).not.toContain("See what's behind this");
+    });
+
+    it('links to #quiz-detail when the student has quiz attempts', async () => {
+      mockQuizDetails.mockResolvedValue([
+        {
+          attemptId: 'qa1',
+          quizTitle: 'Quiz 1',
+          scorePct: 80,
+          masteryBand: 'grade_level',
+          learningStyle: null,
+          submittedAt: '2026-06-01T00:00:00Z',
+          responses: [],
+        } satisfies QuizAttemptDetail,
+      ]);
+      const { container } = await renderPage();
+      const link = Array.from(container.querySelectorAll('a')).find((a) =>
+        a.textContent?.includes("See what's behind this"),
+      );
+      expect(link).toBeDefined();
+      expect(link?.getAttribute('href')).toBe('#quiz-detail');
+    });
+
+    it('links to #skill-map when there are no quiz attempts but per_skill_cl is non-empty', async () => {
+      mockSignals.mockResolvedValue(
+        baseSignals({
+          per_skill_cl: [
+            {
+              skill_id: 'k1',
+              skill_name: 'Long Division',
+              state: 'needs_more_time',
+              cl_verb: 'Reinforce',
+              cl_display: 'Reinforce',
+              confidence_label: 'tentative',
+            },
+          ],
+        }),
+      );
+      const { container } = await renderPage();
+      const link = Array.from(container.querySelectorAll('a')).find((a) =>
+        a.textContent?.includes("See what's behind this"),
+      );
+      expect(link).toBeDefined();
+      expect(link?.getAttribute('href')).toBe('#skill-map');
+    });
   });
 });

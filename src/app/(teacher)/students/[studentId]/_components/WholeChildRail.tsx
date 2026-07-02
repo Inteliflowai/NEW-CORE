@@ -26,6 +26,8 @@ interface WholeChildRailProps {
   signals: StudentSignals;
   storyLine: string;
   cta: PriorityCta;
+  /** Evidence link target for the "Worth a look?" card (cold-start-safe null). */
+  evidenceHref?: string | null;
 }
 
 type EyebrowTone = 'brand' | 'ok' | 'warn' | 'risk';
@@ -42,6 +44,7 @@ export function WholeChildRail({
   signals,
   storyLine,
   cta,
+  evidenceHref,
 }: WholeChildRailProps): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3 lg:sticky lg:top-5">
@@ -68,7 +71,7 @@ export function WholeChildRail({
       </Card>
 
       {/* Worth a look? — EMA coach-read; #at-risk anchor lives on the animated card (priority CTA target) */}
-      <CoachObservationCard coach={signals.coach_read} />
+      <CoachObservationCard coach={signals.coach_read} evidenceHref={evidenceHref} />
 
       {/* Effort */}
       <Card tone="warn">

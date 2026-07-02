@@ -39,7 +39,7 @@ export function QuizDetailSection({ attempts }: Props): React.JSX.Element | null
   if (attempts.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-2.5" aria-label="Quiz performance">
+    <section id="quiz-detail" className="flex flex-col gap-2.5" aria-label="Quiz performance">
       <h2><SectionLabel tone="brand">Quiz performance</SectionLabel></h2>
       <div className="flex flex-col gap-4">
         {attempts.map((a) => (

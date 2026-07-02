@@ -13,7 +13,13 @@ import type { StudentSignals } from '@/lib/signals/loadStudentSignals';
 
 type CoachRead = StudentSignals['coach_read'];
 
-export function CoachObservationCard({ coach }: { coach: CoachRead }): React.JSX.Element {
+interface CoachObservationCardProps {
+  coach: CoachRead;
+  /** Optional evidence anchor/href (e.g. '#quiz-detail' or '#skill-map'); null/absent renders no link. */
+  evidenceHref?: string | null;
+}
+
+export function CoachObservationCard({ coach, evidenceHref }: CoachObservationCardProps): React.JSX.Element {
   const reduce = useReducedMotion();
   const cfg = COACH_MOTION.teacher;
   return (
@@ -28,6 +34,14 @@ export function CoachObservationCard({ coach }: { coach: CoachRead }): React.JSX
             <motion.p variants={coachRiseVariants(!!reduce, cfg)} className="text-fg text-[13px]">{coach.suggestion}</motion.p>
           )}
         </div>
+        {evidenceHref && (
+          <a
+            href={evidenceHref}
+            className="mt-2 inline-block text-sm font-semibold text-brand hover:underline"
+          >
+            See what&apos;s behind this →
+          </a>
+        )}
       </Card>
     </motion.div>
   );

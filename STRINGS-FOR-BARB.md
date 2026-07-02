@@ -1558,3 +1558,18 @@ Prediction · Confidence (format: `{n} / 100`) · Observation · Chose · Why ·
 **Reteach-verbatim flag (Barb/Marvin call):** on attempts projected without a mastery band (older rows), SPARK-authored step text and the student's tier answer can contain the word "Reteach" verbatim (e.g. `Chose: Reteach`). [[v2-reteach-is-reinforce]] binds CORE-authored teacher copy, but this is quoted student-seen content — shipped verbatim for fidelity pending Barb/Marvin's decision on display-mapping.
 
 NOTE (binding): no string may imply Teli conversation content is viewable — transcripts are never stored (student privacy promise); only the hint count exists.
+
+## Drill-in completions (One-Student page) — 2026-07-01
+
+| Where | Draft string |
+|---|---|
+| Add-note modal title | Add a note about {student} |
+| Privacy subtitle | Only you can see these notes. |
+| Textarea placeholder | What do you want to remember? |
+| Buttons | Cancel · Save note · Saving… |
+| Saved status | Saved. |
+| Earlier-notes heading | Your earlier notes |
+| Save error | Something went wrong — your note wasn’t saved. Try again. |
+| Worth-a-look link | See what's behind this → |
+
+NOTE for Barb: the "Open Assignments ›" button now opens the Gradebook (assignments live there as columns — same destination as the Reinforce flow). If the label should say where it goes (e.g. "See Assignments in Gradebook ›"), that's a one-line copy change.
