@@ -116,6 +116,17 @@ beforeEach(() => {
 });
 
 describe('POST /api/teacher/students/notes', () => {
+  it('400 on unparseable JSON body', async () => {
+    const { POST } = await loadRoute();
+    const req = new Request('http://x/api/teacher/students/notes', {
+      method: 'POST',
+      body: 'not json',
+    }) as unknown as import('next/server').NextRequest;
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(inserts.length).toBe(0);
+  });
+
   it('401 when unauthenticated', async () => {
     getUser.mockResolvedValue({ data: { user: null }, error: null });
     const { POST } = await loadRoute();

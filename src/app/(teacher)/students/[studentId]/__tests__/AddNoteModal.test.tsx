@@ -223,4 +223,53 @@ describe('AddNoteModal', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(container.innerHTML).toContain('Only you can see these notes.');
   });
+
+  it('resets stale "Saved." status when reopening the modal', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ notes: [] })); // initial open GET
+    let onClose = vi.fn();
+    const { rerender, container } = render(
+      React.createElement(AddNoteModal, {
+        studentId: 's1',
+        classId: 'c1',
+        studentName: 'Alex',
+        isOpen: true,
+        onClose,
+      }),
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+
+    // Save successfully
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true, id: 'note1' })); // POST
+    fetchMock.mockResolvedValueOnce(jsonResponse({ notes: [] })); // refreshed GET
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'Test note' } });
+    fireEvent.click(container.querySelector('[data-testid="note-save"]')!);
+    await waitFor(() => expect(container.querySelector('[role="status"]')?.textContent).toBe('Saved.'));
+
+    // Close the modal
+    rerender(
+      React.createElement(AddNoteModal, {
+        studentId: 's1',
+        classId: 'c1',
+        studentName: 'Alex',
+        isOpen: false,
+        onClose,
+      }),
+    );
+    expect(container.innerHTML).not.toContain('Saved.');
+
+    // Reopen the modal
+    fetchMock.mockResolvedValueOnce(jsonResponse({ notes: [] }));
+    rerender(
+      React.createElement(AddNoteModal, {
+        studentId: 's1',
+        classId: 'c1',
+        studentName: 'Alex',
+        isOpen: true,
+        onClose,
+      }),
+    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(container.querySelector('[role="status"]')).toBeNull();
+  });
 });

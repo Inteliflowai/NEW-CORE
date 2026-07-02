@@ -40,6 +40,8 @@ export function AddNoteModal({
 
   useEffect(() => {
     if (!isOpen) return;
+    setSaved(false);
+    setError(null);
     let cancelled = false;
     (async () => {
       try {
