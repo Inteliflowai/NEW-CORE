@@ -1538,7 +1538,8 @@ Teacher-only panel. Coach posture: observational; no raw-stat dumps beyond what 
 | Toggle (open) | Hide student's work |
 | Loading | Loading student's work… |
 | No work in SPARK (quiet state) | We don't see this student's work in SPARK yet. |
-| SPARK unreachable / generic failure | We couldn't reach SPARK right now — the work is safe there; try again in a moment. |
+| SPARK unreachable (502/network — retry may help) | We couldn't reach SPARK right now — the work is safe there; try again in a moment. |
+| Work unavailable (permanent 404) | This work isn't available to view. |
 | Challenge context summary | The challenge this student saw |
 | Answers heading | Student's answers |
 | No answers | No written answers yet. |
@@ -1550,9 +1551,9 @@ Teacher-only panel. Coach posture: observational; no raw-stat dumps beyond what 
 | Unrecognized answer | (unrecognized answer format) |
 
 **Per-answer labels emitted by the formatter** (each renders as `Label: <student's words>`):
-Prediction · Confidence (format: `{n} / 100`) · Observation · Chose · Why · Claim · Evidence · Reasoning · Side A · Side B · Synthesis · Sensor data · Code ({language}) · Answer. `data_entry` answers render the student's own field keys verbatim as labels. `reflection` answers use each answered prompt's own SPARK-authored text as the label (e.g. `What changed?: My view`) rather than a fixed word. Rubric-dimension observations are prefixed with the SAME friendly dimension labels already gated in §Spark Challenges (Problem / Reasoning / Evidence / Creativity / Communication / Reflection / Collaboration); an unrecognized dimension falls back to its raw key (defensive-only edge case).
+Prediction · Confidence (format: `{n} / 100`) · Observation · Chose · Why · Claim · Evidence · Reasoning · Side A · Side B · Synthesis · Sensor data · Code ({language}), or bare `Code` when no language is present (was the misleading `Code (code)`; fixed 2026-07-01) · Answer. `data_entry` answers render the student's own field keys verbatim as labels. `reflection` answers use each answered prompt's own SPARK-authored text as the label (e.g. `What changed?: My view`) rather than a fixed word. Rubric-dimension observations are prefixed with the SAME friendly dimension labels already gated in §Spark Challenges (Problem / Reasoning / Evidence / Creativity / Communication / Reflection / Collaboration); an unrecognized dimension falls back to its raw key (defensive-only edge case).
 
-**Voice context for Barb:** `key_observations` under "What the AI shared with the student" are SPARK-authored prose written TO the student (students saw the first one as "Teli says"; second-person redirects like "Ready for another try — …" occur on minimal-effort work). Dimension observations are one-liners never previously surfaced anywhere. Barb picks the framing with that context.
+**Voice context for Barb:** `key_observations` under "What the AI shared with the student" are SPARK-authored prose written TO the student (students saw the first one as "Teli says"; second-person redirects like "Ready for another try — …" occur on minimal-effort work). Dimension observations are one-liners never previously surfaced anywhere. Barb picks the framing with that context. Note: the same "What the AI shared with the student" heading also covers `dimension_observations` — a second kind of content the student themselves never saw (only the teacher does, here) — so the single heading currently spans both audiences; Barb decides whether the dimension-observations block needs its own subheading to disambiguate.
 
 **Reteach-verbatim flag (Barb/Marvin call):** on attempts projected without a mastery band (older rows), SPARK-authored step text and the student's tier answer can contain the word "Reteach" verbatim (e.g. `Chose: Reteach`). [[v2-reteach-is-reinforce]] binds CORE-authored teacher copy, but this is quoted student-seen content — shipped verbatim for fidelity pending Barb/Marvin's decision on display-mapping.
 

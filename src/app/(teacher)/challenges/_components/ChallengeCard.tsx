@@ -5,20 +5,13 @@
 'use client';
 import React, { useState } from 'react';
 import type { ChallengeRow } from '@/lib/spark/loadChallenges';
-import { transferWord } from '@/lib/spark/contract';
+import { transferWord, RUBRIC_LABEL } from '@/lib/spark/contract';
 import { challengeTooltipLines, shortDate } from '@/lib/spark/groupChallenges';
 import StudentWorkPanel from './StudentWorkPanel';
 
 const STATE_GLYPH: Record<ChallengeRow['status'], string> = { completed: '✓', in_progress: '◷', assigned: '○' };
 const QUALITY_LABEL: Record<NonNullable<ChallengeRow['contentQuality']>, string> = {
   engaged: 'engaged deeply', minimal: 'engaged lightly', non_engaged: 'did not engage',
-};
-// Exported so StudentWorkPanel's rubricLabel() reuses this single source
-// of truth instead of duplicating it.
-export const RUBRIC_LABEL: Record<string, string> = {
-  problem_understanding: 'Problem', reasoning_strategy: 'Reasoning', use_of_evidence: 'Evidence',
-  creativity_application: 'Creativity', communication: 'Communication',
-  reflection_metacognition: 'Reflection', collaboration: 'Collaboration',
 };
 
 function rubricParts(rubric: Record<string, number | null> | null): string[] {

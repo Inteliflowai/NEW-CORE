@@ -15,7 +15,7 @@ interface PanelBody {
                effortLabel: string | null; revisionCount: number | null; teliHintCount: number | null };
     generationStatus: string | null;
     steps: { order: number; title: string; type: string; description: string }[] | null;
-    analysis: { rubric_dimensions: Record<string, number | null>; dimension_observations: Record<string, string>;
+    analysis: { rubric_dimensions: Record<string, number | null> | null; dimension_observations: Record<string, string> | null;
                 key_observations: string[]; content_quality: string } | null;
   };
   responseIndexes: number[];
@@ -31,7 +31,7 @@ const OK_BODY: PanelBody = {
       { order: 1, title: 'The Challenge', type: 'instruction', description: 'A boat scenario.' },
       { order: 2, title: 'Make a Prediction', type: 'prediction', description: 'What do you predict?' },
     ],
-    analysis: { rubric_dimensions: { creativity: 4 }, dimension_observations: { creativity: 'inventive' },
+    analysis: { rubric_dimensions: { creativity_application: 4 }, dimension_observations: { creativity_application: 'inventive' },
                 key_observations: ['kept revising'], content_quality: 'engaged' },
   },
   responseIndexes: [1],
@@ -55,6 +55,11 @@ describe('StudentWorkPanel', () => {
     expect(screen.getByText('kept revising')).toBeInTheDocument();
     const img = screen.getByRole('img', { name: /drawing/i });
     expect(img.getAttribute('src')).toMatch(/^data:image\//);
+    // Friendly-label path: a REAL dimension key (creativity_application) renders via
+    // RUBRIC_LABEL ("Creativity"), not the raw-key fallback.
+    expect(screen.getByText(/Creativity/)).toBeInTheDocument();
+    expect(screen.getByText('inventive')).toBeInTheDocument();
+    expect(screen.queryByText(/creativity_application/)).toBeNull();
   });
 
   it('quiet friendly state ONLY for the not_started 404 body', async () => {
@@ -64,12 +69,13 @@ describe('StudentWorkPanel', () => {
     await waitFor(() => expect(screen.getByText(/don.t see this student.s work in SPARK yet/i)).toBeInTheDocument());
   });
 
-  it('other 404s (spark_not_enabled) get the generic state, never the false not-started claim', async () => {
+  it('other 404s (spark_not_enabled) get the permanent "unavailable" state, never the false not-started claim or the outage copy', async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
       new Response(JSON.stringify({ error: 'spark_not_enabled' }), { status: 404 }));
     render(<StudentWorkPanel assignmentId="a1" />);
-    await waitFor(() => expect(screen.getByText(/couldn.t reach SPARK right now/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/isn.t available to view/i)).toBeInTheDocument());
     expect(screen.queryByText(/don.t see this student.s work/i)).toBeNull();
+    expect(screen.queryByText(/couldn.t reach SPARK right now/i)).toBeNull();
   });
 
   it('labels the synthetic extension index 9999 and sorts it last', async () => {
@@ -137,5 +143,15 @@ describe('StudentWorkPanel', () => {
     render(<StudentWorkPanel assignmentId="a1" />);
     await waitFor(() => expect(screen.getByText('It floats')).toBeInTheDocument());
     expect(screen.getAllByText('It floats')).toHaveLength(1);
+  });
+
+  it('quiet: the "What the AI shared with the student" heading is absent when there is nothing to share', async () => {
+    const body = structuredClone(OK_BODY);
+    body.review.analysis = { rubric_dimensions: null, dimension_observations: null, key_observations: [], content_quality: 'engaged' };
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Response(JSON.stringify(body), { status: 200 }));
+    render(<StudentWorkPanel assignmentId="a1" />);
+    await waitFor(() => expect(screen.getByText('It floats')).toBeInTheDocument());
+    expect(screen.queryByText(/What the AI shared with the student/i)).toBeNull();
   });
 });

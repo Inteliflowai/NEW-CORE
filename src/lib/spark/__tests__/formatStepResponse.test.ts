@@ -63,4 +63,13 @@ describe('formatStepResponse', () => {
       { kind: 'text', label: 'Answer', text: '(unrecognized answer format)' },
     ]);
   });
+
+  it('code_block with no language → bare "Code" label, not the misleading "Code (code)"', () => {
+    expect(formatStepResponse('code_block', { code: 'print(1)' })).toEqual([
+      { kind: 'text', label: 'Code', text: 'print(1)' },
+    ]);
+    expect(formatStepResponse('code_block', { code: 'print(1)', language: '' })).toEqual([
+      { kind: 'text', label: 'Code', text: 'print(1)' },
+    ]);
+  });
 });

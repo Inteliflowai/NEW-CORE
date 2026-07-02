@@ -31,21 +31,32 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const steps: Record<string, string> = {};
 
-  // 1. SPARK side (dedicated spark school + link + core_integration flag).
-  const sparkRes = await provisionSparkSchool({ coreSchoolId: school.id as string, name: school.name as string, coreBaseUrl: CORE_BASE_URL });
-  steps.spark = sparkRes.success ? `ok (${sparkRes.sparkSchoolId})` : `failed: ${sparkRes.error}`;
-
-  // 2. V2 platform_links row (the gate). Idempotent: reuse an existing api_key on re-enable
-  //    so a repeat enable preserves the credential instead of rotating it.
+  // 1. Resolve the api_key FIRST (reuse-or-mint, idempotent on re-enable). CORE is the key
+  //    source of truth (Item 1 fix): SPARK needs to learn this SAME key at provision time, or
+  //    its core_spark_links row defaults to an unrelated uuid and every get_attempt_review
+  //    call 401s forever. Never throws — a select failure just falls back to minting fresh.
+  let apiKey: string;
   try {
     const { data: existingLink } = await admin
       .from('platform_links').select('api_key').eq('school_id', school.id).eq('product', 'spark').maybeSingle();
-    const apiKey = existingLink?.api_key ?? `core_spark_${randomUUID()}`;
+    apiKey = existingLink?.api_key ?? `core_spark_${randomUUID()}`;
+  } catch {
+    apiKey = `core_spark_${randomUUID()}`;
+  }
+
+  // 2. SPARK side (dedicated spark school + link + core_integration flag). Pass apiKey so
+  //    SPARK's core_spark_links.api_key matches the credential CORE will actually send.
+  const sparkRes = await provisionSparkSchool({ coreSchoolId: school.id as string, name: school.name as string, coreBaseUrl: CORE_BASE_URL, apiKey });
+  steps.spark = sparkRes.success ? `ok (${sparkRes.sparkSchoolId})` : `failed: ${sparkRes.error}`;
+
+  // 3. V2 platform_links row (the gate). Idempotent: reuse an existing api_key on re-enable
+  //    so a repeat enable preserves the credential instead of rotating it.
+  try {
     await provisionSparkLink(admin, { schoolId: school.id as string, apiKey, coreBaseUrl: CORE_BASE_URL, label: 'SPARK' });
     steps.link = 'ok';
   } catch (e) { steps.link = `failed: ${(e as Error).message}`; }
 
-  // 3. License feature grant (V1-parity): school_licenses.feature_overrides.spark_experiences = true.
+  // 4. License feature grant (V1-parity): school_licenses.feature_overrides.spark_experiences = true.
   //    Capture the update error so a failed grant is reflected in steps.license (not silently 'ok').
   try {
     const { data: lic } = await admin.from('school_licenses').select('feature_overrides').eq('school_id', school.id).maybeSingle();

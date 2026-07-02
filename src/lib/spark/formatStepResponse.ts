@@ -66,9 +66,10 @@ export function formatStepResponse(type: string, value: unknown): DisplaySegment
         ? [{ kind: 'text', label: 'Sensor data', text: parts.join(' · ') }] : [];
     }
     case 'code_block': {
-      const lang = typeof v.language === 'string' ? v.language : 'code';
+      const lang = typeof v.language === 'string' && v.language.trim() !== '' ? v.language : null;
+      const label = lang ? `Code (${lang})` : 'Code';
       return typeof v.code === 'string' && v.code.trim() !== ''
-        ? [{ kind: 'text', label: `Code (${lang})`, text: v.code }] : [];
+        ? [{ kind: 'text', label, text: v.code }] : [];
     }
     default:
       return [{ kind: 'text', label: 'Answer', text: '(unrecognized answer format)' }];

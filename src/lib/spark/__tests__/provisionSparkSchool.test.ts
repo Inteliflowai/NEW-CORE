@@ -20,6 +20,24 @@ describe('provisionSparkSchool', () => {
     expect(r).toMatchObject({ success: true, sparkSchoolId: 'ss-1' });
   });
 
+  it('includes api_key in the POST body when provided (Item 1 key exchange)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, spark_school_id: 'ss-1' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const { provisionSparkSchool } = await import('../provisionSparkSchool');
+    await provisionSparkSchool({ coreSchoolId: 'cs-1', name: 'Demo', coreBaseUrl: 'https://newcore.inteliflowai.com', apiKey: 'core_spark_abc123' });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toMatchObject({ api_key: 'core_spark_abc123' });
+  });
+
+  it('omits api_key from the POST body when not provided (backward compatible)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true, spark_school_id: 'ss-1' }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const { provisionSparkSchool } = await import('../provisionSparkSchool');
+    await provisionSparkSchool({ coreSchoolId: 'cs-1', name: 'Demo' });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).not.toHaveProperty('api_key');
+  });
+
   it('returns success:false on non-OK / throw (never throws)', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
     const { provisionSparkSchool } = await import('../provisionSparkSchool');

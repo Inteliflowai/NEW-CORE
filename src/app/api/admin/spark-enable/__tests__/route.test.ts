@@ -214,6 +214,11 @@ describe('POST /api/admin/spark-enable', () => {
     // No existing link → a fresh core_spark_ key is minted.
     const mintedArg = mockProvisionSparkLink.mock.calls[0][1] as { apiKey: string };
     expect(mintedArg.apiKey).toMatch(/^core_spark_/);
+
+    // Item 1 fix: the SAME minted key is also passed to provisionSparkSchool, so SPARK's
+    // core_spark_links row is provisioned with the credential CORE will actually send.
+    const sparkSchoolArg = mockProvisionSparkSchool.mock.calls[0][0] as { apiKey: string };
+    expect(sparkSchoolArg.apiKey).toBe(mintedArg.apiKey);
   });
 
   // ── FIX B: idempotent api_key — re-enable reuses the existing platform_links key ──
@@ -236,6 +241,11 @@ describe('POST /api/admin/spark-enable', () => {
     expect(mockProvisionSparkLink).toHaveBeenCalledOnce();
     const passedArg = mockProvisionSparkLink.mock.calls[0][1] as { apiKey: string };
     expect(passedArg.apiKey).toBe(EXISTING_KEY);
+
+    // Item 1 fix: provisionSparkSchool ALSO receives the reused key (not a fresh mint) — a
+    // re-enable must repair a mismatched SPARK-side key with CORE's actual credential.
+    const sparkSchoolArg = mockProvisionSparkSchool.mock.calls[0][0] as { apiKey: string };
+    expect(sparkSchoolArg.apiKey).toBe(EXISTING_KEY);
   });
 
   // ── FIX C: a failed license update is surfaced in steps + flips ok to false ──

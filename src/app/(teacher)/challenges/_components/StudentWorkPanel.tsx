@@ -5,7 +5,7 @@
 // segment is still re-checked for a data:image/ prefix before <img>.
 import { useEffect, useState } from 'react';
 import type { DisplaySegment } from '@/lib/spark/formatStepResponse';
-import { RUBRIC_LABEL } from './ChallengeCard';
+import { RUBRIC_LABEL } from '@/lib/spark/contract';
 
 interface StepInfo { order: number; title: string; type: string; description: string }
 interface PanelData {
@@ -22,15 +22,15 @@ interface PanelData {
   segmentsByStep: Record<string, DisplaySegment[]>;
 }
 type PanelState =
-  | { phase: 'loading' } | { phase: 'not_started' } | { phase: 'unreachable' }
+  | { phase: 'loading' } | { phase: 'not_started' } | { phase: 'unreachable' } | { phase: 'unavailable' }
   | { phase: 'ready'; data: PanelData };
 
 const DATA_IMAGE = /^data:image\//;
 const EXTENSION_INDEX = 9999;
 
-// Friendly rubric-dimension labels: reuses ChallengeCard's RUBRIC_LABEL (the
-// single source of truth) — falls back to the raw key only for unknown
-// dimensions, and never shows a snake_case key for a known one.
+// Friendly rubric-dimension labels: reuses contract.ts's RUBRIC_LABEL (the
+// single source of truth, shared with ChallengeCard) — falls back to the raw
+// key only for unknown dimensions, and never shows a snake_case key for a known one.
 function rubricLabel(dim: string): string {
   return RUBRIC_LABEL[dim] ?? dim;
 }
@@ -49,11 +49,13 @@ export default function StudentWorkPanel({ assignmentId }: { assignmentId: strin
         const res = await fetch(`/api/teacher/challenges/attempt?assignmentId=${encodeURIComponent(assignmentId)}`);
         if (cancelled) return;
         if (res.status === 404) {
-          // Disambiguate: only SPARK's "no attempt" maps to the quiet state.
-          // Other 404s (spark_not_enabled, assignment lookup) get the generic one —
-          // a scored row with a disabled link must NOT claim the student never started.
+          // Disambiguate: only SPARK's "no attempt" maps to the quiet state. Other 404s
+          // (spark_not_enabled, assignment lookup) are PERMANENT — the resource genuinely
+          // isn't there — so they get their own 'unavailable' state, distinct from
+          // 'unreachable' (outage copy, "try again in a moment"), which is reserved for
+          // 502/network failures where retrying might actually work.
           const body = await res.json().catch(() => ({} as { error?: string }));
-          setState(body?.error === 'not_started' ? { phase: 'not_started' } : { phase: 'unreachable' });
+          setState(body?.error === 'not_started' ? { phase: 'not_started' } : { phase: 'unavailable' });
           return;
         }
         if (!res.ok) { setState({ phase: 'unreachable' }); return; }
@@ -75,6 +77,11 @@ export default function StudentWorkPanel({ assignmentId }: { assignmentId: strin
   }
   if (state.phase === 'unreachable') {
     return <p className="text-sm text-fg py-2">We couldn’t reach SPARK right now — the work is safe there; try again in a moment.</p>;
+  }
+  if (state.phase === 'unavailable') {
+    // Permanent 404 (e.g. spark_not_enabled, assignment lookup) — not an outage, so no
+    // "try again" implication. Also NEVER the false not-started claim.
+    return <p className="text-sm text-fg py-2">This work isn’t available to view.</p>;
   }
 
   const { review, responseIndexes, segmentsByStep } = state.data;
@@ -141,7 +148,7 @@ export default function StudentWorkPanel({ assignmentId }: { assignmentId: strin
         )}
       </div>
 
-      {review.analysis && (
+      {review.analysis && (review.analysis.key_observations.length > 0 || review.analysis.dimension_observations) && (
         <div className="space-y-1">
           {/* key_observations were authored FOR the student (they saw the first
               one as "Teli says" — second-person redirects possible), so the

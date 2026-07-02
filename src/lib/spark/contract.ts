@@ -57,3 +57,12 @@ export function transferWord(score: number | null | undefined): string {
   if (score >= 50) return 'developing';
   return 'emerging';
 }
+
+/** Friendly labels for the 7 RubricDimensions keys — single source of truth shared by
+ *  ChallengeCard (rubric summary line) and StudentWorkPanel (dimension_observations),
+ *  which previously duplicated this map via a component→component import (circular-import risk). */
+export const RUBRIC_LABEL: Record<string, string> = {
+  problem_understanding: 'Problem', reasoning_strategy: 'Reasoning', use_of_evidence: 'Evidence',
+  creativity_application: 'Creativity', communication: 'Communication',
+  reflection_metacognition: 'Reflection', collaboration: 'Collaboration',
+};

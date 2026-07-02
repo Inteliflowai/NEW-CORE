@@ -31,13 +31,18 @@ export type FetchReviewResult =
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
+// All-or-nothing: a single malformed element invalidates the WHOLE array. Dropping just the
+// bad element (via `continue`) would shift every subsequent element's array position, and the
+// panel labels answers by `steps[idx]` positionally — a shifted array silently mislabels an
+// answer with a neighbor's title. Degrading to null (→ safe "Step N" fallback labels) is safer
+// than a wrong-but-plausible-looking title.
 function mapSteps(v: unknown): SparkStep[] | null {
   if (!Array.isArray(v)) return null;
   const out: SparkStep[] = [];
   for (const s of v) {
-    if (!s || typeof s !== 'object') continue;
+    if (!s || typeof s !== 'object') return null;
     const o = s as Record<string, unknown>;
-    if (typeof o.order !== 'number' || typeof o.title !== 'string' || typeof o.type !== 'string') continue;
+    if (typeof o.order !== 'number' || typeof o.title !== 'string' || typeof o.type !== 'string') return null;
     out.push({ order: o.order, title: o.title, type: o.type, description: str(o.description) ?? '' });
   }
   return out.length ? out : null;
@@ -93,7 +98,11 @@ export async function fetchAttemptReview(args: {
       cache: 'no-store',
     });
     if (res.status === 404) return { ok: false, reason: 'not_found' };
-    if (!res.ok) return { ok: false, reason: 'unreachable' };
+    if (!res.ok) {
+      // Observability only — status code, never the api key or request headers.
+      console.warn('[spark-review] fetch failed', { status: res.status });
+      return { ok: false, reason: 'unreachable' };
+    }
     const raw = (await res.json()) as Record<string, unknown>;
     const a = (raw.attempt ?? {}) as Record<string, unknown>;
     return {
@@ -111,7 +120,10 @@ export async function fetchAttemptReview(args: {
         analysis: mapAnalysis(raw.analysis),
       },
     };
-  } catch {
+  } catch (err) {
+    // Observability only — the exception's message (network/timeout reason), never
+    // the api key or request headers.
+    console.warn('[spark-review] fetch failed', { reason: (err as Error)?.message ?? 'unknown' });
     return { ok: false, reason: 'unreachable' };
   }
 }

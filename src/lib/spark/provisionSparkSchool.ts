@@ -6,6 +6,10 @@ export interface ProvisionSparkSchoolInput {
   coreSchoolId: string;
   name: string;
   coreBaseUrl?: string | null;
+  /** The V2 platform_links api_key CORE will actually authenticate with. When present, SPARK's
+   *  core_spark_links row is upserted with this SAME key (Item 1 fix) — without it, SPARK
+   *  defaults to an unrelated generated uuid and every subsequent get_attempt_review call 401s. */
+  apiKey?: string;
 }
 export interface ProvisionSparkSchoolResult {
   success: boolean;
@@ -20,7 +24,12 @@ export async function provisionSparkSchool(input: ProvisionSparkSchoolInput): Pr
     const res = await fetch(`${SPARK_API_URL}/api/integration/provision-school`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${CORE_SPARK_API_SECRET}` },
-      body: JSON.stringify({ core_school_id: input.coreSchoolId, name: input.name, core_base_url: input.coreBaseUrl ?? null }),
+      body: JSON.stringify({
+        core_school_id: input.coreSchoolId,
+        name: input.name,
+        core_base_url: input.coreBaseUrl ?? null,
+        ...(input.apiKey ? { api_key: input.apiKey } : {}),
+      }),
       signal: controller.signal,
     });
     if (!res.ok) return { success: false, error: `SPARK HTTP ${res.status}` };

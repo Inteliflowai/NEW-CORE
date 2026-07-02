@@ -800,9 +800,17 @@ async function main() {
 
   // ── SPARK demo: enabled link + seeded completions (demoable without a live round-trip) ──
   try {
+    // Reuse an existing platform_links api_key if the demo school already has a REAL SPARK
+    // link (e.g. a live get_attempt_review provisioning already exchanged a key — see
+    // spark-enable/route.ts's identical reuse-or-mint pattern). A reseed must never clobber
+    // a working credential with the literal demo placeholder — that would silently 401 every
+    // subsequent SPARK call for the demo school until someone re-ran spark-enable.
+    const { data: existingLink } = await admin
+      .from('platform_links').select('api_key').eq('school_id', schoolId).eq('product', 'spark').maybeSingle();
+    const apiKey = existingLink?.api_key ?? 'demo-spark-key-2026';
     await provisionSparkLink(admin, {
       schoolId,
-      apiKey: 'demo-spark-key-2026',
+      apiKey,
       coreBaseUrl: 'https://newcore.inteliflowai.com',
       label: 'SPARK (demo)',
     });

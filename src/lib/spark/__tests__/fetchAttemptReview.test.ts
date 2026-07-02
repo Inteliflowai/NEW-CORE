@@ -77,4 +77,22 @@ describe('fetchAttemptReview', () => {
     expect(res.review.analysis?.dimension_observations).toEqual({ reflection: 'real prose' });
     expect(res.review.analysis?.rubric_dimensions).toEqual({ reflection: 3 });
   });
+
+  it('mapSteps is all-or-nothing: one malformed element invalidates the WHOLE steps array', async () => {
+    (fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Response(JSON.stringify({
+        attempt: { state: 'completed' },
+        steps: [
+          { order: 1, title: 'The Challenge', type: 'instruction', description: 'd' },
+          { order: 2, title: 'Bad Step' /* missing type */ },
+        ],
+      }), { status: 200 }));
+    const res = await fetchAttemptReview({ apiKey: 'k', coreHomeworkId: 'h', coreStudentId: 's' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // NOT [{ order: 1, ... }] (dropping the bad element and shifting positions) — null,
+    // so the panel degrades to safe "Step N" fallback labels instead of a positionally
+    // mislabeled title.
+    expect(res.review.steps).toBeNull();
+  });
 });
